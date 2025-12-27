@@ -1,0 +1,148 @@
+You are an expert full-stack SaaS architect and developer.
+
+Build a **School CRM / Education Center Management Web App** designed for the Uzbekistan market.
+
+IMPORTANT:
+- The entire UI language must be Uzbek (including buttons, menu, labels, form fields, validation messages).
+- All database seed data, default roles, subjects, and text content should also be in Uzbek.
+- Support Uzbek Latin alphabet.
+
+====================================
+1️⃣ TECHNOLOGY & ARCHITECTURE
+====================================
+Recommend a modern, scalable stack and explain briefly why. Suggested:
+
+Frontend:
+- Next.js or React with TypeScript
+- Tailwind CSS (mobile-first design)
+- React Query / Zustand (or similar state management)
+
+Backend:
+- Node.js with TypeScript (NestJS preferred)
+- PostgreSQL database
+- Prisma or TypeORM ORM
+- JWT auth with refresh token using HTTP-only cookies
+- REST API (GraphQL-ready structure)
+
+Other requirements:
+- Clean modular architecture (controllers/services/repository)
+- Every core entity must include a `tenant_id` field (future multi-tenant support)
+- Docker-based deployment readiness
+- Protection against tenant data leakage (middleware/guards)
+
+====================================
+2️⃣ ROLES & PERMISSIONS
+====================================
+
+System roles:
+- Super Admin — platform owner
+- Markaz Admini (School admin for a single tenant)
+- O‘qituvchi (Teacher)
+- Menejer (Sales/Call center)
+- O‘quvchi (Student)
+- Ota-ona (Parent) — prepare structure, not mandatory UI yet
+
+RBAC must be implemented.
+
+====================================
+3️⃣ CORE MODULES (MVP)
+====================================
+
+Entities:
+- Tenant (Markaz)
+- Users (with roles)
+- Leads
+- Students
+- Teachers
+- Groups
+- Lessons (Schedule)
+- Attendance
+- Payments (Debts/Fees)
+- Subjects / Courses
+- Notes/tasks (optional MVP)
+
+Features:
+
+1) Authentication & User Management
+- Login, logout, password recovery
+- Users restricted to their own tenant’s data
+- Uzbek UI for all forms and alerts
+
+2) Lead & Student CRM
+- Manage leads:
+  - status: yangi, qo‘ng‘iroq, trial, yopilgan, o‘qishga o‘tdi
+- Convert lead → student
+- Students with parent contacts, status: active, paused, left
+
+3) Group & Schedule Management
+- Create groups with:
+  - daraja (A0–C1), fan, o‘qituvchi, kunlar, vaqt, xona (optional)
+- Weekly schedule view
+- Assign students to groups
+
+4) Attendance & Progress
+- Mark students: bor / yo‘q / kech
+- Optional homework notes
+- Per-student attendance history screen
+
+5) Payments & Debtors
+- Add monthly payments per student
+- Calculate remaining debt
+- Income summary by month
+
+6) Dashboards
+- Markaz Admin:
+  - Active students, groups count
+  - New leads this month
+  - Monthly income
+  - Attendance %
+- Super Admin:
+  - Overview of all tenants
+
+====================================
+4️⃣ UI / UX REQUIREMENTS
+====================================
+- Must be **fully mobile-responsive**
+- Mobile-first navigation (bottom/tab menu or collapsible sidebar)
+- Avoid tables on mobile → use cards or stacked lists
+- Clean and modern UI using Tailwind CSS
+
+Example Uzbek UI labels:
+- “O‘quvchilar”, “Guruhlar”, “Jadval”, “Davomat”, “To‘lovlar”, “Sozlamalar”
+- Buttons: “Saqlash”, “O‘chirish”, “Tahrirlash”, “Qidirish”, “Qo‘shish”
+
+Provide a **language JSON file** for UI text (Uzbek default).
+
+====================================
+5️⃣ CODE QUALITY
+====================================
+- Type-safe code (TypeScript everywhere)
+- Input validation (Zod/Joi/class-validator)
+- Tenant-based access control (middleware/guards)
+- Document:
+  - How to extend into full multi-tenant SaaS
+  - How to integrate a future mobile app (React Native/Flutter/PWA)
+
+====================================
+6️⃣ OUTPUT
+====================================
+1) Architecture plan:
+   - Tech stack choice
+   - Folder structure
+   - Database schema (ERD)
+
+2) Working code MVP:
+   - Backend API
+   - Frontend pages, forms, routing
+   - Uzbek UI content
+   - Auth + Roles + CRUD features
+   - Demo seed data (2 tenants, groups, teachers, students, payments)
+
+3) Run instructions:
+   - Docker or npm commands
+   - Example .env file
+   - How to create first Super Admin and first Tenant
+
+Focus on delivering a **fully working MVP** designed specifically for Uzbek language users, later expandable to:
+- Multi-tenant SaaS platform
+- Android / iOS application with shared API
