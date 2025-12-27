@@ -91,17 +91,21 @@ export async function getBalance(): Promise<{ balance: number; error?: string }>
   }
 }
 
+// Test mode - Eskiz only allows these messages in test mode
+const TEST_MODE = true;
+const TEST_MESSAGE = "Bu Eskiz dan test";
+
 // SMS Templates
 export const smsTemplates = {
   paymentReminder: (name: string, group: string, amount: number) =>
-    `Hurmatli ${name}, ${group} guruhi uchun ${amount.toLocaleString()} so'm to'lov qilishingiz kerak. EduCRM`,
+    TEST_MODE ? TEST_MESSAGE : `Hurmatli ${name}, ${group} guruhi uchun ${amount.toLocaleString()} so'm to'lov qilishingiz kerak. EduCRM`,
   
   paymentReceived: (name: string, amount: number, balance: number) =>
-    `Rahmat ${name}! ${amount.toLocaleString()} so'm to'lov qabul qilindi. Balansingiz: ${balance.toLocaleString()} so'm. EduCRM`,
+    TEST_MODE ? TEST_MESSAGE : `Rahmat ${name}! ${amount.toLocaleString()} so'm to'lov qabul qilindi. Balansingiz: ${balance.toLocaleString()} so'm. EduCRM`,
   
   lowBalance: (name: string, balance: number) =>
-    `Hurmatli ${name}, balansingiz ${balance.toLocaleString()} so'm. Iltimos to'lovni amalga oshiring. EduCRM`,
+    TEST_MODE ? TEST_MESSAGE : `Hurmatli ${name}, balansingiz ${balance.toLocaleString()} so'm. Iltimos to'lovni amalga oshiring. EduCRM`,
   
   welcomeStudent: (name: string, group: string) =>
-    `Xush kelibsiz ${name}! Siz ${group} guruhiga qo'shildingiz. EduCRM`,
+    TEST_MODE ? TEST_MESSAGE : `Xush kelibsiz ${name}! Siz ${group} guruhiga qo'shildingiz. EduCRM`,
 };
