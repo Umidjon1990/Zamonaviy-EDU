@@ -64,7 +64,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      <div className="p-4 border-t border-sidebar-border">
+      <div className="p-4 border-t border-sidebar-border space-y-3">
+        <Link href="/teacher-login">
+          <Button variant="outline" size="sm" className="w-full justify-start gap-2" data-testid="link-teacher-login">
+            <GraduationCap className="w-4 h-4" />
+            O'qituvchi portali
+          </Button>
+        </Link>
         <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50">
           <Avatar className="h-9 w-9 border border-sidebar-border">
             <AvatarImage src="https://github.com/shadcn.png" />
