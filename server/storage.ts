@@ -234,17 +234,17 @@ export class DatabaseStorage implements IStorage {
 
   // Attendance
   async getAttendance(tenantId: number, groupId?: number, date?: Date): Promise<Attendance[]> {
-    let query = db.select().from(attendance).where(eq(attendance.tenantId, tenantId));
+    const conditions = [eq(attendance.tenantId, tenantId)];
     
     if (groupId) {
-      query = query.where(eq(attendance.groupId, groupId)) as any;
+      conditions.push(eq(attendance.groupId, groupId));
     }
     
     if (date) {
-      query = query.where(eq(attendance.date, date)) as any;
+      conditions.push(eq(attendance.date, date));
     }
     
-    return await query.orderBy(desc(attendance.date));
+    return await db.select().from(attendance).where(and(...conditions)).orderBy(desc(attendance.date));
   }
 
   async createAttendance(att: InsertAttendance): Promise<Attendance> {
@@ -259,13 +259,13 @@ export class DatabaseStorage implements IStorage {
 
   // Payments
   async getPayments(tenantId: number, studentId?: number): Promise<Payment[]> {
-    let query = db.select().from(payments).where(eq(payments.tenantId, tenantId));
+    const conditions = [eq(payments.tenantId, tenantId)];
     
     if (studentId) {
-      query = query.where(eq(payments.studentId, studentId)) as any;
+      conditions.push(eq(payments.studentId, studentId));
     }
     
-    return await query.orderBy(desc(payments.createdAt));
+    return await db.select().from(payments).where(and(...conditions)).orderBy(desc(payments.createdAt));
   }
 
   async getPayment(id: number): Promise<Payment | undefined> {
