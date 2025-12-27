@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { GraduationCap, Users, Calendar, LogOut, Plus, Check, X, Clock } from "lucide-react";
+import { GraduationCap, Users, Calendar, LogOut, Plus, Check, X, Clock, UserPlus, Edit, ArrowRightLeft } from "lucide-react";
 
 export default function TeacherDashboard() {
   const [, setLocation] = useLocation();
@@ -20,7 +20,11 @@ export default function TeacherDashboard() {
   const [teacherName, setTeacherName] = useState("");
   const [teacherId, setTeacherId] = useState("");
   const [isGroupOpen, setIsGroupOpen] = useState(false);
+  const [isStudentOpen, setIsStudentOpen] = useState(false);
+  const [isEditStudentOpen, setIsEditStudentOpen] = useState(false);
+  const [isMoveStudentOpen, setIsMoveStudentOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [groupForm, setGroupForm] = useState({
@@ -31,6 +35,16 @@ export default function TeacherDashboard() {
     room: "",
     maxStudents: 15,
   });
+
+  const [studentForm, setStudentForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    parentPhone: "",
+    groupId: "",
+  });
+
+  const [moveToGroupId, setMoveToGroupId] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("teacherToken");
@@ -75,6 +89,16 @@ export default function TeacherDashboard() {
   });
   const groupStudents = (studentsData || []) as any[];
 
+  const { data: allStudentsData } = useQuery({
+    queryKey: ["teacher-all-students", teacherId],
+    queryFn: async () => {
+      const res = await fetch(`/api/teacher/${teacherId}/students`);
+      return res.json();
+    },
+    enabled: !!teacherId,
+  });
+  const allStudents = (allStudentsData || []) as any[];
+
   const { data: attendanceData } = useQuery({
     queryKey: ["attendance", selectedGroup, attendanceDate],
     queryFn: async () => {
@@ -97,7 +121,63 @@ export default function TeacherDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teacher-groups"] });
       setIsGroupOpen(false);
+      setGroupForm({ name: "", level: "Beginner", days: [], time: "14:00 - 15:30", room: "", maxStudents: 15 });
       toast({ title: "Muvaffaqiyat", description: "Guruh yaratildi" });
+    },
+  });
+
+  const createStudentMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/teacher/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teacher-all-students"] });
+      queryClient.invalidateQueries({ queryKey: ["group-students"] });
+      setIsStudentOpen(false);
+      setStudentForm({ firstName: "", lastName: "", phone: "", parentPhone: "", groupId: "" });
+      toast({ title: "Muvaffaqiyat", description: "O'quvchi qo'shildi" });
+    },
+  });
+
+  const updateStudentMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await fetch(`/api/teacher/students/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teacher-all-students"] });
+      queryClient.invalidateQueries({ queryKey: ["group-students"] });
+      setIsEditStudentOpen(false);
+      setSelectedStudent(null);
+      toast({ title: "Muvaffaqiyat", description: "O'quvchi tahrirlandi" });
+    },
+  });
+
+  const moveStudentMutation = useMutation({
+    mutationFn: async ({ studentId, fromGroupId, toGroupId }: { studentId: number; fromGroupId: number; toGroupId: number }) => {
+      const res = await fetch("/api/teacher/move-student", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId, fromGroupId, toGroupId }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group-students"] });
+      queryClient.invalidateQueries({ queryKey: ["teacher-all-students"] });
+      setIsMoveStudentOpen(false);
+      setSelectedStudent(null);
+      setMoveToGroupId("");
+      toast({ title: "Muvaffaqiyat", description: "O'quvchi boshqa guruhga o'tkazildi" });
     },
   });
 
@@ -133,6 +213,54 @@ export default function TeacherDashboard() {
     createGroupMutation.mutate(groupForm);
   };
 
+  const handleCreateStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    createStudentMutation.mutate(studentForm);
+  };
+
+  const handleUpdateStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedStudent) {
+      updateStudentMutation.mutate({
+        id: selectedStudent.id,
+        data: {
+          firstName: studentForm.firstName,
+          lastName: studentForm.lastName,
+          phone: studentForm.phone,
+          parentPhone: studentForm.parentPhone,
+        },
+      });
+    }
+  };
+
+  const handleMoveStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedStudent && selectedGroup && moveToGroupId) {
+      moveStudentMutation.mutate({
+        studentId: selectedStudent.id,
+        fromGroupId: selectedGroup,
+        toGroupId: parseInt(moveToGroupId),
+      });
+    }
+  };
+
+  const openEditStudent = (student: any) => {
+    setSelectedStudent(student);
+    setStudentForm({
+      firstName: student.firstName,
+      lastName: student.lastName,
+      phone: student.phone || "",
+      parentPhone: student.parentPhone || "",
+      groupId: "",
+    });
+    setIsEditStudentOpen(true);
+  };
+
+  const openMoveStudent = (student: any) => {
+    setSelectedStudent(student);
+    setIsMoveStudentOpen(true);
+  };
+
   const getAttendanceStatus = (studentId: number) => {
     const record = attendance.find((a: any) => a.studentId === studentId);
     return record?.status || null;
@@ -166,6 +294,9 @@ export default function TeacherDashboard() {
           <TabsList>
             <TabsTrigger value="groups" className="flex items-center gap-2">
               <Users className="w-4 h-4" /> Guruhlarim
+            </TabsTrigger>
+            <TabsTrigger value="students" className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4" /> O'quvchilar
             </TabsTrigger>
             <TabsTrigger value="attendance" className="flex items-center gap-2">
               <Calendar className="w-4 h-4" /> Davomat
@@ -257,6 +388,212 @@ export default function TeacherDashboard() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="students" className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <div className="space-y-2">
+                <Label>Guruh</Label>
+                <Select value={selectedGroup?.toString() || ""} onValueChange={(v) => setSelectedGroup(parseInt(v))}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Guruhni tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((g: any) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Dialog open={isStudentOpen} onOpenChange={setIsStudentOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-add-student">
+                    <UserPlus className="w-4 h-4 mr-2" /> O'quvchi qo'shish
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Yangi o'quvchi qo'shish</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateStudent} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Ism</Label>
+                        <Input
+                          value={studentForm.firstName}
+                          onChange={(e) => setStudentForm({ ...studentForm, firstName: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Familiya</Label>
+                        <Input
+                          value={studentForm.lastName}
+                          onChange={(e) => setStudentForm({ ...studentForm, lastName: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Telefon</Label>
+                      <Input
+                        value={studentForm.phone}
+                        onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
+                        placeholder="+998 90 123 45 67"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Ota-ona telefoni</Label>
+                      <Input
+                        value={studentForm.parentPhone}
+                        onChange={(e) => setStudentForm({ ...studentForm, parentPhone: e.target.value })}
+                        placeholder="+998 90 123 45 67"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Guruh</Label>
+                      <Select value={studentForm.groupId} onValueChange={(v) => setStudentForm({ ...studentForm, groupId: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Guruhni tanlang" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {groups.map((g: any) => (
+                            <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button type="submit" className="w-full" disabled={createStudentMutation.isPending}>
+                      {createStudentMutation.isPending ? "Qo'shilmoqda..." : "Qo'shish"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {selectedGroup ? (
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>O'quvchi</TableHead>
+                        <TableHead>Telefon</TableHead>
+                        <TableHead>Ota-ona</TableHead>
+                        <TableHead className="text-right">Amallar</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {groupStudents.length > 0 ? (
+                        groupStudents.map((student: any) => (
+                          <TableRow key={student.id}>
+                            <TableCell className="font-medium">{student.firstName} {student.lastName}</TableCell>
+                            <TableCell>{student.phone}</TableCell>
+                            <TableCell>{student.parentPhone}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button size="sm" variant="outline" onClick={() => openEditStudent(student)}>
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => openMoveStudent(student)}>
+                                  <ArrowRightLeft className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                            Bu guruhda o'quvchilar yo'q.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  O'quvchilarni ko'rish uchun guruhni tanlang.
+                </CardContent>
+              </Card>
+            )}
+
+            <Dialog open={isEditStudentOpen} onOpenChange={setIsEditStudentOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>O'quvchini tahrirlash</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleUpdateStudent} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ism</Label>
+                      <Input
+                        value={studentForm.firstName}
+                        onChange={(e) => setStudentForm({ ...studentForm, firstName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Familiya</Label>
+                      <Input
+                        value={studentForm.lastName}
+                        onChange={(e) => setStudentForm({ ...studentForm, lastName: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Telefon</Label>
+                    <Input
+                      value={studentForm.phone}
+                      onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ota-ona telefoni</Label>
+                    <Input
+                      value={studentForm.parentPhone}
+                      onChange={(e) => setStudentForm({ ...studentForm, parentPhone: e.target.value })}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={updateStudentMutation.isPending}>
+                    {updateStudentMutation.isPending ? "Saqlanmoqda..." : "Saqlash"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isMoveStudentOpen} onOpenChange={setIsMoveStudentOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>O'quvchini boshqa guruhga o'tkazish</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleMoveStudent} className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {selectedStudent?.firstName} {selectedStudent?.lastName} ni qaysi guruhga o'tkazmoqchisiz?
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Yangi guruh</Label>
+                    <Select value={moveToGroupId} onValueChange={setMoveToGroupId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Guruhni tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groups.filter(g => g.id !== selectedGroup).map((g: any) => (
+                          <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={moveStudentMutation.isPending || !moveToGroupId}>
+                    {moveStudentMutation.isPending ? "O'tkazilmoqda..." : "O'tkazish"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="attendance" className="space-y-4">

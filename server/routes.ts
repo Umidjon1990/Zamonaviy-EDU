@@ -410,6 +410,68 @@ export async function registerRoutes(
     }
   });
 
+  // Get all students for a teacher (across all their groups)
+  app.get("/api/teacher/:teacherId/students", async (req, res) => {
+    try {
+      const teacherId = req.params.teacherId;
+      const students = await storage.getStudentsByTeacher(teacherId);
+      res.json(students);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch students" });
+    }
+  });
+
+  // Teacher creates a student
+  app.post("/api/teacher/students", async (req, res) => {
+    try {
+      const { firstName, lastName, phone, parentPhone, groupId } = req.body;
+      const student = await storage.createStudent({
+        tenantId: TENANT_ID,
+        firstName,
+        lastName,
+        phone,
+        parentPhone,
+        balance: 0,
+        status: "active",
+      });
+      
+      if (groupId) {
+        await storage.addStudentToGroup({
+          studentId: student.id,
+          groupId: parseInt(groupId),
+        });
+      }
+      
+      res.status(201).json(student);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create student" });
+    }
+  });
+
+  // Teacher updates a student (no delete allowed)
+  app.patch("/api/teacher/students/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { firstName, lastName, phone, parentPhone } = req.body;
+      const student = await storage.updateStudent(id, { firstName, lastName, phone, parentPhone });
+      res.json(student);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update student" });
+    }
+  });
+
+  // Teacher moves student between groups
+  app.post("/api/teacher/move-student", async (req, res) => {
+    try {
+      const { studentId, fromGroupId, toGroupId } = req.body;
+      await storage.removeStudentFromGroup(studentId, fromGroupId);
+      await storage.addStudentToGroup({ studentId, groupId: toGroupId });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to move student" });
+    }
+  });
+
   app.delete("/api/teachers/:id", async (req, res) => {
     try {
       const id = req.params.id;

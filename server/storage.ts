@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
 const { Pool } = pkg;
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
   type User,
   type InsertUser,
@@ -74,6 +74,7 @@ export interface IStorage {
   getGroup(id: number): Promise<Group | undefined>;
   getGroupsByTeacher(teacherId: string): Promise<Group[]>;
   getStudentsByGroup(groupId: number): Promise<Student[]>;
+  getStudentsByTeacher(teacherId: string): Promise<Student[]>;
   createGroup(group: InsertGroup): Promise<Group>;
   updateGroup(id: number, group: Partial<InsertGroup>): Promise<Group | undefined>;
   deleteGroup(id: number): Promise<boolean>;
@@ -224,6 +225,19 @@ export class DatabaseStorage implements IStorage {
       .from(studentGroups)
       .innerJoin(students, eq(studentGroups.studentId, students.id))
       .where(eq(studentGroups.groupId, groupId));
+    return result.map(r => r.student);
+  }
+
+  async getStudentsByTeacher(teacherId: string): Promise<Student[]> {
+    const teacherGroups = await this.getGroupsByTeacher(teacherId);
+    const groupIds = teacherGroups.map(g => g.id);
+    if (groupIds.length === 0) return [];
+    
+    const result = await db
+      .selectDistinct({ student: students })
+      .from(studentGroups)
+      .innerJoin(students, eq(studentGroups.studentId, students.id))
+      .where(inArray(studentGroups.groupId, groupIds));
     return result.map(r => r.student);
   }
 
