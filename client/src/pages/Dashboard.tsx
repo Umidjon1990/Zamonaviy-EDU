@@ -1,19 +1,35 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { translations } from "@/lib/i18n";
-import { mockStats } from "@/lib/mockData";
+import { useStats } from "@/lib/api";
 import { Users, GraduationCap, DollarSign, CalendarCheck } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const data = [
-  { name: "Jan", total: 15000000 },
-  { name: "Feb", total: 22000000 },
+  { name: "Yan", total: 15000000 },
+  { name: "Fev", total: 22000000 },
   { name: "Mar", total: 18000000 },
   { name: "Apr", total: 28000000 },
   { name: "May", total: 35000000 },
-  { name: "Jun", total: 32000000 },
+  { name: "Iyun", total: 32000000 },
 ];
 
 export default function Dashboard() {
+  const { data: stats, isLoading } = useStats();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -32,8 +48,8 @@ export default function Dashboard() {
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalStudents}</div>
-            <p className="text-xs text-muted-foreground">+12% o‘tgan oyga nisbatan</p>
+            <div className="text-2xl font-bold">{stats?.totalStudents || 0}</div>
+            <p className="text-xs text-muted-foreground">Faol o'quvchilar</p>
           </CardContent>
         </Card>
         
@@ -45,8 +61,8 @@ export default function Dashboard() {
             <GraduationCap className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.activeGroups}</div>
-            <p className="text-xs text-muted-foreground">+2 yangi guruh</p>
+            <div className="text-2xl font-bold">{stats?.activeGroups || 0}</div>
+            <p className="text-xs text-muted-foreground">Faol guruhlar</p>
           </CardContent>
         </Card>
 
@@ -58,21 +74,21 @@ export default function Dashboard() {
             <DollarSign className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.monthlyIncome.toLocaleString()} UZS</div>
-            <p className="text-xs text-muted-foreground">+8% o‘tgan oyga nisbatan</p>
+            <div className="text-2xl font-bold">{(stats?.monthlyIncome || 0).toLocaleString()} UZS</div>
+            <p className="text-xs text-muted-foreground">So'nggi 30 kun</p>
           </CardContent>
         </Card>
 
         <Card className="shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {translations.dashboard.attendanceRate}
+              Yangi lidlar
             </CardTitle>
             <CalendarCheck className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{mockStats.attendanceRate}%</div>
-            <p className="text-xs text-muted-foreground">O‘rtacha davomat</p>
+            <div className="text-2xl font-bold">{stats?.newLeads || 0}</div>
+            <p className="text-xs text-muted-foreground">So'nggi 30 kun</p>
           </CardContent>
         </Card>
       </div>
@@ -80,7 +96,7 @@ export default function Dashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 shadow-sm">
           <CardHeader>
-            <CardTitle>{translations.dashboard.monthlyIncome}</CardTitle>
+            <CardTitle>Oylik tushum</CardTitle>
           </CardHeader>
           <CardContent className="pl-2">
             <div className="h-[300px]">
@@ -117,37 +133,37 @@ export default function Dashboard() {
 
         <Card className="col-span-3 shadow-sm">
           <CardHeader>
-            <CardTitle>{translations.dashboard.recentActivity}</CardTitle>
+            <CardTitle>Tizimda mavjud ma'lumotlar</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-8">
               <div className="flex items-center">
                 <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">Aziz Rahimov</p>
-                  <p className="text-sm text-muted-foreground">To‘lov qildi: 500,000 UZS</p>
+                  <p className="text-sm font-medium leading-none">Jami o'quvchilar</p>
+                  <p className="text-sm text-muted-foreground">Barcha statuslar</p>
                 </div>
-                <div className="ml-auto font-medium text-emerald-600">+500,000</div>
+                <div className="ml-auto font-medium text-primary">{stats?.totalStudents || 0}</div>
               </div>
               <div className="flex items-center">
                 <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">Yangi Lid: Sardor</p>
-                  <p className="text-sm text-muted-foreground">Instagram orqali</p>
+                  <p className="text-sm font-medium leading-none">Faol guruhlar</p>
+                  <p className="text-sm text-muted-foreground">Hozirgi paytda</p>
                 </div>
-                <div className="ml-auto font-medium text-primary">Yangi</div>
+                <div className="ml-auto font-medium text-primary">{stats?.activeGroups || 0}</div>
               </div>
               <div className="flex items-center">
                 <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">English A1</p>
-                  <p className="text-sm text-muted-foreground">Dars yakunlandi</p>
+                  <p className="text-sm font-medium leading-none">Yangi lidlar</p>
+                  <p className="text-sm text-muted-foreground">So'nggi oy</p>
                 </div>
-                <div className="ml-auto font-medium text-muted-foreground">15:30</div>
+                <div className="ml-auto font-medium text-yellow-600">{stats?.newLeads || 0}</div>
               </div>
               <div className="flex items-center">
                 <div className="ml-4 space-y-1">
-                  <p className="text-sm font-medium leading-none">Malika Karimova</p>
-                  <p className="text-sm text-muted-foreground">Darsga kelmadi</p>
+                  <p className="text-sm font-medium leading-none">Oylik tushum</p>
+                  <p className="text-sm text-muted-foreground">So'nggi 30 kun</p>
                 </div>
-                <div className="ml-auto font-medium text-destructive">Yo‘q</div>
+                <div className="ml-auto font-medium text-emerald-600">{((stats?.monthlyIncome || 0) / 1000000).toFixed(1)}M</div>
               </div>
             </div>
           </CardContent>
