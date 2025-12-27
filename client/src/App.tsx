@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import Leads from "@/pages/Leads";
 import Students from "@/pages/Students";
+import Teachers from "@/pages/Teachers";
 import Groups from "@/pages/Groups";
 import Schedule from "@/pages/Schedule";
 import Payments from "@/pages/Payments";
@@ -19,6 +20,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/leads" component={Leads} />
         <Route path="/students" component={Students} />
+        <Route path="/teachers" component={Teachers} />
         <Route path="/groups" component={Groups} />
         <Route path="/schedule" component={Schedule} />
         <Route path="/payments" component={Payments} />

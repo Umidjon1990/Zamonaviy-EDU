@@ -203,6 +203,22 @@ export function useTeachers() {
   });
 }
 
+export function useCreateTeacher() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiCall("/teachers", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["teachers"] }),
+  });
+}
+
+export function useDeleteTeacher() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiCall(`/teachers/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["teachers"] }),
+  });
+}
+
 // ===== STATISTICS =====
 export function useStats() {
   return useQuery({

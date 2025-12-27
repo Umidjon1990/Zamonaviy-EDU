@@ -341,6 +341,38 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/teachers", async (req, res) => {
+    try {
+      const { firstName, lastName, email, phone, salaryPercent } = req.body;
+      const teacher = await storage.createUser({
+        tenantId: TENANT_ID,
+        firstName,
+        lastName,
+        email,
+        password: "password123", // Default password
+        phone,
+        salaryPercent: salaryPercent || 0,
+        role: "teacher",
+      });
+      res.status(201).json(teacher);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create teacher" });
+    }
+  });
+
+  app.delete("/api/teachers/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const deleted = await storage.deleteUser(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete teacher" });
+    }
+  });
+
   // ===== STATISTICS =====
   app.get("/api/stats", async (req, res) => {
     try {
