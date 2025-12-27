@@ -38,13 +38,19 @@ export default function Payments() {
       
       if (sendSms && formData.studentId) {
         try {
-          await fetch("/api/sms/payment-received", {
+          const smsResponse = await fetch("/api/sms/payment-received", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ studentId: formData.studentId, amount: formData.amount }),
           });
-          toast({ title: "SMS yuborildi", description: "O'quvchiga SMS xabarnoma yuborildi" });
+          const smsResult = await smsResponse.json();
+          if (smsResult.success) {
+            toast({ title: "SMS yuborildi", description: "O'quvchiga SMS xabarnoma yuborildi" });
+          } else {
+            toast({ title: "SMS xatosi", description: smsResult.error || "SMS yuborishda xatolik", variant: "destructive" });
+          }
         } catch (smsError) {
+          console.error("SMS error:", smsError);
           toast({ title: "SMS xatosi", description: "SMS yuborishda xatolik", variant: "destructive" });
         }
       }
