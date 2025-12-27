@@ -1,15 +1,66 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { useLeads } from "@/lib/api";
-import { Plus, Search, Phone, MessageCircle, Calendar } from "lucide-react";
+import { useLeads, useCreateLead, useUpdateLead, useDeleteLead } from "@/lib/api";
+import { Plus, Search, Phone, MessageCircle, Calendar, Trash2, Edit } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Leads() {
   const { data: leads, isLoading } = useLeads();
+  const createLead = useCreateLead();
+  const updateLead = useUpdateLead();
+  const deleteLead = useDeleteLead();
+  const { toast } = useToast();
+  
+  const [isOpen, setIsOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    source: "Instagram",
+    interest: "",
+    status: "new",
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createLead.mutateAsync(formData);
+      toast({ title: "Muvaffaqiyat", description: "Yangi lid qo'shildi" });
+      setIsOpen(false);
+      setFormData({ firstName: "", lastName: "", phone: "", source: "Instagram", interest: "", status: "new" });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Lid qo'shishda xatolik yuz berdi", variant: "destructive" });
+    }
+  };
+
+  const handleStatusChange = async (id: number, status: string) => {
+    try {
+      await updateLead.mutateAsync({ id, status });
+      toast({ title: "Muvaffaqiyat", description: "Status yangilandi" });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Statusni yangilashda xatolik", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm("Haqiqatan ham o'chirmoqchimisiz?")) {
+      try {
+        await deleteLead.mutateAsync(id);
+        toast({ title: "Muvaffaqiyat", description: "Lid o'chirildi" });
+      } catch (error) {
+        toast({ title: "Xatolik", description: "O'chirishda xatolik", variant: "destructive" });
+      }
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -35,9 +86,82 @@ export default function Leads() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">{translations.leads.title}</h1>
-        <Button className="w-full sm:w-auto" data-testid="button-add-lead">
-          <Plus className="mr-2 h-4 w-4" /> {translations.leads.addLead}
-        </Button>
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogTrigger asChild>
+            <Button className="w-full sm:w-auto" data-testid="button-add-lead">
+              <Plus className="mr-2 h-4 w-4" /> {translations.leads.addLead}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Yangi lid qo'shish</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">Ism</Label>
+                  <Input
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    required
+                    data-testid="input-firstName"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Familiya</Label>
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    required
+                    data-testid="input-lastName"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefon</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="+998 90 123 45 67"
+                  required
+                  data-testid="input-phone"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="interest">Qiziqish (Kurs)</Label>
+                <Input
+                  id="interest"
+                  value={formData.interest}
+                  onChange={(e) => setFormData({ ...formData, interest: e.target.value })}
+                  placeholder="English, Math, IELTS..."
+                  required
+                  data-testid="input-interest"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="source">Manba</Label>
+                <Select value={formData.source} onValueChange={(value) => setFormData({ ...formData, source: value })}>
+                  <SelectTrigger data-testid="select-source">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Instagram">Instagram</SelectItem>
+                    <SelectItem value="Telegram">Telegram</SelectItem>
+                    <SelectItem value="Walk-in">Shaxsan keldi</SelectItem>
+                    <SelectItem value="Referral">Tanish orqali</SelectItem>
+                    <SelectItem value="Website">Veb-sayt</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" className="w-full" disabled={createLead.isPending} data-testid="button-submit">
+                {createLead.isPending ? "Saqlanmoqda..." : "Saqlash"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="flex items-center gap-2 max-w-sm">
@@ -78,18 +202,27 @@ export default function Leads() {
                     <TableCell>{lead.source}</TableCell>
                     <TableCell>{lead.interest}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={getStatusColor(lead.status)}>
-                        {translations.leads.status[lead.status as keyof typeof translations.leads.status]}
-                      </Badge>
+                      <Select value={lead.status} onValueChange={(value) => handleStatusChange(lead.id, value)}>
+                        <SelectTrigger className={`w-32 h-8 text-xs ${getStatusColor(lead.status)}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="new">Yangi</SelectItem>
+                          <SelectItem value="contacted">Qo'ng'iroq</SelectItem>
+                          <SelectItem value="trial">Sinov</SelectItem>
+                          <SelectItem value="converted">O'qishga o'tdi</SelectItem>
+                          <SelectItem value="lost">Yopilgan</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>{new Date(lead.createdAt).toLocaleDateString('uz-UZ')}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" data-testid={`button-call-${lead.id}`}>
                           <Phone className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" data-testid={`button-message-${lead.id}`}>
-                          <MessageCircle className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(lead.id)} data-testid={`button-delete-${lead.id}`}>
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -121,9 +254,18 @@ export default function Leads() {
                       {lead.phone}
                     </div>
                   </div>
-                  <Badge variant="outline" className={getStatusColor(lead.status)}>
-                    {translations.leads.status[lead.status as keyof typeof translations.leads.status]}
-                  </Badge>
+                  <Select value={lead.status} onValueChange={(value) => handleStatusChange(lead.id, value)}>
+                    <SelectTrigger className={`w-28 h-7 text-xs ${getStatusColor(lead.status)}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">Yangi</SelectItem>
+                      <SelectItem value="contacted">Qo'ng'iroq</SelectItem>
+                      <SelectItem value="trial">Sinov</SelectItem>
+                      <SelectItem value="converted">O'qishga o'tdi</SelectItem>
+                      <SelectItem value="lost">Yopilgan</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2 text-sm">
@@ -146,8 +288,8 @@ export default function Leads() {
                     <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-green-600 border-green-200 bg-green-50">
                       <Phone className="h-4 w-4" />
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-blue-600 border-blue-200 bg-blue-50">
-                      <MessageCircle className="h-4 w-4" />
+                    <Button variant="outline" size="sm" className="h-8 w-8 p-0 text-destructive border-red-200 bg-red-50" onClick={() => handleDelete(lead.id)}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

@@ -1,16 +1,67 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { useStudents } from "@/lib/api";
-import { Plus, Search, MoreHorizontal } from "lucide-react";
+import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent } from "@/lib/api";
+import { Plus, Search, MoreHorizontal, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Students() {
   const { data: students, isLoading } = useStudents();
+  const createStudent = useCreateStudent();
+  const updateStudent = useUpdateStudent();
+  const deleteStudent = useDeleteStudent();
+  const { toast } = useToast();
+  
+  const [isOpen, setIsOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    parentPhone: "",
+    status: "active",
+    balance: 0,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createStudent.mutateAsync(formData);
+      toast({ title: "Muvaffaqiyat", description: "Yangi o'quvchi qo'shildi" });
+      setIsOpen(false);
+      setFormData({ firstName: "", lastName: "", phone: "", parentPhone: "", status: "active", balance: 0 });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "O'quvchi qo'shishda xatolik yuz berdi", variant: "destructive" });
+    }
+  };
+
+  const handleStatusChange = async (id: number, status: string) => {
+    try {
+      await updateStudent.mutateAsync({ id, status });
+      toast({ title: "Muvaffaqiyat", description: "Status yangilandi" });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Statusni yangilashda xatolik", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm("Haqiqatan ham o'chirmoqchimisiz?")) {
+      try {
+        await deleteStudent.mutateAsync(id);
+        toast({ title: "Muvaffaqiyat", description: "O'quvchi o'chirildi" });
+      } catch (error) {
+        toast({ title: "Xatolik", description: "O'chirishda xatolik", variant: "destructive" });
+      }
+    }
+  };
 
   if (isLoading) {
     return (
@@ -25,9 +76,80 @@ export default function Students() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">{translations.students.title}</h1>
-        <Button className="w-full sm:w-auto" data-testid="button-add-student">
-          <Plus className="mr-2 h-4 w-4" /> {translations.students.addStudent}
-        </Button>
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogTrigger asChild>
+            <Button className="w-full sm:w-auto" data-testid="button-add-student">
+              <Plus className="mr-2 h-4 w-4" /> {translations.students.addStudent}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Yangi o'quvchi qo'shish</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">Ism</Label>
+                  <Input
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    required
+                    data-testid="input-firstName"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Familiya</Label>
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    required
+                    data-testid="input-lastName"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">O'quvchi telefoni</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="+998 90 123 45 67"
+                  required
+                  data-testid="input-phone"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="parentPhone">Ota-ona telefoni</Label>
+                <Input
+                  id="parentPhone"
+                  value={formData.parentPhone}
+                  onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
+                  placeholder="+998 90 123 45 67"
+                  required
+                  data-testid="input-parentPhone"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Holat</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger data-testid="select-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Faol</SelectItem>
+                    <SelectItem value="paused">Muzlatilgan</SelectItem>
+                    <SelectItem value="left">Ketgan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" className="w-full" disabled={createStudent.isPending} data-testid="button-submit">
+                {createStudent.isPending ? "Saqlanmoqda..." : "Saqlash"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="flex items-center gap-2 max-w-sm">
@@ -70,27 +192,25 @@ export default function Students() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={
-                        student.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        student.status === "paused" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
-                        "bg-gray-50 text-gray-700 border-gray-200"
-                      } data-testid={`badge-status-${student.id}`}>
-                        {translations.students.status[student.status as keyof typeof translations.students.status]}
-                      </Badge>
+                      <Select value={student.status} onValueChange={(value) => handleStatusChange(student.id, value)}>
+                        <SelectTrigger className={`w-28 h-8 text-xs ${
+                          student.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          student.status === "paused" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
+                          "bg-gray-50 text-gray-700 border-gray-200"
+                        }`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Faol</SelectItem>
+                          <SelectItem value="paused">Muzlatilgan</SelectItem>
+                          <SelectItem value="left">Ketgan</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-actions-${student.id}`}>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>{translations.common.view}</DropdownMenuItem>
-                          <DropdownMenuItem>{translations.common.edit}</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">{translations.common.delete}</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(student.id)} data-testid={`button-delete-${student.id}`}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
