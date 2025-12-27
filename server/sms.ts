@@ -92,7 +92,8 @@ export async function getBalance(): Promise<{ balance: number; error?: string }>
 }
 
 // Test mode - Eskiz only allows these messages in test mode
-const TEST_MODE = true;
+// Set to false when alpha-name is approved
+const TEST_MODE = false;
 const TEST_MESSAGE = "Bu Eskiz dan test";
 
 // SMS Templates
