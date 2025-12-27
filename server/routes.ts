@@ -331,6 +331,16 @@ export async function registerRoutes(
     }
   });
 
+  // ===== TEACHERS =====
+  app.get("/api/teachers", async (req, res) => {
+    try {
+      const teachers = await storage.getTeachers(TENANT_ID);
+      res.json(teachers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch teachers" });
+    }
+  });
+
   // ===== STATISTICS =====
   app.get("/api/stats", async (req, res) => {
     try {

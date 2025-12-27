@@ -47,6 +47,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getTeachers(tenantId: number): Promise<User[]>;
   
   // Leads
   getLeads(tenantId: number): Promise<Lead[]>;
@@ -124,6 +125,10 @@ export class DatabaseStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     const result = await db.insert(users).values(user).returning();
     return result[0];
+  }
+
+  async getTeachers(tenantId: number): Promise<User[]> {
+    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'teacher')));
   }
 
   // Leads

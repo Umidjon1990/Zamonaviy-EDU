@@ -8,14 +8,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent } from "@/lib/api";
-import { Plus, Search, MoreHorizontal, Trash2 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useGroups, useTeachers } from "@/lib/api";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Students() {
-  const { data: students, isLoading } = useStudents();
+  const { data: studentsData, isLoading } = useStudents();
+  const students = (studentsData || []) as any[];
+  const { data: groupsData } = useGroups();
+  const groups = (groupsData || []) as any[];
+  const { data: teachersData } = useTeachers();
+  const teachers = (teachersData || []) as any[];
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
@@ -29,15 +33,18 @@ export default function Students() {
     parentPhone: "",
     status: "active",
     balance: 0,
+    groupId: 0,
+    teacherId: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createStudent.mutateAsync(formData);
+      const { groupId, teacherId, ...studentData } = formData;
+      await createStudent.mutateAsync(studentData);
       toast({ title: "Muvaffaqiyat", description: "Yangi o'quvchi qo'shildi" });
       setIsOpen(false);
-      setFormData({ firstName: "", lastName: "", phone: "", parentPhone: "", status: "active", balance: 0 });
+      setFormData({ firstName: "", lastName: "", phone: "", parentPhone: "", status: "active", balance: 0, groupId: 0, teacherId: "" });
     } catch (error) {
       toast({ title: "Xatolik", description: "O'quvchi qo'shishda xatolik yuz berdi", variant: "destructive" });
     }
@@ -132,6 +139,36 @@ export default function Students() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="groupId">Guruh</Label>
+                <Select value={formData.groupId.toString()} onValueChange={(value) => setFormData({ ...formData, groupId: parseInt(value) })}>
+                  <SelectTrigger data-testid="select-group">
+                    <SelectValue placeholder="Guruhni tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((g: any) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="teacherId">O'qituvchi</Label>
+                <Select value={formData.teacherId} onValueChange={(value) => setFormData({ ...formData, teacherId: value })}>
+                  <SelectTrigger data-testid="select-teacher">
+                    <SelectValue placeholder="O'qituvchini tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teachers.map((t: any) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.firstName} {t.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="status">Holat</Label>
                 <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
                   <SelectTrigger data-testid="select-status">
@@ -178,7 +215,7 @@ export default function Students() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {students && students.length > 0 ? (
+              {students.length > 0 ? (
                 students.map((student: any) => (
                   <TableRow key={student.id} data-testid={`row-student-${student.id}`}>
                     <TableCell className="font-medium" data-testid={`text-name-${student.id}`}>

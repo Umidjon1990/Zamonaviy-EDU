@@ -195,6 +195,14 @@ export function useUpdateAttendance() {
   });
 }
 
+// ===== TEACHERS =====
+export function useTeachers() {
+  return useQuery({
+    queryKey: ["teachers"],
+    queryFn: () => apiCall("/teachers"),
+  });
+}
+
 // ===== STATISTICS =====
 export function useStats() {
   return useQuery({
