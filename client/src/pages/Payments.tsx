@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { translations } from "@/lib/i18n";
 import { usePayments, useCreatePayment, useStudents } from "@/lib/api";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, MessageSquare } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,6 +21,7 @@ export default function Payments() {
   const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [sendSms, setSendSms] = useState(true);
   const [formData, setFormData] = useState({
     studentId: 0,
     amount: 0,
@@ -33,6 +35,20 @@ export default function Payments() {
     try {
       await createPayment.mutateAsync(formData);
       toast({ title: "Muvaffaqiyat", description: "To'lov qabul qilindi" });
+      
+      if (sendSms && formData.studentId) {
+        try {
+          await fetch("/api/sms/payment-received", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ studentId: formData.studentId, amount: formData.amount }),
+          });
+          toast({ title: "SMS yuborildi", description: "O'quvchiga SMS xabarnoma yuborildi" });
+        } catch (smsError) {
+          toast({ title: "SMS xatosi", description: "SMS yuborishda xatolik", variant: "destructive" });
+        }
+      }
+      
       setIsOpen(false);
       setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "" });
     } catch (error) {
@@ -128,6 +144,18 @@ export default function Payments() {
                     placeholder="Oylik to'lov"
                     data-testid="input-notes"
                   />
+                </div>
+                <div className="flex items-center space-x-2 py-2">
+                  <Checkbox 
+                    id="sendSms" 
+                    checked={sendSms} 
+                    onCheckedChange={(checked) => setSendSms(checked as boolean)}
+                    data-testid="checkbox-send-sms"
+                  />
+                  <label htmlFor="sendSms" className="text-sm font-medium leading-none flex items-center gap-2 cursor-pointer">
+                    <MessageSquare className="w-4 h-4" />
+                    SMS xabarnoma yuborish
+                  </label>
                 </div>
                 <Button type="submit" className="w-full" disabled={createPayment.isPending} data-testid="button-submit">
                   {createPayment.isPending ? "Saqlanmoqda..." : "Qabul qilish"}

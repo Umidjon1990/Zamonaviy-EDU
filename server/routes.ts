@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { sendSMS, getBalance, smsTemplates } from "./sms";
 import {
   insertLeadSchema,
   insertStudentSchema,
@@ -492,6 +493,74 @@ export async function registerRoutes(
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  });
+
+  // ===== SMS =====
+  app.get("/api/sms/balance", async (req, res) => {
+    try {
+      const result = await getBalance();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get SMS balance" });
+    }
+  });
+
+  app.post("/api/sms/send", async (req, res) => {
+    try {
+      const { phone, message } = req.body;
+      if (!phone || !message) {
+        return res.status(400).json({ error: "phone va message kerak" });
+      }
+      const result = await sendSMS(phone, message);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send SMS" });
+    }
+  });
+
+  app.post("/api/sms/payment-reminder", async (req, res) => {
+    try {
+      const { studentId, groupId, amount } = req.body;
+      const student = await storage.getStudent(studentId);
+      const group = await storage.getGroup(groupId);
+      
+      if (!student || !group) {
+        return res.status(404).json({ error: "O'quvchi yoki guruh topilmadi" });
+      }
+
+      const phone = student.parentPhone || student.phone;
+      if (!phone) {
+        return res.status(400).json({ error: "Telefon raqami yo'q" });
+      }
+
+      const message = smsTemplates.paymentReminder(student.firstName, group.name, amount);
+      const result = await sendSMS(phone, message);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send payment reminder" });
+    }
+  });
+
+  app.post("/api/sms/payment-received", async (req, res) => {
+    try {
+      const { studentId, amount } = req.body;
+      const student = await storage.getStudent(studentId);
+      
+      if (!student) {
+        return res.status(404).json({ error: "O'quvchi topilmadi" });
+      }
+
+      const phone = student.parentPhone || student.phone;
+      if (!phone) {
+        return res.status(400).json({ error: "Telefon raqami yo'q" });
+      }
+
+      const message = smsTemplates.paymentReceived(student.firstName, amount, student.balance || 0);
+      const result = await sendSMS(phone, message);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send payment confirmation" });
     }
   });
 
