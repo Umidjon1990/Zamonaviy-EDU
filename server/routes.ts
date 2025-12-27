@@ -343,13 +343,13 @@ export async function registerRoutes(
 
   app.post("/api/teachers", async (req, res) => {
     try {
-      const { firstName, lastName, email, phone, salaryPercent } = req.body;
+      const { firstName, lastName, email, password, phone, salaryPercent } = req.body;
       const teacher = await storage.createUser({
         tenantId: TENANT_ID,
         firstName,
         lastName,
         email,
-        password: "password123", // Default password
+        password: password || "password123",
         phone,
         salaryPercent: salaryPercent || 0,
         role: "teacher",
@@ -357,6 +357,56 @@ export async function registerRoutes(
       res.status(201).json(teacher);
     } catch (error) {
       res.status(400).json({ error: "Failed to create teacher" });
+    }
+  });
+
+  // Teacher login
+  app.post("/api/auth/teacher-login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      const user = await storage.getUserByEmail(email);
+      
+      if (!user || user.role !== "teacher") {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      if (user.password !== password) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      res.json({
+        token: `teacher_${user.id}_${Date.now()}`,
+        teacher: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  // Get teacher's groups
+  app.get("/api/teacher/:teacherId/groups", async (req, res) => {
+    try {
+      const teacherId = req.params.teacherId;
+      const groups = await storage.getGroupsByTeacher(teacherId);
+      res.json(groups);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch groups" });
+    }
+  });
+
+  // Get students in a group
+  app.get("/api/groups/:groupId/students", async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const students = await storage.getStudentsByGroup(groupId);
+      res.json(students);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch students" });
     }
   });
 

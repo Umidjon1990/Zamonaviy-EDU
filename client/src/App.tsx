@@ -11,23 +11,31 @@ import Groups from "@/pages/Groups";
 import Schedule from "@/pages/Schedule";
 import Payments from "@/pages/Payments";
 import Settings from "@/pages/Settings";
+import TeacherLogin from "@/pages/TeacherLogin";
+import TeacherDashboard from "@/pages/TeacherDashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
-    <AppLayout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/leads" component={Leads} />
-        <Route path="/students" component={Students} />
-        <Route path="/teachers" component={Teachers} />
-        <Route path="/groups" component={Groups} />
-        <Route path="/schedule" component={Schedule} />
-        <Route path="/payments" component={Payments} />
-        <Route path="/settings" component={Settings} />
-        <Route component={NotFound} />
-      </Switch>
-    </AppLayout>
+    <Switch>
+      <Route path="/teacher-login" component={TeacherLogin} />
+      <Route path="/teacher-dashboard" component={TeacherDashboard} />
+      <Route>
+        <AppLayout>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/leads" component={Leads} />
+            <Route path="/students" component={Students} />
+            <Route path="/teachers" component={Teachers} />
+            <Route path="/groups" component={Groups} />
+            <Route path="/schedule" component={Schedule} />
+            <Route path="/payments" component={Payments} />
+            <Route path="/settings" component={Settings} />
+            <Route component={NotFound} />
+          </Switch>
+        </AppLayout>
+      </Route>
+    </Switch>
   );
 }
 

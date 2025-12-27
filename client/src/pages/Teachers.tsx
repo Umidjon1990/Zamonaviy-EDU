@@ -22,6 +22,7 @@ export default function Teachers() {
     firstName: "",
     lastName: "",
     email: "",
+    password: "",
     phone: "",
     salaryPercent: 30,
   });
@@ -32,7 +33,7 @@ export default function Teachers() {
       await createTeacher.mutateAsync(formData);
       toast({ title: "Muvaffaqiyat", description: "Yangi o'qituvchi qo'shildi" });
       setIsOpen(false);
-      setFormData({ firstName: "", lastName: "", email: "", phone: "", salaryPercent: 30 });
+      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", salaryPercent: 30 });
     } catch (error) {
       toast({ title: "Xatolik", description: "O'qituvchi qo'shishda xatolik yuz berdi", variant: "destructive" });
     }
@@ -96,7 +97,7 @@ export default function Teachers() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Email (Login)</Label>
                 <Input
                   id="email"
                   type="email"
@@ -105,6 +106,18 @@ export default function Teachers() {
                   placeholder="teacher@educrm.uz"
                   required
                   data-testid="input-email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Parol</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Kamida 6 belgi"
+                  required
+                  data-testid="input-password"
                 />
               </div>
               <div className="space-y-2">

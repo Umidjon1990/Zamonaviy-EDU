@@ -72,6 +72,8 @@ export interface IStorage {
   // Groups
   getGroups(tenantId: number): Promise<Group[]>;
   getGroup(id: number): Promise<Group | undefined>;
+  getGroupsByTeacher(teacherId: string): Promise<Group[]>;
+  getStudentsByGroup(groupId: number): Promise<Student[]>;
   createGroup(group: InsertGroup): Promise<Group>;
   updateGroup(id: number, group: Partial<InsertGroup>): Promise<Group | undefined>;
   deleteGroup(id: number): Promise<boolean>;
@@ -210,6 +212,19 @@ export class DatabaseStorage implements IStorage {
   async getGroup(id: number): Promise<Group | undefined> {
     const result = await db.select().from(groups).where(eq(groups.id, id)).limit(1);
     return result[0];
+  }
+
+  async getGroupsByTeacher(teacherId: string): Promise<Group[]> {
+    return await db.select().from(groups).where(eq(groups.teacherId, teacherId)).orderBy(desc(groups.createdAt));
+  }
+
+  async getStudentsByGroup(groupId: number): Promise<Student[]> {
+    const result = await db
+      .select({ student: students })
+      .from(studentGroups)
+      .innerJoin(students, eq(studentGroups.studentId, students.id))
+      .where(eq(studentGroups.groupId, groupId));
+    return result.map(r => r.student);
   }
 
   async createGroup(group: InsertGroup): Promise<Group> {
