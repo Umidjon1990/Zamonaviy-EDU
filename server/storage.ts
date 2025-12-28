@@ -85,7 +85,7 @@ export interface IStorage {
   removeStudentFromGroup(studentId: number, groupId: number): Promise<boolean>;
   
   // Attendance
-  getAttendance(tenantId: number, groupId?: number, date?: Date): Promise<Attendance[]>;
+  getAttendance(tenantId: number, groupId?: number, date?: Date, month?: number, year?: number): Promise<Attendance[]>;
   createAttendance(attendance: InsertAttendance): Promise<Attendance>;
   updateAttendance(id: number, attendance: Partial<InsertAttendance>): Promise<Attendance | undefined>;
   
@@ -273,7 +273,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Attendance
-  async getAttendance(tenantId: number, groupId?: number, date?: Date): Promise<Attendance[]> {
+  async getAttendance(tenantId: number, groupId?: number, date?: Date, month?: number, year?: number): Promise<Attendance[]> {
     const conditions = [eq(attendance.tenantId, tenantId)];
     
     if (groupId) {
@@ -282,6 +282,14 @@ export class DatabaseStorage implements IStorage {
     
     if (date) {
       conditions.push(eq(attendance.date, date));
+    }
+    
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(sql`${attendance.date} >= ${startDate}`);
+      conditions.push(sql`${attendance.date} <= ${endDate}`);
     }
     
     return await db.select().from(attendance).where(and(...conditions)).orderBy(desc(attendance.date));

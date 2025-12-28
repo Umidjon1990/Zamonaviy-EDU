@@ -257,7 +257,9 @@ export async function registerRoutes(
     try {
       const groupId = req.query.groupId ? parseInt(req.query.groupId as string) : undefined;
       const date = req.query.date ? new Date(req.query.date as string) : undefined;
-      const attendance = await storage.getAttendance(TENANT_ID, groupId, date);
+      const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      const attendance = await storage.getAttendance(TENANT_ID, groupId, date, month, year);
       res.json(attendance);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch attendance" });

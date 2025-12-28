@@ -10,7 +10,8 @@ import {
   LogOut,
   Menu,
   X,
-  UserCheck
+  UserCheck,
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ const navItems = [
   { icon: Users, label: translations.nav.groups, href: "/groups" },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule" },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments" },
+  { icon: FileText, label: "Hisobotlar", href: "/reports" },
   { icon: Settings, label: translations.nav.settings, href: "/settings" },
 ];
 
