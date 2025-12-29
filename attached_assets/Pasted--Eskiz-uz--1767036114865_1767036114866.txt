@@ -1,0 +1,118 @@
+СМС шлюз от Eskiz.uz
+Отправляйте СМС по всему миру, в любом количестве!
+
+В тестовом статусе для отправки тестовых смс сообщений, Вы можете использовать только нижеуказанные тексты:
+
+Это тест от Eskiz
+
+Bu Eskiz dan test
+
+This is test from Eskiz
+
+AUTHORIZATION
+Bearer Token
+POST
+Расходы по датам
+notify.eskiz.uz/api/report/total-by-range?status
+AUTHORIZATION
+Bearer Token
+This request is using Bearer Token from collectionСМС шлюз от Eskiz.uz
+PARAMS
+status
+[пустой] - все "delivered" - только частично и полностью доставленное "rejected" - только не доставленное
+
+Body
+formdata
+start_date
+2023-11-01 00:00
+
+С %Y-%m-%d %H:%M
+
+to_date
+2023-11-02 23:59
+
+По %Y-%m-%d %H:%M
+
+is_ad
+[пустой] - все 1 - только рекламное 0 - только сервисное
+
+Example Request
+Расходы по датам
+curl
+curl --location 'notify.eskiz.uz/api/report/total-by-range?status=null' \
+--form 'start_date="2023-11-01 00:00"' \
+--form 'to_date="2023-11-02 23:59"' \
+--form 'is_ad=""'
+Example Response
+Body
+Headers (0)
+No response body
+This request doesn't return any response body
+POST
+Расходы по рассылке
+notify.eskiz.uz/api/report/total-by-dispatch?status
+AUTHORIZATION
+Bearer Token
+This request is using Bearer Token from collectionСМС шлюз от Eskiz.uz
+PARAMS
+status
+[пустой] - все "delivered" - только частично и полностью доставленное "rejected" - только не доставленное
+
+Body
+formdata
+dispatch_id
+123
+
+ID рассылки
+
+is_ad
+[пустой] - все 1 - только рекламное 0 - только сервисное
+
+Example Request
+Расходы по рассылке
+curl
+curl --location 'notify.eskiz.uz/api/report/total-by-dispatch?status=null' \
+--form 'dispatch_id="123"' \
+--form 'is_ad=""'
+Example Response
+Body
+Headers (0)
+No response body
+This request doesn't return any response body
+GET
+Получить статус по ID
+notify.eskiz.uz/api/message/sms/status_by_id/:id
+Если :id INT - это ID SMS на платформе Eskiz
+
+Если :id UUID - это id, полученный в результате вызова API send, send-batch и send-global, или столбец request_id в результатах остальных API.
+
+AUTHORIZATION
+Bearer Token
+This request is using Bearer Token from collectionСМС шлюз от Eskiz.uz
+PATH VARIABLES
+id
+INT или UUID
+
+Example Request
+Получить статус по ID
+curl
+curl --location 'notify.eskiz.uz/api/message/sms/status_by_id/61359094'
+Example Response
+Body
+Headers (1)
+View More
+json
+{
+  "status": "success",
+  "data": {
+    "id": 61359094,
+    "user_id": 0,
+    "country_id": 83,
+    "connection_id": 8,
+    "smsc_id": 8,
+    "dispatch_id": null,
+    "user_sms_id": null,
+    "request_id": "b169553b-de29-4649-b5dd-cfafd85984f9",
+    "price": 0,
+    "total_price": 0,
+    "
