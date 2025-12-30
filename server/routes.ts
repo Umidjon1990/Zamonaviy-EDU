@@ -392,9 +392,9 @@ export async function registerRoutes(
           time = line.split(":").slice(1).join(":").trim();
         } else if (lowerLine.startsWith("xona:")) {
           room = line.split(":").slice(1).join(":").trim();
-        } else if (lowerLine.startsWith("o'qituvchi:") || lowerLine.startsWith("oqituvchi:") || lowerLine.startsWith("ustoz:")) {
+        } else if (/^o[''`]?qituvchi:/i.test(line) || lowerLine.startsWith("ustoz:")) {
           teacherName = line.split(":").slice(1).join(":").trim();
-        } else if (lowerLine.startsWith("o'quvchilar:") || lowerLine.startsWith("oquvchilar:") || lowerLine.startsWith("talabalar:")) {
+        } else if (/^o[''`]?quvchilar:/i.test(line) || lowerLine.startsWith("talabalar:")) {
           parsingStudents = true;
         } else if (parsingStudents) {
           // Check if this line looks like a phone number
