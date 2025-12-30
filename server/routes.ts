@@ -353,6 +353,8 @@ export async function registerRoutes(
       // Parse template
       const lines = template.split("\n").map(l => l.trim()).filter(l => l);
       
+      console.log("Template lines:", lines);
+      
       let groupName = "";
       let days: string[] = [];
       let time = "";
@@ -395,13 +397,15 @@ export async function registerRoutes(
         } else if (lowerLine.startsWith("o'quvchilar:") || lowerLine.startsWith("oquvchilar:") || lowerLine.startsWith("talabalar:")) {
           parsingStudents = true;
         } else if (parsingStudents) {
+          console.log("Parsing student line:", line, "pendingName:", pendingStudentName);
+          
           // Check if line starts with number (student name line)
-          if (/^\d+\./.test(line)) {
+          if (/^\d+[\.\)]/.test(line)) {
             // Check if name and phone on same line: "1.Aliyev Jasur +99890 123 45 67"
-            const sameLineMatch = line.match(/^\d+\.\s*(.+?)\s+(\+?\d[\d\s]+)$/);
+            const sameLineMatch = line.match(/^\d+[\.\)]\s*(.+?)\s+(\+?\d[\d\s\-]+)$/);
             if (sameLineMatch) {
               const fullName = sameLineMatch[1].trim();
-              const phone = sameLineMatch[2].replace(/\s+/g, "").replace(/^\+/, "");
+              const phone = sameLineMatch[2].replace(/[\s\-]+/g, "").replace(/^\+/, "");
               
               const nameParts = fullName.split(/\s+/);
               let lastName = "";
@@ -414,33 +418,41 @@ export async function registerRoutes(
                 firstName = fullName;
               }
               
+              console.log("Same line student:", { firstName, lastName, phone });
               students.push({ firstName, lastName, phone });
             } else {
               // Name only line: "1. Aliyev Jasur" - phone on next line
-              const nameMatch = line.match(/^\d+\.\s*(.+)$/);
+              const nameMatch = line.match(/^\d+[\.\)]\s*(.+)$/);
               if (nameMatch) {
                 pendingStudentName = nameMatch[1].trim();
+                console.log("Pending student name:", pendingStudentName);
               }
             }
-          } else if (pendingStudentName && /^\+?\d[\d\s]+$/.test(line.trim())) {
-            // Phone number line for pending student
-            const phone = line.trim().replace(/\s+/g, "").replace(/^\+/, "");
-            const nameParts = pendingStudentName.split(/\s+/);
-            let lastName = "";
-            let firstName = "";
-            
-            if (nameParts.length >= 2) {
-              lastName = nameParts[0];
-              firstName = nameParts.slice(1).join(" ");
-            } else {
-              firstName = pendingStudentName;
+          } else if (pendingStudentName) {
+            // Try to extract phone from this line
+            const phoneMatch = line.match(/\+?\d[\d\s\-]+/);
+            if (phoneMatch) {
+              const phone = phoneMatch[0].replace(/[\s\-]+/g, "").replace(/^\+/, "");
+              const nameParts = pendingStudentName.split(/\s+/);
+              let lastName = "";
+              let firstName = "";
+              
+              if (nameParts.length >= 2) {
+                lastName = nameParts[0];
+                firstName = nameParts.slice(1).join(" ");
+              } else {
+                firstName = pendingStudentName;
+              }
+              
+              console.log("Multi-line student:", { firstName, lastName, phone });
+              students.push({ firstName, lastName, phone });
+              pendingStudentName = "";
             }
-            
-            students.push({ firstName, lastName, phone });
-            pendingStudentName = "";
           }
         }
       }
+      
+      console.log("Parsed students:", students);
       
       // Validate required fields
       if (!groupName) {
