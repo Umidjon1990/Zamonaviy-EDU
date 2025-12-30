@@ -602,6 +602,51 @@ export default function SuperAdmin() {
                       value={editingTenant.subscriptionEndsAt ? new Date(editingTenant.subscriptionEndsAt).toISOString().split('T')[0] : ""}
                       onChange={(e) => setEditingTenant({ ...editingTenant, subscriptionEndsAt: e.target.value ? new Date(e.target.value) : null })}
                     />
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const baseDate = editingTenant.subscriptionEndsAt ? new Date(editingTenant.subscriptionEndsAt) : new Date();
+                          const newDate = new Date(baseDate);
+                          newDate.setMonth(newDate.getMonth() + 1);
+                          setEditingTenant({ ...editingTenant, subscriptionEndsAt: newDate, status: "active" });
+                        }}
+                        data-testid="button-extend-1-month"
+                      >
+                        +1 oy
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const baseDate = editingTenant.subscriptionEndsAt ? new Date(editingTenant.subscriptionEndsAt) : new Date();
+                          const newDate = new Date(baseDate);
+                          newDate.setMonth(newDate.getMonth() + 3);
+                          setEditingTenant({ ...editingTenant, subscriptionEndsAt: newDate, status: "active" });
+                        }}
+                        data-testid="button-extend-3-months"
+                      >
+                        +3 oy
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const baseDate = editingTenant.subscriptionEndsAt ? new Date(editingTenant.subscriptionEndsAt) : new Date();
+                          const newDate = new Date(baseDate);
+                          newDate.setFullYear(newDate.getFullYear() + 1);
+                          setEditingTenant({ ...editingTenant, subscriptionEndsAt: newDate, status: "active" });
+                        }}
+                        data-testid="button-extend-1-year"
+                      >
+                        +1 yil
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Uzaytirish tugmasi statusni ham "Faol" ga o'zgartiradi</p>
                   </div>
                 </div>
               )}
