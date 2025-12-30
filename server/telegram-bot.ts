@@ -97,24 +97,45 @@ export async function startTelegramBot() {
   }
 }
 
+function normalizePhone(phone: string): string {
+  let normalized = phone.replace(/[\s\-\+\(\)]/g, "");
+  if (normalized.startsWith("998")) {
+    return normalized;
+  } else if (normalized.startsWith("0")) {
+    return "998" + normalized.substring(1);
+  } else if (normalized.length === 9) {
+    return "998" + normalized;
+  }
+  return normalized;
+}
+
 async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
-  let phone = rawPhone.replace(/[\s\-\+\(\)]/g, "");
+  const phone = normalizePhone(rawPhone);
   
-  if (phone.startsWith("998")) {
-    phone = phone;
-  } else if (phone.startsWith("0")) {
-    phone = "998" + phone.substring(1);
-  } else if (phone.length === 9) {
-    phone = "998" + phone;
+  if (phone.length < 12) {
+    await ctx.reply(
+      "❌ Telefon raqami noto'g'ri formatda.\n\n" +
+      "Iltimos, to'liq raqamni kiriting:\n" +
+      "Namuna: +998901234567 yoki 901234567"
+    );
+    return;
   }
 
   const students = await storage.getStudents(TENANT_ID);
-  const student = students.find((s) => {
-    const studentPhone = s.phone.replace(/[\s\-\+\(\)]/g, "");
-    const parentPhone = s.parentPhone?.replace(/[\s\-\+\(\)]/g, "") || "";
-    return studentPhone.includes(phone) || phone.includes(studentPhone) ||
-           parentPhone.includes(phone) || phone.includes(parentPhone);
+  const matchingStudents = students.filter((s) => {
+    const studentPhone = normalizePhone(s.phone);
+    const parentPhone = s.parentPhone ? normalizePhone(s.parentPhone) : "";
+    return studentPhone === phone || parentPhone === phone;
   });
+  
+  if (matchingStudents.length > 1) {
+    await ctx.reply(
+      "⚠️ Bir nechta o'quvchi topildi. Iltimos, markaz bilan bog'laning."
+    );
+    return;
+  }
+  
+  const student = matchingStudents[0];
 
   if (student) {
     ctx.session.step = "verified";
