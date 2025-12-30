@@ -372,6 +372,7 @@ export async function registerRoutes(
       };
       
       let parsingStudents = false;
+      let pendingStudentName = "";
       
       for (const line of lines) {
         const lowerLine = line.toLowerCase();
@@ -393,15 +394,38 @@ export async function registerRoutes(
           teacherName = line.split(":").slice(1).join(":").trim();
         } else if (lowerLine.startsWith("o'quvchilar:") || lowerLine.startsWith("oquvchilar:") || lowerLine.startsWith("talabalar:")) {
           parsingStudents = true;
-        } else if (parsingStudents && /^\d+\./.test(line)) {
-          // Parse student line: "1.Jaloliddinova Mohinur +99894 00152 48"
-          const match = line.match(/^\d+\.\s*(.+?)\s+(\+?\d[\d\s]+)$/);
-          if (match) {
-            const fullName = match[1].trim();
-            const phone = match[2].replace(/\s+/g, "").replace(/^\+/, "");
-            
-            // Split name into parts (last name first, then first name)
-            const nameParts = fullName.split(/\s+/);
+        } else if (parsingStudents) {
+          // Check if line starts with number (student name line)
+          if (/^\d+\./.test(line)) {
+            // Check if name and phone on same line: "1.Aliyev Jasur +99890 123 45 67"
+            const sameLineMatch = line.match(/^\d+\.\s*(.+?)\s+(\+?\d[\d\s]+)$/);
+            if (sameLineMatch) {
+              const fullName = sameLineMatch[1].trim();
+              const phone = sameLineMatch[2].replace(/\s+/g, "").replace(/^\+/, "");
+              
+              const nameParts = fullName.split(/\s+/);
+              let lastName = "";
+              let firstName = "";
+              
+              if (nameParts.length >= 2) {
+                lastName = nameParts[0];
+                firstName = nameParts.slice(1).join(" ");
+              } else {
+                firstName = fullName;
+              }
+              
+              students.push({ firstName, lastName, phone });
+            } else {
+              // Name only line: "1. Aliyev Jasur" - phone on next line
+              const nameMatch = line.match(/^\d+\.\s*(.+)$/);
+              if (nameMatch) {
+                pendingStudentName = nameMatch[1].trim();
+              }
+            }
+          } else if (pendingStudentName && /^\+?\d[\d\s]+$/.test(line.trim())) {
+            // Phone number line for pending student
+            const phone = line.trim().replace(/\s+/g, "").replace(/^\+/, "");
+            const nameParts = pendingStudentName.split(/\s+/);
             let lastName = "";
             let firstName = "";
             
@@ -409,10 +433,11 @@ export async function registerRoutes(
               lastName = nameParts[0];
               firstName = nameParts.slice(1).join(" ");
             } else {
-              firstName = fullName;
+              firstName = pendingStudentName;
             }
             
             students.push({ firstName, lastName, phone });
+            pendingStudentName = "";
           }
         }
       }

@@ -30,9 +30,12 @@ Vaqti: 10:00
 Xona: 3-xona
 O'qituvchi: Abdushukur
 O'quvchilar:
-1.Jaloliddinova Mohinur +99894 001 52 48
-2.Abdulboqiyev Azamat +99893 053 85 31
-3.Fayzullayev Bilolxon +99893 405 98 98`;
+1. Aliyev Jasur
+   +998 90 123 45 67
+2. Karimova Nilufar
+   +998 91 234 56 78
+3. Rahimov Sardor
+   +998 93 345 67 89`;
 
 export default function Groups() {
   const { data: groupsData, isLoading } = useGroups();
