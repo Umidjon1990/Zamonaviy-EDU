@@ -500,12 +500,12 @@ export async function registerRoutes(
             if (studentGroupsList.length > 0) {
               const group = await storage.getGroup(studentGroupsList[0].groupId);
               if (group) {
-                // Eskiz template requires "... kursi" format
-                courseName = group.name.toLowerCase().includes("kurs") ? group.name : group.name + " kursi";
+                const groupName = group.name.trim();
+                courseName = groupName.toLowerCase().includes("kurs") ? groupName : groupName + " kursi";
               }
             }
             
-            sendPaymentReceivedSMS(phone, student.firstName, courseName, payment.amount)
+            sendPaymentReceivedSMS(phone, student.firstName.trim(), courseName, payment.amount)
               .catch(err => console.error("SMS notification error:", err));
           }
         }
@@ -784,8 +784,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Telefon raqami yo'q" });
       }
 
-      const courseName = group?.name || "kurs";
-      const result = await sendPaymentReceivedSMS(phone, student.firstName, courseName, amount);
+      let courseName = "umumiy kursi";
+      if (group) {
+        const groupName = group.name.trim();
+        courseName = groupName.toLowerCase().includes("kurs") ? groupName : groupName + " kursi";
+      }
+      const result = await sendPaymentReceivedSMS(phone, student.firstName.trim(), courseName, amount);
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to send payment confirmation" });
