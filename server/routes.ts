@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
 import { notifyStudentAttendance, notifyStudentPayment } from "./telegram-bot";
@@ -20,13 +21,116 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Hardcoded tenant ID for MVP (single tenant)
-  const TENANT_ID = 1;
+  // ===== TENANT AUTHENTICATION =====
+  
+  // Middleware to require tenant authentication
+  const requireTenantAuth = (req: any, res: any, next: any) => {
+    if (!req.session.tenantId || !req.session.userId) {
+      return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
+    }
+    next();
+  };
+
+  // Get tenant ID from session - throws if not authenticated
+  const getTenantId = (req: any): number => {
+    if (!req.session.tenantId) {
+      throw new Error("Tenant ID not found in session");
+    }
+    return req.session.tenantId;
+  };
+
+  // Login for tenant admins/staff
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { phone, password } = req.body;
+      if (!phone || !password) {
+        return res.status(400).json({ error: "Telefon va parol kiritilishi shart" });
+      }
+
+      // Clean phone number
+      const cleanPhone = phone.replace(/\D/g, '');
+      
+      // Find user by phone
+      const user = await storage.getUserByPhone(cleanPhone);
+      if (!user) {
+        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
+      }
+
+      // Password check using bcrypt
+      const passwordMatch = await bcrypt.compare(password, user.password);
+      if (!passwordMatch) {
+        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
+      }
+
+      // Check if tenant is active
+      const tenant = await storage.getTenant(user.tenantId);
+      if (!tenant) {
+        return res.status(401).json({ error: "Markaz topilmadi" });
+      }
+      if (tenant.status === "suspended") {
+        return res.status(403).json({ error: "Markaz obunasi to'xtatilgan. Admin bilan bog'laning." });
+      }
+
+      // Set session
+      req.session.userId = user.id;
+      req.session.tenantId = user.tenantId;
+      req.session.role = user.role;
+
+      res.json({
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          phone: user.phone,
+        },
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+        },
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Tizim xatosi" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Chiqishda xato" });
+      }
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
+    }
+    res.json({
+      userId: req.session.userId,
+      tenantId: req.session.tenantId,
+      role: req.session.role,
+    });
+  });
+
+  // Apply requireTenantAuth to all tenant data routes
+  app.use("/api/leads", requireTenantAuth);
+  app.use("/api/students", requireTenantAuth);
+  app.use("/api/subjects", requireTenantAuth);
+  app.use("/api/groups", requireTenantAuth);
+  app.use("/api/attendance", requireTenantAuth);
+  app.use("/api/payments", requireTenantAuth);
+  app.use("/api/teachers", requireTenantAuth);
+  app.use("/api/stats", requireTenantAuth);
 
   // ===== LEADS =====
   app.get("/api/leads", async (req, res) => {
     try {
-      const leads = await storage.getLeads(TENANT_ID);
+      const tenantId = getTenantId(req);
+      const leads = await storage.getLeads(tenantId);
       res.json(leads);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch leads" });
@@ -36,8 +140,9 @@ export async function registerRoutes(
   app.get("/api/leads/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
       const lead = await storage.getLead(id);
-      if (!lead) {
+      if (!lead || lead.tenantId !== tenantId) {
         return res.status(404).json({ error: "Lead not found" });
       }
       res.json(lead);
@@ -48,7 +153,7 @@ export async function registerRoutes(
 
   app.post("/api/leads", async (req, res) => {
     try {
-      const data = insertLeadSchema.parse({ ...req.body, tenantId: TENANT_ID });
+      const data = insertLeadSchema.parse({ ...req.body, tenantId: getTenantId(req) });
       const lead = await storage.createLead(data);
       res.status(201).json(lead);
     } catch (error) {
@@ -59,11 +164,13 @@ export async function registerRoutes(
   app.patch("/api/leads/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const lead = await storage.updateLead(id, req.body);
-      if (!lead) {
+      const tenantId = getTenantId(req);
+      const lead = await storage.getLead(id);
+      if (!lead || lead.tenantId !== tenantId) {
         return res.status(404).json({ error: "Lead not found" });
       }
-      res.json(lead);
+      const updated = await storage.updateLead(id, req.body);
+      res.json(updated);
     } catch (error) {
       res.status(400).json({ error: "Failed to update lead" });
     }
@@ -72,10 +179,12 @@ export async function registerRoutes(
   app.delete("/api/leads/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const deleted = await storage.deleteLead(id);
-      if (!deleted) {
+      const tenantId = getTenantId(req);
+      const lead = await storage.getLead(id);
+      if (!lead || lead.tenantId !== tenantId) {
         return res.status(404).json({ error: "Lead not found" });
       }
+      await storage.deleteLead(id);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete lead" });
@@ -85,7 +194,7 @@ export async function registerRoutes(
   // ===== STUDENTS =====
   app.get("/api/students", async (req, res) => {
     try {
-      const students = await storage.getStudents(TENANT_ID);
+      const students = await storage.getStudents(getTenantId(req));
       res.json(students);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch students" });
@@ -95,8 +204,9 @@ export async function registerRoutes(
   app.get("/api/students/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
       const student = await storage.getStudent(id);
-      if (!student) {
+      if (!student || student.tenantId !== tenantId) {
         return res.status(404).json({ error: "Student not found" });
       }
       res.json(student);
@@ -107,7 +217,7 @@ export async function registerRoutes(
 
   app.post("/api/students", async (req, res) => {
     try {
-      const data = insertStudentSchema.parse({ ...req.body, tenantId: TENANT_ID });
+      const data = insertStudentSchema.parse({ ...req.body, tenantId: getTenantId(req) });
       const student = await storage.createStudent(data);
       res.status(201).json(student);
     } catch (error) {
@@ -118,10 +228,12 @@ export async function registerRoutes(
   app.patch("/api/students/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const student = await storage.updateStudent(id, req.body);
-      if (!student) {
+      const tenantId = getTenantId(req);
+      const existing = await storage.getStudent(id);
+      if (!existing || existing.tenantId !== tenantId) {
         return res.status(404).json({ error: "Student not found" });
       }
+      const student = await storage.updateStudent(id, req.body);
       res.json(student);
     } catch (error) {
       res.status(400).json({ error: "Failed to update student" });
@@ -131,10 +243,12 @@ export async function registerRoutes(
   app.delete("/api/students/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const deleted = await storage.deleteStudent(id);
-      if (!deleted) {
+      const tenantId = getTenantId(req);
+      const existing = await storage.getStudent(id);
+      if (!existing || existing.tenantId !== tenantId) {
         return res.status(404).json({ error: "Student not found" });
       }
+      await storage.deleteStudent(id);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete student" });
@@ -144,7 +258,7 @@ export async function registerRoutes(
   // ===== SUBJECTS =====
   app.get("/api/subjects", async (req, res) => {
     try {
-      const subjects = await storage.getSubjects(TENANT_ID);
+      const subjects = await storage.getSubjects(getTenantId(req));
       res.json(subjects);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch subjects" });
@@ -153,7 +267,7 @@ export async function registerRoutes(
 
   app.post("/api/subjects", async (req, res) => {
     try {
-      const data = insertSubjectSchema.parse({ ...req.body, tenantId: TENANT_ID });
+      const data = insertSubjectSchema.parse({ ...req.body, tenantId: getTenantId(req) });
       const subject = await storage.createSubject(data);
       res.status(201).json(subject);
     } catch (error) {
@@ -164,7 +278,7 @@ export async function registerRoutes(
   // ===== GROUPS =====
   app.get("/api/groups", async (req, res) => {
     try {
-      const groups = await storage.getGroups(TENANT_ID);
+      const groups = await storage.getGroups(getTenantId(req));
       res.json(groups);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch groups" });
@@ -174,8 +288,9 @@ export async function registerRoutes(
   app.get("/api/groups/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
       const group = await storage.getGroup(id);
-      if (!group) {
+      if (!group || group.tenantId !== tenantId) {
         return res.status(404).json({ error: "Group not found" });
       }
       res.json(group);
@@ -186,7 +301,7 @@ export async function registerRoutes(
 
   app.post("/api/groups", async (req, res) => {
     try {
-      const data = insertGroupSchema.parse({ ...req.body, tenantId: TENANT_ID });
+      const data = insertGroupSchema.parse({ ...req.body, tenantId: getTenantId(req) });
       const group = await storage.createGroup(data);
       res.status(201).json(group);
     } catch (error) {
@@ -197,10 +312,12 @@ export async function registerRoutes(
   app.patch("/api/groups/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const group = await storage.updateGroup(id, req.body);
-      if (!group) {
+      const tenantId = getTenantId(req);
+      const existing = await storage.getGroup(id);
+      if (!existing || existing.tenantId !== tenantId) {
         return res.status(404).json({ error: "Group not found" });
       }
+      const group = await storage.updateGroup(id, req.body);
       res.json(group);
     } catch (error) {
       res.status(400).json({ error: "Failed to update group" });
@@ -210,10 +327,12 @@ export async function registerRoutes(
   app.delete("/api/groups/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const deleted = await storage.deleteGroup(id);
-      if (!deleted) {
+      const tenantId = getTenantId(req);
+      const existing = await storage.getGroup(id);
+      if (!existing || existing.tenantId !== tenantId) {
         return res.status(404).json({ error: "Group not found" });
       }
+      await storage.deleteGroup(id);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete group" });
@@ -224,6 +343,11 @@ export async function registerRoutes(
   app.get("/api/students/:studentId/groups", async (req, res) => {
     try {
       const studentId = parseInt(req.params.studentId);
+      const tenantId = getTenantId(req);
+      const student = await storage.getStudent(studentId);
+      if (!student || student.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Student not found" });
+      }
       const groups = await storage.getStudentGroups(studentId);
       res.json(groups);
     } catch (error) {
@@ -234,6 +358,15 @@ export async function registerRoutes(
   app.post("/api/students/:studentId/groups", async (req, res) => {
     try {
       const studentId = parseInt(req.params.studentId);
+      const tenantId = getTenantId(req);
+      const student = await storage.getStudent(studentId);
+      if (!student || student.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+      const group = await storage.getGroup(req.body.groupId);
+      if (!group || group.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Group not found" });
+      }
       const data = insertStudentGroupSchema.parse({ ...req.body, studentId });
       const studentGroup = await storage.addStudentToGroup(data);
       res.status(201).json(studentGroup);
@@ -246,6 +379,11 @@ export async function registerRoutes(
     try {
       const studentId = parseInt(req.params.studentId);
       const groupId = parseInt(req.params.groupId);
+      const tenantId = getTenantId(req);
+      const student = await storage.getStudent(studentId);
+      if (!student || student.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Student not found" });
+      }
       const deleted = await storage.removeStudentFromGroup(studentId, groupId);
       if (!deleted) {
         return res.status(404).json({ error: "Student-Group relation not found" });
@@ -263,7 +401,7 @@ export async function registerRoutes(
       const date = req.query.date ? new Date(req.query.date as string) : undefined;
       const month = req.query.month ? parseInt(req.query.month as string) : undefined;
       const year = req.query.year ? parseInt(req.query.year as string) : undefined;
-      const attendance = await storage.getAttendance(TENANT_ID, groupId, date, month, year);
+      const attendance = await storage.getAttendance(getTenantId(req), groupId, date, month, year);
       res.json(attendance);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch attendance" });
@@ -272,7 +410,7 @@ export async function registerRoutes(
 
   app.post("/api/attendance", async (req, res) => {
     try {
-      const data = insertAttendanceSchema.parse({ ...req.body, tenantId: TENANT_ID });
+      const data = insertAttendanceSchema.parse({ ...req.body, tenantId: getTenantId(req) });
       const attendance = await storage.createAttendance(data);
       
       // Send Telegram notification to student
@@ -297,10 +435,13 @@ export async function registerRoutes(
   app.patch("/api/attendance/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const attendance = await storage.updateAttendance(id, req.body);
-      if (!attendance) {
+      const tenantId = getTenantId(req);
+      // Attendance records are created with tenantId, so we verify ownership
+      const existing = await storage.getAttendanceById(id);
+      if (!existing || existing.tenantId !== tenantId) {
         return res.status(404).json({ error: "Attendance record not found" });
       }
+      const attendance = await storage.updateAttendance(id, req.body);
       res.json(attendance);
     } catch (error) {
       res.status(400).json({ error: "Failed to update attendance" });
@@ -311,7 +452,7 @@ export async function registerRoutes(
   app.get("/api/payments", async (req, res) => {
     try {
       const studentId = req.query.studentId ? parseInt(req.query.studentId as string) : undefined;
-      const payments = await storage.getPayments(TENANT_ID, studentId);
+      const payments = await storage.getPayments(getTenantId(req), studentId);
       res.json(payments);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch payments" });
@@ -321,8 +462,9 @@ export async function registerRoutes(
   app.get("/api/payments/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
       const payment = await storage.getPayment(id);
-      if (!payment) {
+      if (!payment || payment.tenantId !== tenantId) {
         return res.status(404).json({ error: "Payment not found" });
       }
       res.json(payment);
@@ -333,7 +475,7 @@ export async function registerRoutes(
 
   app.post("/api/payments", async (req, res) => {
     try {
-      const data = insertPaymentSchema.parse({ ...req.body, tenantId: TENANT_ID });
+      const data = insertPaymentSchema.parse({ ...req.body, tenantId: getTenantId(req) });
       const payment = await storage.createPayment(data);
       
       // Update student balance
@@ -378,7 +520,7 @@ export async function registerRoutes(
   // ===== TEACHERS =====
   app.get("/api/teachers", async (req, res) => {
     try {
-      const teachers = await storage.getTeachers(TENANT_ID);
+      const teachers = await storage.getTeachers(getTenantId(req));
       res.json(teachers);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch teachers" });
@@ -388,12 +530,13 @@ export async function registerRoutes(
   app.post("/api/teachers", async (req, res) => {
     try {
       const { firstName, lastName, email, password, phone, salaryPercent } = req.body;
+      const hashedPassword = await bcrypt.hash(password || "password123", 10);
       const teacher = await storage.createUser({
-        tenantId: TENANT_ID,
+        tenantId: getTenantId(req),
         firstName,
         lastName,
         email,
-        password: password || "password123",
+        password: hashedPassword,
         phone,
         salaryPercent: salaryPercent || 0,
         role: "teacher",
@@ -470,7 +613,7 @@ export async function registerRoutes(
     try {
       const { firstName, lastName, phone, parentPhone, groupId } = req.body;
       const student = await storage.createStudent({
-        tenantId: TENANT_ID,
+        tenantId: getTenantId(req),
         firstName,
         lastName,
         phone,
@@ -532,7 +675,7 @@ export async function registerRoutes(
   // ===== STATISTICS =====
   app.get("/api/stats", async (req, res) => {
     try {
-      const stats = await storage.getStats(TENANT_ID);
+      const stats = await storage.getStats(getTenantId(req));
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch statistics" });
@@ -838,10 +981,11 @@ export async function registerRoutes(
       // Create admin user for this tenant
       if (adminPhone && adminPassword) {
         const adminEmail = `admin-${tenant.id}@${tenant.slug || 'tenant'}.educrm.uz`;
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
         await storage.createUser({
           tenantId: tenant.id,
           email: adminEmail,
-          password: adminPassword,
+          password: hashedPassword,
           firstName: adminFirstName || "Admin",
           lastName: adminLastName || "",
           phone: adminPhone.replace(/\D/g, ''), // Remove non-digits

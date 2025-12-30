@@ -57,10 +57,34 @@ Preferred communication style: Simple, everyday language.
 ```
 
 ### Key Design Decisions
-- **Hardcoded Tenant ID**: MVP uses `TENANT_ID = 1` for single-tenant operation
+- **Multi-Tenant Architecture**: Full tenant isolation with session-based authentication
 - **Uzbek Localization**: All UI text stored in `client/src/lib/i18n.ts`
 - **API Hooks Pattern**: Custom hooks in `lib/api.ts` wrap React Query for data fetching
 - **Mobile-First**: Responsive sidebar with Sheet component for mobile navigation
+
+### Authentication System
+- **Tenant User Auth**: Session-based authentication with bcrypt password hashing
+  - Login: `POST /api/auth/login` with phone and password
+  - Logout: `POST /api/auth/logout`
+  - Check session: `GET /api/auth/me`
+- **Super Admin Auth**: Token-based authentication for system administration
+  - Login: `POST /api/super-admin/login` with username and password
+  - Verify: `GET /api/super-admin/verify`
+  - Credentials stored in environment secrets
+
+### Multi-Tenant Data Isolation
+- All tenant-specific routes extract tenant_id from session via `getTenantId(req)`
+- User passwords are hashed with bcrypt (10 rounds)
+- Session data stored in PostgreSQL via connect-pg-simple
+- Suspended tenants cannot login (checked during authentication)
+
+### Environment Secrets Required
+- `SESSION_SECRET`: **REQUIRED** - Secret for signing session cookies. App will fail to start without this.
+- `SUPER_ADMIN_USERNAME`: Super admin login username
+- `SUPER_ADMIN_PASSWORD`: Super admin login password
+- `SUPER_ADMIN_TOKEN_SECRET`: Secret for signing super admin tokens
+- `TELEGRAM_BOT_TOKEN`: Telegram bot API token
+- `ESKIZ_EMAIL`, `ESKIZ_PASSWORD`: Eskiz.uz SMS gateway credentials
 
 ## External Dependencies
 

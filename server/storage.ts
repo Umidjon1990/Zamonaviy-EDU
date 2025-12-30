@@ -66,6 +66,7 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   deleteUser(id: string): Promise<boolean>;
   getTeachers(tenantId: number): Promise<User[]>;
@@ -107,6 +108,7 @@ export interface IStorage {
   
   // Attendance
   getAttendance(tenantId: number, groupId?: number, date?: Date, month?: number, year?: number): Promise<Attendance[]>;
+  getAttendanceById(id: number): Promise<Attendance | undefined>;
   createAttendance(attendance: InsertAttendance): Promise<Attendance>;
   updateAttendance(id: number, attendance: Partial<InsertAttendance>): Promise<Attendance | undefined>;
   
@@ -199,6 +201,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0];
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
     return result[0];
   }
 
@@ -373,6 +380,11 @@ export class DatabaseStorage implements IStorage {
     }
     
     return await db.select().from(attendance).where(and(...conditions)).orderBy(desc(attendance.date));
+  }
+
+  async getAttendanceById(id: number): Promise<Attendance | undefined> {
+    const result = await db.select().from(attendance).where(eq(attendance.id, id)).limit(1);
+    return result[0];
   }
 
   async createAttendance(att: InsertAttendance): Promise<Attendance> {
