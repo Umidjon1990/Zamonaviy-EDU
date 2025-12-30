@@ -6,9 +6,10 @@ const TENANT_ID = 1;
 interface SessionData {
   step: "start" | "awaiting_phone" | "verified";
   phone?: string;
-  userType?: "student" | "teacher";
+  userType?: "student" | "teacher" | "admin";
   studentId?: number;
   teacherId?: string;
+  adminId?: string;
 }
 
 type BotContext = Context & SessionFlavor<SessionData>;
@@ -36,6 +37,7 @@ export async function startTelegramBot() {
     ctx.session.userType = undefined;
     ctx.session.studentId = undefined;
     ctx.session.teacherId = undefined;
+    ctx.session.adminId = undefined;
     
     await ctx.reply(
       "Assalomu alaykum! EduCRM botiga xush kelibsiz!\n\n" +
@@ -107,6 +109,39 @@ export async function startTelegramBot() {
     await showTeacherSalary(ctx, ctx.session.teacherId);
   });
 
+  // Admin commands
+  bot.command("statistika", async (ctx) => {
+    if (ctx.session.step !== "verified" || ctx.session.userType !== "admin") {
+      await ctx.reply("Bu buyruq faqat adminlar uchun.");
+      return;
+    }
+    await showAdminStats(ctx);
+  });
+
+  bot.command("tushum", async (ctx) => {
+    if (ctx.session.step !== "verified" || ctx.session.userType !== "admin") {
+      await ctx.reply("Bu buyruq faqat adminlar uchun.");
+      return;
+    }
+    await showAdminIncome(ctx);
+  });
+
+  bot.command("qarzdorlar", async (ctx) => {
+    if (ctx.session.step !== "verified" || ctx.session.userType !== "admin") {
+      await ctx.reply("Bu buyruq faqat adminlar uchun.");
+      return;
+    }
+    await showAdminDebtors(ctx);
+  });
+
+  bot.command("hisobot", async (ctx) => {
+    if (ctx.session.step !== "verified" || ctx.session.userType !== "admin") {
+      await ctx.reply("Bu buyruq faqat adminlar uchun.");
+      return;
+    }
+    await showAdminDailyReport(ctx);
+  });
+
   bot.catch((err) => {
     console.error("Telegram bot xatosi:", err);
   });
@@ -143,7 +178,46 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
     return;
   }
 
-  // Check for teacher first
+  // Check for admin first (markaz_admin role)
+  const admins = await storage.getAdmins(TENANT_ID);
+  const admin = admins.find((u) => {
+    const adminPhone = u.phone ? normalizePhone(u.phone) : "";
+    return adminPhone === phone;
+  });
+
+  if (admin) {
+    ctx.session.step = "verified";
+    ctx.session.userType = "admin";
+    ctx.session.adminId = admin.id;
+    ctx.session.phone = phone;
+
+    const chatId = ctx.chat?.id?.toString();
+    if (chatId) {
+      await storage.updateUserTelegramChatId(admin.id, chatId);
+    }
+
+    await ctx.reply(
+      `✅ Xush kelibsiz, ${admin.firstName} ${admin.lastName}!\n\n` +
+      `👔 Siz admin sifatida aniqlandingiz.\n\n` +
+      `📊 Buyruqlar:\n` +
+      `/statistika - Umumiy statistika\n` +
+      `/tushum - Oylik tushum\n` +
+      `/qarzdorlar - Qarzdor o'quvchilar\n` +
+      `/hisobot - Kunlik hisobot\n`,
+      {
+        reply_markup: {
+          keyboard: [
+            [{ text: "📊 Statistika" }, { text: "💰 Tushum" }],
+            [{ text: "⚠️ Qarzdorlar" }, { text: "📋 Hisobot" }],
+          ],
+          resize_keyboard: true,
+        },
+      }
+    );
+    return;
+  }
+
+  // Check for teacher
   const teachers = await storage.getTeachers(TENANT_ID);
   const teacher = teachers.find((t) => {
     const teacherPhone = t.phone ? normalizePhone(t.phone) : "";
@@ -238,7 +312,25 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
 async function handleVerifiedUser(ctx: BotContext) {
   const text = ctx.message?.text?.toLowerCase() || "";
   
-  if (ctx.session.userType === "teacher" && ctx.session.teacherId) {
+  if (ctx.session.userType === "admin") {
+    if (text.includes("statistika") || text.includes("📊")) {
+      await showAdminStats(ctx);
+    } else if (text.includes("tushum") || text.includes("💰")) {
+      await showAdminIncome(ctx);
+    } else if (text.includes("qarzdor") || text.includes("⚠️")) {
+      await showAdminDebtors(ctx);
+    } else if (text.includes("hisobot") || text.includes("📋")) {
+      await showAdminDailyReport(ctx);
+    } else {
+      await ctx.reply(
+        "Quyidagi buyruqlardan birini tanlang:\n\n" +
+        "📊 Statistika - Umumiy statistika\n" +
+        "💰 Tushum - Oylik tushum\n" +
+        "⚠️ Qarzdorlar - Qarzdor o'quvchilar\n" +
+        "📋 Hisobot - Kunlik hisobot"
+      );
+    }
+  } else if (ctx.session.userType === "teacher" && ctx.session.teacherId) {
     if (text.includes("guruh") || text.includes("📚")) {
       await showTeacherGroups(ctx, ctx.session.teacherId);
     } else if (text.includes("oylik") || text.includes("💰")) {
@@ -501,6 +593,263 @@ async function showTeacherAttendance(ctx: BotContext, teacherId: string) {
   await ctx.reply(message, { parse_mode: "HTML" });
 }
 
+// ===== ADMIN FUNCTIONS =====
+
+async function showAdminStats(ctx: BotContext) {
+  const stats = await storage.getStats(TENANT_ID);
+  const students = await storage.getStudents(TENANT_ID);
+  const groups = await storage.getGroups(TENANT_ID);
+  const teachers = await storage.getTeachers(TENANT_ID);
+  const leads = await storage.getLeads(TENANT_ID);
+  
+  const activeStudents = students.filter(s => s.status === "active").length;
+  const pausedStudents = students.filter(s => s.status === "paused").length;
+  const newLeads = leads.filter(l => l.status === "new").length;
+  const debtors = students.filter(s => s.balance < 0).length;
+  
+  const message = 
+    `📊 <b>Umumiy statistika</b>\n\n` +
+    `👥 <b>O'quvchilar:</b>\n` +
+    `   ├ Jami: ${students.length} ta\n` +
+    `   ├ Faol: ${activeStudents} ta\n` +
+    `   ├ To'xtatilgan: ${pausedStudents} ta\n` +
+    `   └ Qarzdorlar: ${debtors} ta\n\n` +
+    `📚 Guruhlar: ${groups.length} ta\n` +
+    `👨‍🏫 O'qituvchilar: ${teachers.length} ta\n` +
+    `📝 Yangi lidlar: ${newLeads} ta\n\n` +
+    `💰 Oylik tushum: ${stats.monthlyIncome.toLocaleString()} so'm`;
+  
+  await ctx.reply(message, { parse_mode: "HTML" });
+}
+
+async function showAdminIncome(ctx: BotContext) {
+  const now = new Date();
+  const payments = await storage.getPayments(TENANT_ID);
+  
+  // Current month payments
+  const monthlyPayments = payments.filter(p => {
+    const paymentDate = new Date(p.createdAt);
+    return paymentDate.getMonth() === now.getMonth() && 
+           paymentDate.getFullYear() === now.getFullYear() &&
+           p.status === "completed";
+  });
+  
+  const totalIncome = monthlyPayments.reduce((sum, p) => sum + p.amount, 0);
+  
+  // Group by payment type
+  const cashPayments = monthlyPayments.filter(p => p.paymentType === "cash");
+  const cardPayments = monthlyPayments.filter(p => p.paymentType === "card");
+  const transferPayments = monthlyPayments.filter(p => p.paymentType === "transfer");
+  
+  const cashTotal = cashPayments.reduce((sum, p) => sum + p.amount, 0);
+  const cardTotal = cardPayments.reduce((sum, p) => sum + p.amount, 0);
+  const transferTotal = transferPayments.reduce((sum, p) => sum + p.amount, 0);
+  
+  // Today's income
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayPayments = monthlyPayments.filter(p => new Date(p.createdAt) >= today);
+  const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
+  
+  const message = 
+    `💰 <b>Tushum hisoboti (${now.toLocaleString("uz-UZ", { month: "long" })})</b>\n\n` +
+    `📅 Bugungi tushum: <b>${todayIncome.toLocaleString()} so'm</b>\n\n` +
+    `💵 <b>Oylik tushum:</b>\n` +
+    `   ├ Naqd: ${cashTotal.toLocaleString()} so'm (${cashPayments.length} ta)\n` +
+    `   ├ Karta: ${cardTotal.toLocaleString()} so'm (${cardPayments.length} ta)\n` +
+    `   └ O'tkazma: ${transferTotal.toLocaleString()} so'm (${transferPayments.length} ta)\n\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `💰 <b>Jami: ${totalIncome.toLocaleString()} so'm</b>`;
+  
+  await ctx.reply(message, { parse_mode: "HTML" });
+}
+
+async function showAdminDebtors(ctx: BotContext) {
+  const students = await storage.getStudents(TENANT_ID);
+  const debtors = students.filter(s => s.balance < 0).sort((a, b) => a.balance - b.balance);
+  
+  if (debtors.length === 0) {
+    await ctx.reply("✅ Qarzdor o'quvchilar yo'q!");
+    return;
+  }
+  
+  const totalDebt = debtors.reduce((sum, s) => sum + Math.abs(s.balance), 0);
+  
+  let message = `⚠️ <b>Qarzdor o'quvchilar</b>\n\n`;
+  
+  // Show top 10 debtors
+  const topDebtors = debtors.slice(0, 10);
+  for (let i = 0; i < topDebtors.length; i++) {
+    const s = topDebtors[i];
+    message += `${i + 1}. ${s.firstName} ${s.lastName}\n`;
+    message += `   📱 ${s.phone}\n`;
+    message += `   💸 Qarz: <b>${Math.abs(s.balance).toLocaleString()} so'm</b>\n\n`;
+  }
+  
+  if (debtors.length > 10) {
+    message += `<i>...va yana ${debtors.length - 10} ta qarzdor</i>\n\n`;
+  }
+  
+  message += `━━━━━━━━━━━━━━━\n`;
+  message += `👥 Jami qarzdorlar: ${debtors.length} ta\n`;
+  message += `💸 Umumiy qarz: <b>${totalDebt.toLocaleString()} so'm</b>`;
+  
+  await ctx.reply(message, { parse_mode: "HTML" });
+}
+
+async function showAdminDailyReport(ctx: BotContext) {
+  const now = new Date();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const students = await storage.getStudents(TENANT_ID);
+  const payments = await storage.getPayments(TENANT_ID);
+  const groups = await storage.getGroups(TENANT_ID);
+  const leads = await storage.getLeads(TENANT_ID);
+  
+  // Today's stats
+  const todayPayments = payments.filter(p => {
+    const paymentDate = new Date(p.createdAt);
+    return paymentDate >= today && p.status === "completed";
+  });
+  const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
+  
+  const todayLeads = leads.filter(l => new Date(l.createdAt) >= today);
+  
+  // Active students and debtors
+  const activeStudents = students.filter(s => s.status === "active").length;
+  const debtors = students.filter(s => s.balance < 0).length;
+  const totalDebt = students.filter(s => s.balance < 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
+  
+  // Today's attendance - filter by today's date
+  const allAttendance = await storage.getAttendance(TENANT_ID, undefined, undefined, now.getMonth() + 1, now.getFullYear());
+  const todayStr = today.toISOString().split('T')[0];
+  const todayAttendance = allAttendance.filter(a => {
+    const aDate = a.date ? new Date(a.date).toISOString().split('T')[0] : '';
+    return aDate === todayStr;
+  });
+  const presentCount = todayAttendance.filter(a => a.status === "present").length;
+  const absentCount = todayAttendance.filter(a => a.status === "absent").length;
+  
+  // Day info
+  const dayNames: Record<number, string> = {
+    0: "Yakshanba", 1: "Dushanba", 2: "Seshanba", 3: "Chorshanba", 4: "Payshanba", 5: "Juma", 6: "Shanba"
+  };
+  
+  const message = 
+    `📋 <b>Kunlik hisobot</b>\n` +
+    `📅 ${dayNames[now.getDay()]}, ${now.toLocaleDateString("uz-UZ")}\n\n` +
+    
+    `💰 <b>Moliya:</b>\n` +
+    `   ├ Bugungi tushum: ${todayIncome.toLocaleString()} so'm\n` +
+    `   ├ To'lovlar soni: ${todayPayments.length} ta\n` +
+    `   └ Umumiy qarz: ${totalDebt.toLocaleString()} so'm\n\n` +
+    
+    `👥 <b>O'quvchilar:</b>\n` +
+    `   ├ Faol: ${activeStudents} ta\n` +
+    `   └ Qarzdorlar: ${debtors} ta\n\n` +
+    
+    `📅 <b>Bugungi davomat:</b>\n` +
+    `   ├ ✅ Keldi: ${presentCount} ta\n` +
+    `   └ ❌ Kelmadi: ${absentCount} ta\n\n` +
+    
+    `📝 Yangi lidlar: ${todayLeads.length} ta`;
+  
+  await ctx.reply(message, { parse_mode: "HTML" });
+}
+
+// Notify admin when teacher doesn't mark attendance
+export async function notifyAdminMissingAttendance(
+  teacherName: string,
+  groupName: string,
+  expectedTime: string
+): Promise<void> {
+  const admins = await storage.getAdmins(TENANT_ID);
+  
+  const message = 
+    `⚠️ <b>Davomat belgilanmadi!</b>\n\n` +
+    `👨‍🏫 O'qituvchi: ${teacherName}\n` +
+    `📚 Guruh: ${groupName}\n` +
+    `⏰ Dars vaqti: ${expectedTime}\n\n` +
+    `Iltimos, tekshiring!`;
+  
+  for (const admin of admins) {
+    if (admin.telegramChatId) {
+      try {
+        await sendTelegramMessage(admin.telegramChatId, message);
+      } catch (error) {
+        console.error(`Error notifying admin ${admin.id}:`, error);
+      }
+    }
+  }
+}
+
+// Send daily report to all admins at 9 PM
+export async function sendDailyReportToAdmins(): Promise<void> {
+  const admins = await storage.getAdmins(TENANT_ID);
+  
+  for (const admin of admins) {
+    if (admin.telegramChatId) {
+      try {
+        // Create a mock context to use the existing report function
+        const now = new Date();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const students = await storage.getStudents(TENANT_ID);
+        const payments = await storage.getPayments(TENANT_ID);
+        const leads = await storage.getLeads(TENANT_ID);
+        
+        const todayPayments = payments.filter(p => {
+          const paymentDate = new Date(p.createdAt);
+          return paymentDate >= today && p.status === "completed";
+        });
+        const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
+        
+        const activeStudents = students.filter(s => s.status === "active").length;
+        const debtors = students.filter(s => s.balance < 0).length;
+        const totalDebt = students.filter(s => s.balance < 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
+        
+        const allAttendance = await storage.getAttendance(TENANT_ID, undefined, undefined, now.getMonth() + 1, now.getFullYear());
+        const todayStr = today.toISOString().split('T')[0];
+        const todayAttendance = allAttendance.filter(a => {
+          const aDate = a.date ? new Date(a.date).toISOString().split('T')[0] : '';
+          return aDate === todayStr;
+        });
+        const presentCount = todayAttendance.filter(a => a.status === "present").length;
+        const absentCount = todayAttendance.filter(a => a.status === "absent").length;
+        
+        const dayNames: Record<number, string> = {
+          0: "Yakshanba", 1: "Dushanba", 2: "Seshanba", 3: "Chorshanba", 4: "Payshanba", 5: "Juma", 6: "Shanba"
+        };
+        
+        const message = 
+          `📋 <b>Kunlik hisobot</b>\n` +
+          `📅 ${dayNames[now.getDay()]}, ${now.toLocaleDateString("uz-UZ")}\n\n` +
+          
+          `💰 <b>Moliya:</b>\n` +
+          `   ├ Bugungi tushum: ${todayIncome.toLocaleString()} so'm\n` +
+          `   ├ To'lovlar soni: ${todayPayments.length} ta\n` +
+          `   └ Umumiy qarz: ${totalDebt.toLocaleString()} so'm\n\n` +
+          
+          `👥 <b>O'quvchilar:</b>\n` +
+          `   ├ Faol: ${activeStudents} ta\n` +
+          `   └ Qarzdorlar: ${debtors} ta\n\n` +
+          
+          `📅 <b>Bugungi davomat:</b>\n` +
+          `   ├ ✅ Keldi: ${presentCount} ta\n` +
+          `   └ ❌ Kelmadi: ${absentCount} ta\n\n` +
+          
+          `🌙 Yaxshi dam oling!`;
+        
+        await sendTelegramMessage(admin.telegramChatId, message);
+      } catch (error) {
+        console.error(`Error sending daily report to admin ${admin.id}:`, error);
+      }
+    }
+  }
+}
+
 export function stopTelegramBot() {
   if (bot) {
     bot.stop();
@@ -662,6 +1011,15 @@ export function startScheduledNotifications() {
         console.error("Error sending daily schedules:", error);
       } finally {
         isSendingDailySchedules = false;
+      }
+    }
+    
+    // Send admin evening report at 9 PM
+    if (uzHour === 21 && uzMinutes === 0) {
+      try {
+        await sendDailyReportToAdmins();
+      } catch (error) {
+        console.error("Error sending admin evening report:", error);
       }
     }
   }, 60000); // Check every minute

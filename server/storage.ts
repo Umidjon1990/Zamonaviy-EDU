@@ -49,6 +49,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   deleteUser(id: string): Promise<boolean>;
   getTeachers(tenantId: number): Promise<User[]>;
+  getAdmins(tenantId: number): Promise<User[]>;
   
   // Leads
   getLeads(tenantId: number): Promise<Lead[]>;
@@ -144,6 +145,10 @@ export class DatabaseStorage implements IStorage {
 
   async getTeachers(tenantId: number): Promise<User[]> {
     return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'teacher')));
+  }
+  
+  async getAdmins(tenantId: number): Promise<User[]> {
+    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'markaz_admin')));
   }
 
   // Leads
