@@ -20,6 +20,7 @@ const WEEKDAYS = [
   { value: "Payshanba", label: "Pa" },
   { value: "Juma", label: "Ju" },
   { value: "Shanba", label: "Sha" },
+  { value: "Yakshanba", label: "Ya" },
 ];
 
 export default function Groups() {
