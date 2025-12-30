@@ -661,8 +661,26 @@ export async function registerRoutes(
 
   app.post("/api/admin/tenants", async (req, res) => {
     try {
-      const { adminFirstName, adminLastName, adminPhone, adminPassword, ...tenantData } = req.body;
-      const data = insertTenantSchema.parse(tenantData);
+      const { adminFirstName, adminLastName, adminPhone, adminPassword, trialDays, subscriptionEndsAt, ...tenantData } = req.body;
+      
+      // Calculate trialEndsAt from trialDays
+      let calculatedTrialEndsAt = null;
+      if (trialDays && trialDays > 0) {
+        calculatedTrialEndsAt = new Date();
+        calculatedTrialEndsAt.setDate(calculatedTrialEndsAt.getDate() + trialDays);
+      }
+      
+      // Parse subscriptionEndsAt if provided
+      let parsedSubscriptionEndsAt = null;
+      if (subscriptionEndsAt) {
+        parsedSubscriptionEndsAt = new Date(subscriptionEndsAt);
+      }
+      
+      const data = insertTenantSchema.parse({
+        ...tenantData,
+        trialEndsAt: calculatedTrialEndsAt,
+        subscriptionEndsAt: parsedSubscriptionEndsAt,
+      });
       const tenant = await storage.createTenant(data);
       
       // Create admin user for this tenant

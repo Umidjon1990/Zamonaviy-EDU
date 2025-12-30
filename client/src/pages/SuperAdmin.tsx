@@ -25,11 +25,14 @@ export default function SuperAdmin() {
     address: "",
     status: "trial",
     planId: 1,
+    trialDays: 14,
+    subscriptionEndsAt: "",
     adminFirstName: "",
     adminLastName: "",
     adminPhone: "",
     adminPassword: "",
   });
+  const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [newPlan, setNewPlan] = useState({
     name: "",
     price: 0,
@@ -79,7 +82,7 @@ export default function SuperAdmin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       setIsAddTenantOpen(false);
-      setNewTenant({ name: "", slug: "", phone: "", email: "", address: "", status: "trial", planId: 1, adminFirstName: "", adminLastName: "", adminPhone: "", adminPassword: "" });
+      setNewTenant({ name: "", slug: "", phone: "", email: "", address: "", status: "trial", planId: 1, trialDays: 14, subscriptionEndsAt: "", adminFirstName: "", adminLastName: "", adminPhone: "", adminPassword: "" });
     },
   });
 
@@ -95,6 +98,7 @@ export default function SuperAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
+      setEditingTenant(null);
     },
   });
 
@@ -338,6 +342,29 @@ export default function SuperAdmin() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="trialDays">Sinov muddati (kun)</Label>
+                      <Input
+                        id="trialDays"
+                        type="number"
+                        data-testid="input-trial-days"
+                        value={newTenant.trialDays}
+                        onChange={(e) => setNewTenant({ ...newTenant, trialDays: parseInt(e.target.value) || 0 })}
+                        placeholder="14"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="subscriptionEndsAt">Obuna tugash sanasi</Label>
+                      <Input
+                        id="subscriptionEndsAt"
+                        type="date"
+                        data-testid="input-subscription-ends"
+                        value={newTenant.subscriptionEndsAt}
+                        onChange={(e) => setNewTenant({ ...newTenant, subscriptionEndsAt: e.target.value })}
+                      />
+                    </div>
+                  </div>
 
                   <div className="border-t pt-4 mt-4">
                     <h4 className="font-medium mb-3">Markaz admini</h4>
@@ -411,6 +438,7 @@ export default function SuperAdmin() {
                   <TableHead>Telefon</TableHead>
                   <TableHead>Tarif</TableHead>
                   <TableHead>Holat</TableHead>
+                  <TableHead>Sinov tugash</TableHead>
                   <TableHead>Obuna tugash</TableHead>
                   <TableHead>Amallar</TableHead>
                 </TableRow>
@@ -423,9 +451,18 @@ export default function SuperAdmin() {
                     <TableCell>{tenant.phone}</TableCell>
                     <TableCell>{getPlanName(tenant.planId)}</TableCell>
                     <TableCell>{getStatusBadge(tenant.status)}</TableCell>
+                    <TableCell>{formatDate(tenant.trialEndsAt)}</TableCell>
                     <TableCell>{formatDate(tenant.subscriptionEndsAt)}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setEditingTenant(tenant)}
+                          data-testid={`button-edit-tenant-${tenant.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <Select
                           value={tenant.status}
                           onValueChange={(value) => updateTenantMutation.mutate({ 
@@ -448,7 +485,7 @@ export default function SuperAdmin() {
                 ))}
                 {tenants.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       Hali markazlar yo'q
                     </TableCell>
                   </TableRow>
@@ -456,6 +493,86 @@ export default function SuperAdmin() {
               </TableBody>
             </Table>
           </Card>
+
+          {/* Edit Tenant Dialog */}
+          <Dialog open={!!editingTenant} onOpenChange={(open) => !open && setEditingTenant(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Markaz sozlamalari</DialogTitle>
+                <DialogDescription>{editingTenant?.name} markazi sozlamalari</DialogDescription>
+              </DialogHeader>
+              {editingTenant && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Tarif</Label>
+                    <Select
+                      value={editingTenant.planId?.toString() || ""}
+                      onValueChange={(value) => setEditingTenant({ ...editingTenant, planId: parseInt(value) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Tarifni tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plans.map((plan) => (
+                          <SelectItem key={plan.id} value={plan.id.toString()}>
+                            {plan.name} - {formatPrice(plan.price)}/oy
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Holat</Label>
+                    <Select
+                      value={editingTenant.status}
+                      onValueChange={(value) => setEditingTenant({ ...editingTenant, status: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Faol</SelectItem>
+                        <SelectItem value="trial">Sinov</SelectItem>
+                        <SelectItem value="suspended">To'xtatilgan</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sinov tugash sanasi</Label>
+                    <Input
+                      type="date"
+                      value={editingTenant.trialEndsAt ? new Date(editingTenant.trialEndsAt).toISOString().split('T')[0] : ""}
+                      onChange={(e) => setEditingTenant({ ...editingTenant, trialEndsAt: e.target.value ? new Date(e.target.value) : null })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Obuna tugash sanasi</Label>
+                    <Input
+                      type="date"
+                      value={editingTenant.subscriptionEndsAt ? new Date(editingTenant.subscriptionEndsAt).toISOString().split('T')[0] : ""}
+                      onChange={(e) => setEditingTenant({ ...editingTenant, subscriptionEndsAt: e.target.value ? new Date(e.target.value) : null })}
+                    />
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingTenant(null)}>Bekor qilish</Button>
+                <Button 
+                  onClick={() => editingTenant && updateTenantMutation.mutate({ 
+                    id: editingTenant.id, 
+                    data: {
+                      planId: editingTenant.planId,
+                      status: editingTenant.status,
+                      trialEndsAt: editingTenant.trialEndsAt,
+                      subscriptionEndsAt: editingTenant.subscriptionEndsAt,
+                    }
+                  })}
+                >
+                  Saqlash
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="plans" className="space-y-4">
