@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -546,13 +547,14 @@ export default function SuperAdmin() {
 
           {/* Edit Tenant Dialog */}
           <Dialog open={!!editingTenant} onOpenChange={(open) => !open && setEditingTenant(null)}>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className="max-w-md p-0">
+              <DialogHeader className="p-6 pb-0">
                 <DialogTitle>Markaz sozlamalari</DialogTitle>
                 <DialogDescription>{editingTenant?.name} markazi sozlamalari</DialogDescription>
               </DialogHeader>
+              <ScrollArea className="max-h-[60vh] px-6">
               {editingTenant && (
-                <div className="space-y-4">
+                <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label>Tarif</Label>
                     <Select
@@ -650,7 +652,8 @@ export default function SuperAdmin() {
                   </div>
                 </div>
               )}
-              <DialogFooter>
+              </ScrollArea>
+              <DialogFooter className="p-6 pt-0">
                 <Button variant="outline" onClick={() => setEditingTenant(null)}>Bekor qilish</Button>
                 <Button 
                   onClick={() => editingTenant && updateTenantMutation.mutate({ 
