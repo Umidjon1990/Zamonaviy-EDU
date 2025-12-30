@@ -397,62 +397,64 @@ export async function registerRoutes(
         } else if (lowerLine.startsWith("o'quvchilar:") || lowerLine.startsWith("oquvchilar:") || lowerLine.startsWith("talabalar:")) {
           parsingStudents = true;
         } else if (parsingStudents) {
-          console.log("Parsing student line:", line, "pendingName:", pendingStudentName);
+          // Check if this line looks like a phone number
+          const isPhoneLine = /^\+?\d[\d\s\-]+$/.test(line) || /\+998/.test(line);
+          // Check if line starts with number (student name line with number)
+          const hasNumber = /^\d+[\.\)]/.test(line);
+          // Check if line has both name and phone
+          const sameLineMatch = line.match(/^(?:\d+[\.\)]\s*)?(.+?)\s+(\+?\d[\d\s\-]+)$/);
           
-          // Check if line starts with number (student name line)
-          if (/^\d+[\.\)]/.test(line)) {
-            // Check if name and phone on same line: "1.Aliyev Jasur +99890 123 45 67"
-            const sameLineMatch = line.match(/^\d+[\.\)]\s*(.+?)\s+(\+?\d[\d\s\-]+)$/);
-            if (sameLineMatch) {
-              const fullName = sameLineMatch[1].trim();
-              const phone = sameLineMatch[2].replace(/[\s\-]+/g, "").replace(/^\+/, "");
-              
-              const nameParts = fullName.split(/\s+/);
-              let lastName = "";
-              let firstName = "";
-              
-              if (nameParts.length >= 2) {
-                lastName = nameParts[0];
-                firstName = nameParts.slice(1).join(" ");
-              } else {
-                firstName = fullName;
-              }
-              
-              console.log("Same line student:", { firstName, lastName, phone });
-              students.push({ firstName, lastName, phone });
+          if (pendingStudentName && isPhoneLine) {
+            // This is phone for pending student
+            const phone = line.replace(/[\s\-]+/g, "").replace(/^\+/, "");
+            const nameParts = pendingStudentName.split(/\s+/);
+            let lastName = "";
+            let firstName = "";
+            
+            if (nameParts.length >= 2) {
+              lastName = nameParts[0];
+              firstName = nameParts.slice(1).join(" ");
             } else {
-              // Name only line: "1. Aliyev Jasur" - phone on next line
+              firstName = pendingStudentName;
+            }
+            
+            students.push({ firstName, lastName, phone });
+            pendingStudentName = "";
+          } else if (sameLineMatch && sameLineMatch[2].length >= 9) {
+            // Name and phone on same line
+            const fullName = sameLineMatch[1].trim();
+            const phone = sameLineMatch[2].replace(/[\s\-]+/g, "").replace(/^\+/, "");
+            
+            const nameParts = fullName.split(/\s+/);
+            let lastName = "";
+            let firstName = "";
+            
+            if (nameParts.length >= 2) {
+              lastName = nameParts[0];
+              firstName = nameParts.slice(1).join(" ");
+            } else {
+              firstName = fullName;
+            }
+            
+            students.push({ firstName, lastName, phone });
+            pendingStudentName = "";
+          } else if (!isPhoneLine && line.length > 2) {
+            // This looks like a name line (with or without number)
+            let name = line;
+            // Remove leading number if exists
+            if (hasNumber) {
               const nameMatch = line.match(/^\d+[\.\)]\s*(.+)$/);
               if (nameMatch) {
-                pendingStudentName = nameMatch[1].trim();
-                console.log("Pending student name:", pendingStudentName);
+                name = nameMatch[1].trim();
               }
             }
-          } else if (pendingStudentName) {
-            // Try to extract phone from this line
-            const phoneMatch = line.match(/\+?\d[\d\s\-]+/);
-            if (phoneMatch) {
-              const phone = phoneMatch[0].replace(/[\s\-]+/g, "").replace(/^\+/, "");
-              const nameParts = pendingStudentName.split(/\s+/);
-              let lastName = "";
-              let firstName = "";
-              
-              if (nameParts.length >= 2) {
-                lastName = nameParts[0];
-                firstName = nameParts.slice(1).join(" ");
-              } else {
-                firstName = pendingStudentName;
-              }
-              
-              console.log("Multi-line student:", { firstName, lastName, phone });
-              students.push({ firstName, lastName, phone });
-              pendingStudentName = "";
+            // Only set as pending if it looks like a name (has letters)
+            if (/[a-zA-Z\u0400-\u04FF]/.test(name)) {
+              pendingStudentName = name;
             }
           }
         }
       }
-      
-      console.log("Parsed students:", students);
       
       // Validate required fields
       if (!groupName) {
