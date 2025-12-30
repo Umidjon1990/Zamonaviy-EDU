@@ -348,6 +348,23 @@ export async function registerRoutes(
           // Send Telegram notification to student
           notifyStudentPayment(payment.studentId, payment.amount, newBalance)
             .catch(err => console.error("Telegram notification error:", err));
+          
+          // Send SMS notification
+          const phone = student.parentPhone || student.phone;
+          if (phone) {
+            // Find student's group to get course name
+            const studentGroupsList = await storage.getStudentGroups(payment.studentId);
+            let courseName = "kurs";
+            if (studentGroupsList.length > 0) {
+              const group = await storage.getGroup(studentGroupsList[0].groupId);
+              if (group) {
+                courseName = group.name;
+              }
+            }
+            
+            sendPaymentReceivedSMS(phone, student.firstName, courseName, payment.amount)
+              .catch(err => console.error("SMS notification error:", err));
+          }
         }
       }
       
