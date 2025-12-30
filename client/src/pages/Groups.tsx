@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,15 +6,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Toggle } from "@/components/ui/toggle";
 import { translations } from "@/lib/i18n";
-import { useGroups, useCreateGroup, useDeleteGroup, useSubjects } from "@/lib/api";
-import { Plus, Users, Clock, MapPin, Trash2 } from "lucide-react";
+import { useGroups, useCreateGroup, useDeleteGroup, useSubjects, useTeachers } from "@/lib/api";
+import { Plus, Users, Clock, MapPin, Trash2, User } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
+const WEEKDAYS = [
+  { value: "Dushanba", label: "Du" },
+  { value: "Seshanba", label: "Se" },
+  { value: "Chorshanba", label: "Cho" },
+  { value: "Payshanba", label: "Pa" },
+  { value: "Juma", label: "Ju" },
+  { value: "Shanba", label: "Sha" },
+];
+
 export default function Groups() {
-  const { data: groups, isLoading } = useGroups();
-  const { data: subjects } = useSubjects();
+  const { data: groupsData, isLoading } = useGroups();
+  const groups = (groupsData || []) as any[];
+  const { data: subjectsData } = useSubjects();
+  const subjects = (subjectsData || []) as any[];
+  const { data: teachersData } = useTeachers();
+  const teachers = (teachersData || []) as any[];
   const createGroup = useCreateGroup();
   const deleteGroup = useDeleteGroup();
   const { toast } = useToast();
@@ -23,16 +37,33 @@ export default function Groups() {
   const [formData, setFormData] = useState({
     name: "",
     subjectId: 0,
-    teacherId: "default-teacher",
+    teacherId: "",
     level: "Beginner",
-    days: ["Dushanba", "Chorshanba", "Juma"],
-    time: "14:00 - 15:30",
+    days: [] as string[],
+    time: "",
     room: "",
     maxStudents: 15,
   });
 
+  const toggleDay = (day: string) => {
+    setFormData(prev => ({
+      ...prev,
+      days: prev.days.includes(day) 
+        ? prev.days.filter(d => d !== day)
+        : [...prev.days, day]
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.days.length === 0) {
+      toast({ title: "Xatolik", description: "Kamida bitta kun tanlang", variant: "destructive" });
+      return;
+    }
+    if (!formData.teacherId) {
+      toast({ title: "Xatolik", description: "O'qituvchini tanlang", variant: "destructive" });
+      return;
+    }
     try {
       await createGroup.mutateAsync(formData);
       toast({ title: "Muvaffaqiyat", description: "Yangi guruh yaratildi" });
@@ -40,10 +71,10 @@ export default function Groups() {
       setFormData({
         name: "",
         subjectId: 0,
-        teacherId: "default-teacher",
+        teacherId: "",
         level: "Beginner",
-        days: ["Dushanba", "Chorshanba", "Juma"],
-        time: "14:00 - 15:30",
+        days: [],
+        time: "",
         room: "",
         maxStudents: 15,
       });
@@ -102,6 +133,60 @@ export default function Groups() {
                   data-testid="input-name"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="time">Dars vaqti</Label>
+                <Input
+                  id="time"
+                  value={formData.time}
+                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                  placeholder="14:00 - 15:30"
+                  required
+                  data-testid="input-time"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Kunlari</Label>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAYS.map((day) => (
+                    <Toggle
+                      key={day.value}
+                      pressed={formData.days.includes(day.value)}
+                      onPressedChange={() => toggleDay(day.value)}
+                      variant="outline"
+                      size="sm"
+                      className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      data-testid={`toggle-day-${day.value}`}
+                    >
+                      {day.label}
+                    </Toggle>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="room">Xona</Label>
+                <Input
+                  id="room"
+                  value={formData.room}
+                  onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                  placeholder="Xona 1"
+                  data-testid="input-room"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="teacherId">O'qituvchi</Label>
+                <Select value={formData.teacherId} onValueChange={(value) => setFormData({ ...formData, teacherId: value })}>
+                  <SelectTrigger data-testid="select-teacher">
+                    <SelectValue placeholder="O'qituvchini tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teachers.map((t: any) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.firstName} {t.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="subjectId">Fan</Label>
@@ -110,7 +195,7 @@ export default function Groups() {
                       <SelectValue placeholder="Tanlang" />
                     </SelectTrigger>
                     <SelectContent>
-                      {subjects?.map((s: any) => (
+                      {subjects.map((s: any) => (
                         <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -133,39 +218,6 @@ export default function Groups() {
                       <SelectItem value="C1">C1</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time">Dars vaqti</Label>
-                <Input
-                  id="time"
-                  value={formData.time}
-                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                  placeholder="14:00 - 15:30"
-                  required
-                  data-testid="input-time"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="room">Xona</Label>
-                  <Input
-                    id="room"
-                    value={formData.room}
-                    onChange={(e) => setFormData({ ...formData, room: e.target.value })}
-                    placeholder="Xona 1"
-                    data-testid="input-room"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="maxStudents">Max o'quvchi</Label>
-                  <Input
-                    id="maxStudents"
-                    type="number"
-                    value={formData.maxStudents}
-                    onChange={(e) => setFormData({ ...formData, maxStudents: parseInt(e.target.value) || 15 })}
-                    data-testid="input-maxStudents"
-                  />
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={createGroup.isPending} data-testid="button-submit">
