@@ -1,8 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { translations } from "@/lib/i18n";
 import { useStats } from "@/lib/api";
-import { Users, GraduationCap, Wallet, TrendingUp, BookOpen, Clock, UserPlus, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
+import { Users, GraduationCap, Wallet, TrendingUp, BookOpen, Clock, UserPlus, ArrowUpRight, ArrowDownRight, Sparkles, CalendarDays, Target } from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 
@@ -91,41 +91,63 @@ export default function Dashboard() {
     },
   ];
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Xayrli tong";
+    if (hour < 18) return "Xayrli kun";
+    return "Xayrli kech";
+  };
+
   return (
     <div className="space-y-6 p-2">
-      {/* Header */}
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-            Xush kelibsiz!
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Markaz ko'rsatkichlari va statistika
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-4 py-2 rounded-full">
-          <Clock className="h-4 w-4" />
-          {new Date().toLocaleDateString('uz-UZ', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-2xl gradient-hero p-6 md:p-8 text-white animate-slide-up">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24 blur-2xl" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-5 h-5 text-yellow-300" />
+              <span className="text-white/80 text-sm">{getGreeting()}</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold">
+              Boshqaruv paneli
+            </h1>
+            <p className="text-white/70 mt-1">
+              Markaz ko'rsatkichlari va statistika
+            </p>
+          </div>
+          <div className="flex items-center gap-3 bg-white/20 backdrop-blur-sm px-4 py-2.5 rounded-xl">
+            <CalendarDays className="h-5 w-5" />
+            <span className="text-sm font-medium">
+              {new Date().toLocaleDateString('uz-UZ', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statsCards.map((stat, index) => (
-          <Card key={index} className="relative overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1" data-testid={`card-stat-${index}`}>
+          <Card 
+            key={index} 
+            className="card-modern relative overflow-hidden hover-lift animate-slide-up" 
+            style={{ animationDelay: `${index * 100}ms` }}
+            data-testid={`card-stat-${index}`}
+          >
             <div className="absolute top-0 right-0 w-32 h-32 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-primary/5 to-primary/10" />
-            <CardContent className="p-6">
+            <CardContent className="p-6 relative">
               <div className="flex items-start justify-between">
-                <div className={`p-3 rounded-xl ${stat.iconBg}`}>
+                <div className={`p-3 rounded-xl ${stat.iconBg} shadow-lg`}>
                   <stat.icon className={`h-6 w-6 ${stat.iconColor}`} />
                 </div>
-                <div className={`flex items-center gap-1 text-sm font-medium ${stat.changeType === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
-                  {stat.changeType === 'up' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                <div className={`flex items-center gap-1 text-sm font-medium px-2 py-1 rounded-full ${stat.changeType === 'up' ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
+                  {stat.changeType === 'up' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                   {stat.change}
                 </div>
               </div>
               <div className="mt-4">
-                <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
+                <p className="text-3xl font-bold tracking-tight animate-count-up">{stat.value}</p>
                 <p className="text-sm font-medium text-muted-foreground mt-1">{stat.title}</p>
               </div>
               <p className="text-xs text-muted-foreground/70 mt-2">{stat.description}</p>
@@ -137,7 +159,7 @@ export default function Dashboard() {
       {/* Charts Section */}
       <div className="grid gap-6 lg:grid-cols-7">
         {/* Revenue Chart */}
-        <Card className="lg:col-span-4 border-0 shadow-lg">
+        <Card className="lg:col-span-4 card-modern animate-slide-up" style={{ animationDelay: '200ms' }}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
@@ -196,7 +218,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Attendance Pie Chart */}
-        <Card className="lg:col-span-3 border-0 shadow-lg">
+        <Card className="lg:col-span-3 card-modern animate-slide-up" style={{ animationDelay: '300ms' }}>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-semibold">Davomat statistikasi</CardTitle>
             <p className="text-sm text-muted-foreground">Bugungi holat</p>
@@ -244,7 +266,7 @@ export default function Dashboard() {
       {/* Quick Stats */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Today's Classes */}
-        <Card className="border-0 shadow-lg">
+        <Card className="card-modern animate-slide-up" style={{ animationDelay: '400ms' }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-500/10">
@@ -282,7 +304,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Performance Metrics */}
-        <Card className="border-0 shadow-lg">
+        <Card className="card-modern animate-slide-up" style={{ animationDelay: '500ms' }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-purple-500/10">
@@ -327,7 +349,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Quick Summary */}
-        <Card className="border-0 shadow-lg">
+        <Card className="card-modern animate-slide-up" style={{ animationDelay: '600ms' }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-emerald-500/10">
