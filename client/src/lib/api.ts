@@ -219,6 +219,19 @@ export function useDeleteTeacher() {
   });
 }
 
+// ===== STUDENT GROUPS =====
+export function useAddStudentToGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ studentId, groupId }: { studentId: number; groupId: number }) => 
+      apiCall(`/students/${studentId}/groups`, { method: "POST", body: JSON.stringify({ groupId }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+    },
+  });
+}
+
 // ===== STATISTICS =====
 export function useStats() {
   return useQuery({

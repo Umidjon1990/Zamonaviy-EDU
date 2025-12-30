@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useGroups, useTeachers } from "@/lib/api";
+import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useGroups, useTeachers, useAddStudentToGroup } from "@/lib/api";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +23,7 @@ export default function Students() {
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
+  const addStudentToGroup = useAddStudentToGroup();
   const { toast } = useToast();
   
   const [isOpen, setIsOpen] = useState(false);
@@ -41,7 +42,16 @@ export default function Students() {
     e.preventDefault();
     try {
       const { groupId, teacherId, ...studentData } = formData;
-      await createStudent.mutateAsync(studentData);
+      const newStudent = await createStudent.mutateAsync(studentData) as any;
+      
+      if (groupId && groupId > 0 && newStudent?.id) {
+        try {
+          await addStudentToGroup.mutateAsync({ studentId: newStudent.id, groupId });
+        } catch (groupError) {
+          toast({ title: "Ogohlantirish", description: "O'quvchi qo'shildi, lekin guruhga qo'shishda xatolik", variant: "destructive" });
+        }
+      }
+      
       toast({ title: "Muvaffaqiyat", description: "Yangi o'quvchi qo'shildi" });
       setIsOpen(false);
       setFormData({ firstName: "", lastName: "", phone: "", parentPhone: "", status: "active", balance: 0, groupId: 0, teacherId: "" });
