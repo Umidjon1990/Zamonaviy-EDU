@@ -353,8 +353,6 @@ export async function registerRoutes(
       // Parse template
       const lines = template.split("\n").map(l => l.trim()).filter(l => l);
       
-      console.log("Template lines:", lines);
-      
       let groupName = "";
       let days: string[] = [];
       let time = "";
@@ -395,10 +393,8 @@ export async function registerRoutes(
         } else if (/^o[''`]?qituvchi:/i.test(line) || lowerLine.startsWith("ustoz:")) {
           teacherName = line.split(":").slice(1).join(":").trim();
         } else if (/o.?quvchilar/i.test(line) || lowerLine.startsWith("talabalar:")) {
-          console.log("Found students section:", line);
           parsingStudents = true;
         } else if (parsingStudents) {
-          console.log("Processing student line:", { line, pendingStudentName });
           // Check if this line looks like a phone number
           const isPhoneLine = /^\+?\d[\d\s\-]+$/.test(line) || /\+998/.test(line);
           // Check if line starts with number (student name line with number)
