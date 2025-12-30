@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
-import { notifyStudentAttendance, notifyStudentPayment } from "./telegram-bot";
+import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt } from "./telegram-bot";
 import {
   insertLeadSchema,
   insertStudentSchema,
@@ -828,6 +828,30 @@ export async function registerRoutes(
       res.json({ ...result, message });
     } catch (error) {
       res.status(500).json({ error: "Failed to send test SMS" });
+    }
+  });
+
+  // ===== TELEGRAM NOTIFICATIONS =====
+  app.post("/api/telegram/send-receipt", requireTenantAuth, async (req: any, res) => {
+    try {
+      const { studentId, paymentId, amount, groupName } = req.body;
+      const tenantId = getTenantId(req);
+      
+      if (!studentId || !paymentId || !amount) {
+        return res.status(400).json({ error: "studentId, paymentId va amount kerak" });
+      }
+      
+      // Validate student belongs to this tenant
+      const student = await storage.getStudent(studentId);
+      if (!student || student.tenantId !== tenantId) {
+        return res.status(403).json({ success: false, error: "O'quvchi topilmadi yoki ruxsat yo'q" });
+      }
+      
+      const result = await sendPaymentReceipt(studentId, paymentId, amount, groupName);
+      res.json(result);
+    } catch (error) {
+      console.error("Telegram receipt error:", error);
+      res.status(500).json({ success: false, error: "Telegram xabar yuborishda xatolik" });
     }
   });
 

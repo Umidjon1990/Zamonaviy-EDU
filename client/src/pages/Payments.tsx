@@ -9,19 +9,30 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { translations } from "@/lib/i18n";
-import { usePayments, useCreatePayment, useStudents } from "@/lib/api";
+import { usePayments, useCreatePayment, useStudents, useGroups } from "@/lib/api";
 import { Plus, Download, MessageSquare } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import PaymentReceipt from "@/components/PaymentReceipt";
 
 export default function Payments() {
   const { data: payments, isLoading } = usePayments();
   const { data: students } = useStudents();
+  const { data: groups } = useGroups();
   const createPayment = useCreatePayment();
+  
+  const studentsList = Array.isArray(students) ? students : [];
+  const groupsList = Array.isArray(groups) ? groups : [];
+  const paymentsList = Array.isArray(payments) ? payments : [];
   const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [sendSms, setSendSms] = useState(true);
+  const [receiptData, setReceiptData] = useState<{
+    payment: any;
+    student: any;
+    groupName?: string;
+  } | null>(null);
   const [formData, setFormData] = useState({
     studentId: 0,
     amount: 0,
@@ -33,7 +44,7 @@ export default function Payments() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createPayment.mutateAsync(formData);
+      const newPayment = await createPayment.mutateAsync(formData);
       toast({ title: "Muvaffaqiyat", description: "To'lov qabul qilindi" });
       
       if (sendSms && formData.studentId) {
@@ -54,6 +65,15 @@ export default function Payments() {
           toast({ title: "SMS xatosi", description: "SMS yuborishda xatolik", variant: "destructive" });
         }
       }
+      
+      const student = studentsList.find((s: any) => s.id === formData.studentId);
+      const studentGroup = groupsList.find((g: any) => g.id === student?.groupId);
+      
+      setReceiptData({
+        payment: newPayment,
+        student: student,
+        groupName: studentGroup?.name,
+      });
       
       setIsOpen(false);
       setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "" });
@@ -76,12 +96,12 @@ export default function Payments() {
     );
   }
 
-  const completedPayments = payments?.filter((p: any) => p.status === 'completed') || [];
+  const completedPayments = paymentsList.filter((p: any) => p.status === 'completed');
   const totalIncome = completedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
   // Find student name by ID
   const getStudentName = (studentId: number) => {
-    const student = students?.find((s: any) => s.id === studentId);
+    const student = studentsList.find((s: any) => s.id === studentId);
     return student ? `${student.firstName} ${student.lastName}` : `#${studentId}`;
   };
 
@@ -108,7 +128,7 @@ export default function Payments() {
                       <SelectValue placeholder="O'quvchini tanlang" />
                     </SelectTrigger>
                     <SelectContent>
-                      {students?.map((s: any) => (
+                      {studentsList.map((s: any) => (
                         <SelectItem key={s.id} value={s.id.toString()}>
                           {s.firstName} {s.lastName}
                         </SelectItem>
@@ -186,7 +206,7 @@ export default function Payments() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Jami to'lovlar</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-payments">{payments?.length || 0}</div>
+            <div className="text-2xl font-bold" data-testid="text-total-payments">{paymentsList.length}</div>
           </CardContent>
         </Card>
         <Card className="shadow-sm">
@@ -212,8 +232,8 @@ export default function Payments() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments && payments.length > 0 ? (
-                payments.map((payment: any) => (
+              {paymentsList.length > 0 ? (
+                paymentsList.map((payment: any) => (
                   <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
                     <TableCell className="font-medium" data-testid={`text-student-${payment.id}`}>
                       {getStudentName(payment.studentId)}
@@ -244,6 +264,15 @@ export default function Payments() {
           </Table>
         </CardContent>
       </Card>
+
+      {receiptData && receiptData.payment && receiptData.student && (
+        <PaymentReceipt
+          payment={receiptData.payment}
+          student={receiptData.student}
+          groupName={receiptData.groupName}
+          onClose={() => setReceiptData(null)}
+        />
+      )}
     </div>
   );
 }

@@ -914,6 +914,55 @@ export async function notifyStudentPayment(
   return sendTelegramMessage(student.telegramChatId, message);
 }
 
+export async function sendPaymentReceipt(
+  studentId: number,
+  paymentId: number,
+  amount: number,
+  groupName?: string
+): Promise<{ success: boolean; error?: string }> {
+  const student = await storage.getStudent(studentId);
+  if (!student) {
+    return { success: false, error: "O'quvchi topilmadi" };
+  }
+  if (!student.telegramChatId) {
+    return { success: false, error: "O'quvchi Telegram botga ulanmagan" };
+  }
+  
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("uz-UZ", { 
+    day: "numeric", 
+    month: "long", 
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  
+  let message = 
+    `🧾 <b>TO'LOV CHEKI</b>\n` +
+    `━━━━━━━━━━━━━━━━\n\n` +
+    `📋 Chek #${paymentId}\n` +
+    `📅 ${dateStr}\n\n` +
+    `👤 <b>${student.firstName} ${student.lastName}</b>\n`;
+  
+  if (groupName) {
+    message += `📖 Kurs: ${groupName}\n`;
+  }
+  
+  message += 
+    `\n━━━━━━━━━━━━━━━━\n` +
+    `💵 <b>Jami: ${amount.toLocaleString()} so'm</b>\n` +
+    `━━━━━━━━━━━━━━━━\n\n` +
+    `✅ To'lov muvaffaqiyatli qabul qilindi!\n\n` +
+    `Xaridingiz uchun rahmat! 🙏`;
+  
+  const sent = await sendTelegramMessage(student.telegramChatId, message);
+  if (sent) {
+    return { success: true };
+  } else {
+    return { success: false, error: "Telegram xabar yuborishda xatolik" };
+  }
+}
+
 export async function notifyTeacherDailySchedule(teacherId: string): Promise<boolean> {
   const teacher = await storage.getUser(teacherId);
   if (!teacher?.telegramChatId) return false;
