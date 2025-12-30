@@ -354,11 +354,12 @@ export async function registerRoutes(
           if (phone) {
             // Find student's group to get course name
             const studentGroupsList = await storage.getStudentGroups(payment.studentId);
-            let courseName = "kurs";
+            let courseName = "umumiy kursi"; // Default fallback matching Eskiz template format
             if (studentGroupsList.length > 0) {
               const group = await storage.getGroup(studentGroupsList[0].groupId);
               if (group) {
-                courseName = group.name;
+                // Eskiz template requires "... kursi" format
+                courseName = group.name.toLowerCase().includes("kurs") ? group.name : group.name + " kursi";
               }
             }
             
