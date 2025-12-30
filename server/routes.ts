@@ -11,6 +11,9 @@ import {
   insertStudentGroupSchema,
   insertAttendanceSchema,
   insertPaymentSchema,
+  insertTenantSchema,
+  insertSubscriptionPlanSchema,
+  insertTenantSubscriptionSchema,
 } from "@shared/schema";
 
 export async function registerRoutes(
@@ -583,6 +586,155 @@ export async function registerRoutes(
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to send payment confirmation" });
+    }
+  });
+
+  // ===== SUPER ADMIN: SUBSCRIPTION PLANS =====
+  app.get("/api/admin/plans", async (req, res) => {
+    try {
+      const plans = await storage.getSubscriptionPlans();
+      res.json(plans);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch plans" });
+    }
+  });
+
+  app.post("/api/admin/plans", async (req, res) => {
+    try {
+      const data = insertSubscriptionPlanSchema.parse(req.body);
+      const plan = await storage.createSubscriptionPlan(data);
+      res.status(201).json(plan);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid plan data" });
+    }
+  });
+
+  app.patch("/api/admin/plans/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const plan = await storage.updateSubscriptionPlan(id, req.body);
+      if (!plan) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      res.json(plan);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update plan" });
+    }
+  });
+
+  // ===== SUPER ADMIN: TENANTS MANAGEMENT =====
+  app.get("/api/admin/tenants", async (req, res) => {
+    try {
+      const tenants = await storage.getTenants();
+      res.json(tenants);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tenants" });
+    }
+  });
+
+  app.get("/api/admin/tenants/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenant = await storage.getTenant(id);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      res.json(tenant);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tenant" });
+    }
+  });
+
+  app.post("/api/admin/tenants", async (req, res) => {
+    try {
+      const data = insertTenantSchema.parse(req.body);
+      const tenant = await storage.createTenant(data);
+      res.status(201).json(tenant);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid tenant data" });
+    }
+  });
+
+  app.patch("/api/admin/tenants/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenant = await storage.updateTenant(id, req.body);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      res.json(tenant);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update tenant" });
+    }
+  });
+
+  // ===== SUPER ADMIN: TENANT SUBSCRIPTIONS =====
+  app.get("/api/admin/tenants/:tenantId/subscriptions", async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.tenantId);
+      const subscriptions = await storage.getTenantSubscriptions(tenantId);
+      res.json(subscriptions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch subscriptions" });
+    }
+  });
+
+  app.post("/api/admin/tenants/:tenantId/subscriptions", async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.tenantId);
+      const data = insertTenantSubscriptionSchema.parse({ ...req.body, tenantId });
+      const subscription = await storage.createTenantSubscription(data);
+      
+      // Update tenant's current subscription
+      await storage.updateTenant(tenantId, { 
+        planId: data.planId,
+        subscriptionEndsAt: data.endDate
+      });
+      
+      res.status(201).json(subscription);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid subscription data" });
+    }
+  });
+
+  // ===== SUPER ADMIN: STATISTICS =====
+  app.get("/api/admin/stats", async (req, res) => {
+    try {
+      const tenants = await storage.getTenants();
+      const plans = await storage.getSubscriptionPlans();
+      
+      const activeCount = tenants.filter(t => t.status === 'active').length;
+      const trialCount = tenants.filter(t => t.status === 'trial').length;
+      const suspendedCount = tenants.filter(t => t.status === 'suspended').length;
+      
+      res.json({
+        totalTenants: tenants.length,
+        activeTenants: activeCount,
+        trialTenants: trialCount,
+        suspendedTenants: suspendedCount,
+        totalPlans: plans.length,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch admin stats" });
+    }
+  });
+
+  // ===== TENANT RESOLUTION (for multi-tenant) =====
+  app.get("/api/tenant/:slug", async (req, res) => {
+    try {
+      const tenant = await storage.getTenantBySlug(req.params.slug);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      res.json({
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        logo: tenant.logo,
+        status: tenant.status
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tenant" });
     }
   });
 
