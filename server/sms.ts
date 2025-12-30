@@ -95,9 +95,9 @@ export async function getBalance(): Promise<{ balance: number; error?: string }>
   }
 }
 
-// Format number with spaces (e.g., 300000 -> "300 000")
+// Format number with commas (e.g., 300000 -> "300,000") - matching Eskiz approved template
 function formatAmount(amount: number): string {
-  return amount.toLocaleString('ru-RU').replace(/,/g, ' ');
+  return amount.toLocaleString('en-US');
 }
 
 // SMS Templates - exactly matching Eskiz approved templates
