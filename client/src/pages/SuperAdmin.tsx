@@ -547,14 +547,14 @@ export default function SuperAdmin() {
 
           {/* Edit Tenant Dialog */}
           <Dialog open={!!editingTenant} onOpenChange={(open) => !open && setEditingTenant(null)}>
-            <DialogContent className="max-w-md p-0">
-              <DialogHeader className="p-6 pb-0">
+            <DialogContent className="max-w-md max-h-[90vh] p-0 flex flex-col overflow-hidden">
+              <DialogHeader className="p-6 pb-4 shrink-0">
                 <DialogTitle>Markaz sozlamalari</DialogTitle>
                 <DialogDescription>{editingTenant?.name} markazi sozlamalari</DialogDescription>
               </DialogHeader>
-              <ScrollArea className="max-h-[60vh] px-6">
+              <div className="flex-1 overflow-y-auto px-6">
               {editingTenant && (
-                <div className="space-y-4 py-4">
+                <div className="space-y-4 pb-4">
                   <div className="space-y-2">
                     <Label>Tarif</Label>
                     <Select
@@ -652,8 +652,8 @@ export default function SuperAdmin() {
                   </div>
                 </div>
               )}
-              </ScrollArea>
-              <DialogFooter className="p-6 pt-0">
+              </div>
+              <DialogFooter className="p-6 pt-4 shrink-0 border-t">
                 <Button variant="outline" onClick={() => setEditingTenant(null)}>Bekor qilish</Button>
                 <Button 
                   onClick={() => editingTenant && updateTenantMutation.mutate({ 
