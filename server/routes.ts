@@ -535,7 +535,7 @@ export async function registerRoutes(
         tenantId: getTenantId(req),
         firstName,
         lastName,
-        email,
+        email: email || null,
         password: hashedPassword,
         phone,
         salaryPercent: salaryPercent || 0,

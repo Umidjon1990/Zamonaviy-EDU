@@ -71,7 +71,7 @@ export type TenantSubscription = typeof tenantSubscriptions.$inferSelect;
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: integer("tenant_id").notNull(),
-  email: text("email").notNull().unique(),
+  email: text("email"),
   password: text("password").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),

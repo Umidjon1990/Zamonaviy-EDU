@@ -97,14 +97,13 @@ export default function Teachers() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email (Login)</Label>
+                <Label htmlFor="email">Email (ixtiyoriy)</Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="teacher@educrm.uz"
-                  required
                   data-testid="input-email"
                 />
               </div>
