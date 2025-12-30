@@ -755,7 +755,6 @@ export async function registerRoutes(
     try {
       const { studentId, amount, groupId } = req.body;
       const student = await storage.getStudent(studentId);
-      const group = groupId ? await storage.getGroup(groupId) : null;
       
       if (!student) {
         return res.status(404).json({ error: "O'quvchi topilmadi" });
@@ -767,10 +766,21 @@ export async function registerRoutes(
       }
 
       let courseName = "umumiy kursi";
+      
+      // If groupId provided, use it; otherwise find student's first group
+      let group = groupId ? await storage.getGroup(groupId) : null;
+      if (!group) {
+        const studentGroupsList = await storage.getStudentGroups(studentId);
+        if (studentGroupsList.length > 0) {
+          group = await storage.getGroup(studentGroupsList[0].groupId);
+        }
+      }
+      
       if (group) {
         const groupName = group.name.trim();
         courseName = groupName.toLowerCase().includes("kurs") ? groupName : groupName + " kursi";
       }
+      
       const result = await sendPaymentReceivedSMS(phone, student.firstName.trim(), courseName, amount);
       res.json(result);
     } catch (error) {
