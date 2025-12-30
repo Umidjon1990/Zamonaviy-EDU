@@ -23,6 +23,10 @@ export default function SuperAdmin() {
     address: "",
     status: "trial",
     planId: 1,
+    adminFirstName: "",
+    adminLastName: "",
+    adminPhone: "",
+    adminPassword: "",
   });
 
   const { data: stats } = useQuery({
@@ -63,7 +67,7 @@ export default function SuperAdmin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       setIsAddTenantOpen(false);
-      setNewTenant({ name: "", slug: "", phone: "", email: "", address: "", status: "trial", planId: 1 });
+      setNewTenant({ name: "", slug: "", phone: "", email: "", address: "", status: "trial", planId: 1, adminFirstName: "", adminLastName: "", adminPhone: "", adminPassword: "" });
     },
   });
 
@@ -264,6 +268,53 @@ export default function SuperAdmin() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="font-medium mb-3">Markaz admini</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="adminFirstName">Ism</Label>
+                        <Input
+                          id="adminFirstName"
+                          data-testid="input-admin-firstname"
+                          value={newTenant.adminFirstName}
+                          onChange={(e) => setNewTenant({ ...newTenant, adminFirstName: e.target.value })}
+                          placeholder="Admin ismi"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="adminLastName">Familiya</Label>
+                        <Input
+                          id="adminLastName"
+                          data-testid="input-admin-lastname"
+                          value={newTenant.adminLastName}
+                          onChange={(e) => setNewTenant({ ...newTenant, adminLastName: e.target.value })}
+                          placeholder="Admin familiyasi"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2 mt-3">
+                      <Label htmlFor="adminPhone">Login (Telefon raqami)</Label>
+                      <Input
+                        id="adminPhone"
+                        data-testid="input-admin-phone"
+                        value={newTenant.adminPhone}
+                        onChange={(e) => setNewTenant({ ...newTenant, adminPhone: e.target.value })}
+                        placeholder="998901234567"
+                      />
+                    </div>
+                    <div className="space-y-2 mt-3">
+                      <Label htmlFor="adminPassword">Parol</Label>
+                      <Input
+                        id="adminPassword"
+                        type="password"
+                        data-testid="input-admin-password"
+                        value={newTenant.adminPassword}
+                        onChange={(e) => setNewTenant({ ...newTenant, adminPassword: e.target.value })}
+                        placeholder="Parolni kiriting"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsAddTenantOpen(false)}>
@@ -271,7 +322,7 @@ export default function SuperAdmin() {
                   </Button>
                   <Button 
                     onClick={() => createTenantMutation.mutate(newTenant)}
-                    disabled={!newTenant.name || !newTenant.slug || !newTenant.phone}
+                    disabled={!newTenant.name || !newTenant.slug || !newTenant.phone || !newTenant.adminPhone || !newTenant.adminPassword}
                     data-testid="button-save-tenant"
                   >
                     Saqlash

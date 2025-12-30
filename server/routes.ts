@@ -647,10 +647,27 @@ export async function registerRoutes(
 
   app.post("/api/admin/tenants", async (req, res) => {
     try {
-      const data = insertTenantSchema.parse(req.body);
+      const { adminFirstName, adminLastName, adminPhone, adminPassword, ...tenantData } = req.body;
+      const data = insertTenantSchema.parse(tenantData);
       const tenant = await storage.createTenant(data);
+      
+      // Create admin user for this tenant
+      if (adminPhone && adminPassword) {
+        const adminEmail = `admin-${tenant.id}@${tenant.slug || 'tenant'}.educrm.uz`;
+        await storage.createUser({
+          tenantId: tenant.id,
+          email: adminEmail,
+          password: adminPassword,
+          firstName: adminFirstName || "Admin",
+          lastName: adminLastName || "",
+          phone: adminPhone.replace(/\D/g, ''), // Remove non-digits
+          role: "markaz_admin",
+        });
+      }
+      
       res.status(201).json(tenant);
     } catch (error) {
+      console.error("Error creating tenant:", error);
       res.status(400).json({ error: "Invalid tenant data" });
     }
   });
