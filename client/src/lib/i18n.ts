@@ -18,7 +18,7 @@ export const translations = {
   },
   nav: {
     dashboard: "Bosh sahifa",
-    leads: "Lidlar",
+    leads: "Qabul",
     students: "O‘quvchilar",
     groups: "Guruhlar",
     schedule: "Dars jadvali",
@@ -31,14 +31,14 @@ export const translations = {
     title: "Markaz ko‘rsatkichlari",
     totalStudents: "Jami o‘quvchilar",
     activeGroups: "Faol guruhlar",
-    newLeads: "Yangi lidlar",
+    newLeads: "Yangi arizalar",
     monthlyIncome: "Oylik tushum",
     attendanceRate: "Davomat foizi",
     recentActivity: "So‘nggi faolliklar",
   },
   leads: {
-    title: "Lidlar ro‘yxati",
-    addLead: "Yangi lid qo‘shish",
+    title: "Qabul ro‘yxati",
+    addLead: "Yangi ariza qo‘shish",
     status: {
       new: "Yangi",
       contacted: "Qo‘ng‘iroq qilindi",
