@@ -28,14 +28,12 @@ const TEMPLATE_EXAMPLE = `Guruh nomi: Ingliz tili A1
 Kunlari: seshanba/shanba
 Vaqti: 10:00
 Xona: 3-xona
-O'qituvchi: ...ismi
+O'qituvchi: O'qituvchi ismi
 O'quvchilar:
-1. Familiya Ism
-   +998 XX XXX XX XX
-2. Familiya Ism
-   +998 XX XXX XX XX
-3. Familiya Ism
-   +998 XX XXX XX XX`;
+1. Familiyasi Ismi
+   +998901234567
+2. Familiyasi Ismi
+   +998911234567`;
 
 export default function Groups() {
   const { data: groupsData, isLoading } = useGroups();
