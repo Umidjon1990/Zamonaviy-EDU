@@ -546,7 +546,7 @@ export default function SuperAdmin() {
 
           {/* Edit Tenant Dialog */}
           <Dialog open={!!editingTenant} onOpenChange={(open) => !open && setEditingTenant(null)}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Markaz sozlamalari</DialogTitle>
                 <DialogDescription>{editingTenant?.name} markazi sozlamalari</DialogDescription>
