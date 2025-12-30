@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,49 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Users, CreditCard, TrendingUp, Plus, Settings, Pencil, Trash2 } from "lucide-react";
+import { Building2, Users, CreditCard, TrendingUp, Plus, Settings, Pencil, Trash2, LogOut } from "lucide-react";
+import { useLocation } from "wouter";
 import type { Tenant, SubscriptionPlan } from "@shared/schema";
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("superAdminToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export default function SuperAdmin() {
+  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("superAdminToken");
+    if (!token) {
+      setLocation("/super-admin-login");
+      return;
+    }
+    
+    fetch("/api/super-admin/verify", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.valid) {
+          localStorage.removeItem("superAdminToken");
+          setLocation("/super-admin-login");
+        } else {
+          setIsAuthenticated(true);
+        }
+      })
+      .catch(() => {
+        setLocation("/super-admin-login");
+      });
+  }, [setLocation]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("superAdminToken");
+    setLocation("/super-admin-login");
+  };
+
   const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
   const [isAddPlanOpen, setIsAddPlanOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
@@ -160,6 +198,14 @@ export default function SuperAdmin() {
     setNewPlan({ ...newPlan, features: newPlan.features.filter(f => f !== feature) });
   };
 
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Yuklanmoqda...</p>
+      </div>
+    );
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
@@ -204,6 +250,10 @@ export default function SuperAdmin() {
           <h1 className="text-3xl font-bold" data-testid="text-page-title">Super Admin Panel</h1>
           <p className="text-muted-foreground">Barcha markazlarni boshqarish</p>
         </div>
+        <Button variant="outline" onClick={handleLogout} data-testid="button-logout">
+          <LogOut className="mr-2 h-4 w-4" />
+          Chiqish
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">

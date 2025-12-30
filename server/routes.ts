@@ -678,6 +678,69 @@ export async function registerRoutes(
     }
   });
 
+  // ===== SUPER ADMIN: AUTHENTICATION =====
+  const SUPER_ADMIN_USERNAME = process.env.SUPER_ADMIN_USERNAME;
+  const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
+  const SUPER_ADMIN_TOKEN_SECRET = process.env.SUPER_ADMIN_TOKEN_SECRET;
+
+  function generateToken(): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 15);
+    return Buffer.from(`${timestamp}:${random}:${SUPER_ADMIN_TOKEN_SECRET}`).toString('base64');
+  }
+
+  function verifyToken(token: string): boolean {
+    try {
+      const decoded = Buffer.from(token, 'base64').toString('utf-8');
+      const parts = decoded.split(':');
+      if (parts.length !== 3) return false;
+      const timestamp = parseInt(parts[0]);
+      const secret = parts[2];
+      // Token expires after 24 hours
+      if (Date.now() - timestamp > 24 * 60 * 60 * 1000) return false;
+      if (secret !== SUPER_ADMIN_TOKEN_SECRET) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  app.post("/api/super-admin/login", (req, res) => {
+    if (!SUPER_ADMIN_USERNAME || !SUPER_ADMIN_PASSWORD || !SUPER_ADMIN_TOKEN_SECRET) {
+      return res.status(500).json({ error: "Super admin sozlanmagan" });
+    }
+    const { username, password } = req.body;
+    if (username === SUPER_ADMIN_USERNAME && password === SUPER_ADMIN_PASSWORD) {
+      const token = generateToken();
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ error: "Login yoki parol noto'g'ri" });
+    }
+  });
+
+  app.get("/api/super-admin/verify", (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ valid: false });
+    }
+    const token = authHeader.substring(7);
+    const valid = verifyToken(token);
+    res.json({ valid });
+  });
+
+  // Middleware to protect super admin routes
+  const requireSuperAdmin = (req: any, res: any, next: any) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
+    }
+    const token = authHeader.substring(7);
+    if (!verifyToken(token)) {
+      return res.status(401).json({ error: "Token yaroqsiz yoki muddati o'tgan" });
+    }
+    next();
+  };
+
   // ===== SUPER ADMIN: SUBSCRIPTION PLANS =====
   app.get("/api/admin/plans", async (req, res) => {
     try {

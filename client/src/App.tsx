@@ -15,6 +15,7 @@ import Settings from "@/pages/Settings";
 import TeacherLogin from "@/pages/TeacherLogin";
 import TeacherDashboard from "@/pages/TeacherDashboard";
 import SuperAdmin from "@/pages/SuperAdmin";
+import SuperAdminLogin from "@/pages/SuperAdminLogin";
 import NotFound from "@/pages/not-found";
 
 function AdminRoutes() {
@@ -40,6 +41,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/super-admin" component={SuperAdmin} />
+      <Route path="/super-admin-login" component={SuperAdminLogin} />
       <Route path="/teacher-login" component={TeacherLogin} />
       <Route path="/teacher-dashboard" component={TeacherDashboard} />
       <Route component={AdminRoutes} />
