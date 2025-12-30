@@ -206,8 +206,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
-    return result[0];
+    // Clean the phone number - remove all non-digits
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    // Try different phone formats for matching
+    const phoneVariants = [
+      cleanPhone,                              // Full number: 998913609020
+      cleanPhone.replace(/^998/, ''),          // Without country code: 913609020
+      cleanPhone.replace(/^8/, ''),            // If starts with 8
+      `+998${cleanPhone.replace(/^998/, '')}`, // With +998 prefix
+      `998${cleanPhone.replace(/^998/, '')}`,  // With 998 prefix
+    ];
+    
+    for (const variant of phoneVariants) {
+      const result = await db.select().from(users).where(eq(users.phone, variant)).limit(1);
+      if (result[0]) {
+        return result[0];
+      }
+    }
+    
+    return undefined;
   }
 
   async createUser(user: InsertUser): Promise<User> {
