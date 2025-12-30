@@ -172,13 +172,12 @@ export default function Students() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="parentPhone">Ota-ona telefoni</Label>
+                <Label htmlFor="parentPhone">Ota-ona telefoni (ixtiyoriy)</Label>
                 <Input
                   id="parentPhone"
                   value={formData.parentPhone}
                   onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
                   placeholder="+998 90 123 45 67"
-                  required
                   data-testid="input-parentPhone"
                 />
               </div>
@@ -285,13 +284,12 @@ export default function Students() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-parentPhone">Ota-ona telefoni</Label>
+              <Label htmlFor="edit-parentPhone">Ota-ona telefoni (ixtiyoriy)</Label>
               <Input
                 id="edit-parentPhone"
                 value={formData.parentPhone}
                 onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
                 placeholder="+998 90 123 45 67"
-                required
                 data-testid="input-edit-parentPhone"
               />
             </div>
