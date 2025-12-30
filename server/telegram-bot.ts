@@ -1022,6 +1022,15 @@ export function startScheduledNotifications() {
         console.error("Error sending admin evening report:", error);
       }
     }
+    
+    // Check expired trials at midnight (00:00)
+    if (uzHour === 0 && uzMinutes === 0) {
+      try {
+        await checkExpiredTrials();
+      } catch (error) {
+        console.error("Error checking expired trials:", error);
+      }
+    }
   }, 60000); // Check every minute
   
   console.log("Telegram bildirish tizimi ishga tushdi");
@@ -1114,5 +1123,40 @@ async function checkClassReminders() {
     }
   } catch (error) {
     console.error("Error in checkClassReminders:", error);
+  }
+}
+
+// Check and suspend tenants with expired trials
+async function checkExpiredTrials() {
+  try {
+    const allTenants = await storage.getTenants();
+    const now = new Date();
+    
+    for (const tenant of allTenants) {
+      // Skip if already suspended or active with valid subscription
+      if (tenant.status === "suspended") continue;
+      
+      // Check if trial has expired
+      if (tenant.status === "trial" && tenant.trialEndsAt) {
+        const trialEnd = new Date(tenant.trialEndsAt);
+        if (now > trialEnd) {
+          // Trial expired - suspend the tenant
+          await storage.updateTenant(tenant.id, { status: "suspended" });
+          console.log(`Tenant ${tenant.id} (${tenant.name}) suspended - trial expired`);
+        }
+      }
+      
+      // Also check subscription end date for active tenants
+      if (tenant.status === "active" && tenant.subscriptionEndsAt) {
+        const subEnd = new Date(tenant.subscriptionEndsAt);
+        if (now > subEnd) {
+          // Subscription expired - suspend the tenant
+          await storage.updateTenant(tenant.id, { status: "suspended" });
+          console.log(`Tenant ${tenant.id} (${tenant.name}) suspended - subscription expired`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error checking expired trials:", error);
   }
 }
