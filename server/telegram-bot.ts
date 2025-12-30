@@ -39,7 +39,7 @@ export async function startTelegramBot() {
     ctx.session.adminId = undefined;
     
     await ctx.reply(
-      "Assalomu alaykum! EduCRM botiga xush kelibsiz!\n\n" +
+      "Assalomu alaykum! Zamonaviy-Edu botiga xush kelibsiz!\n\n" +
       "O'z ma'lumotlaringizni ko'rish uchun telefon raqamingizni yuboring.\n\n" +
       "Namuna: +998901234567 yoki 901234567",
       {

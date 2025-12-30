@@ -275,7 +275,7 @@ export default function TeacherDashboard() {
               <GraduationCap className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <p className="font-bold">EduCRM</p>
+              <p className="font-bold">Zamonaviy-Edu</p>
               <p className="text-xs text-muted-foreground">{teacherName}</p>
             </div>
           </div>

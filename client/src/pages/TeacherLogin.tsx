@@ -53,7 +53,7 @@ export default function TeacherLogin() {
           </div>
           <div>
             <CardTitle className="text-2xl font-bold">O'qituvchi portali</CardTitle>
-            <CardDescription>EduCRM tizimiga kirish</CardDescription>
+            <CardDescription>Zamonaviy-Edu tizimiga kirish</CardDescription>
           </div>
         </CardHeader>
         <CardContent>

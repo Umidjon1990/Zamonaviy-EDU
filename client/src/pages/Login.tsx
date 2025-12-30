@@ -70,7 +70,7 @@ export default function Login() {
               <GraduationCap className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl">EduCRM</CardTitle>
+          <CardTitle className="text-2xl">Zamonaviy-Edu</CardTitle>
           <CardDescription>
             O'quv markaz boshqaruv tizimiga kirish
           </CardDescription>

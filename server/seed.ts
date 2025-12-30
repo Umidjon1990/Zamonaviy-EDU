@@ -26,7 +26,7 @@ async function seed() {
     const [tenant] = await db
       .insert(tenants)
       .values({
-        name: "EduCRM O'quv Markazi",
+        name: "Zamonaviy-Edu O'quv Markazi",
         phone: "+998 90 123 45 67",
         address: "Toshkent sh., Yunusobod t., 12-uy",
       })

@@ -41,7 +41,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
           <GraduationCap className="text-primary-foreground w-5 h-5" />
         </div>
-        <span className="font-display font-bold text-xl tracking-tight">EduCRM</span>
+        <span className="font-display font-bold text-xl tracking-tight">Zamonaviy-Edu</span>
       </div>
 
       <nav className="flex-1 px-4 py-4 space-y-1">
@@ -104,7 +104,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <GraduationCap className="text-primary-foreground w-5 h-5" />
             </div>
-            <span className="font-display font-bold text-lg">EduCRM</span>
+            <span className="font-display font-bold text-lg">Zamonaviy-Edu</span>
           </div>
           
           <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>

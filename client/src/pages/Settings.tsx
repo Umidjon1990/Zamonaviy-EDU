@@ -14,7 +14,7 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   
   const [centerInfo, setCenterInfo] = useState({
-    name: "EduCRM Learning Center",
+    name: "Zamonaviy-Edu Learning Center",
     phone: "+998 90 123 45 67",
     address: "Toshkent sh., Yunusobod t., 12-uy",
   });

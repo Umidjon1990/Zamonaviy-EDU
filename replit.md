@@ -1,8 +1,8 @@
-# EduCRM - O'quv Markaz Boshqaruv Tizimi
+# Zamonaviy-Edu - O'quv Markaz Boshqaruv Tizimi
 
 ## Overview
 
-EduCRM is a School CRM / Education Center Management Web Application designed for the Uzbekistan market. The entire UI is in Uzbek (Latin alphabet), targeting education centers (o'quv markazlari) with features for managing leads, students, groups, schedules, attendance, and payments. The system is built as a single-tenant MVP with multi-tenant architecture prepared for future scaling.
+Zamonaviy-Edu is a School CRM / Education Center Management Web Application designed for the Uzbekistan market. The entire UI is in Uzbek (Latin alphabet), targeting education centers (o'quv markazlari) with features for managing leads, students, groups, schedules, attendance, and payments. The system is built as a single-tenant MVP with multi-tenant architecture prepared for future scaling.
 
 ## User Preferences
 
