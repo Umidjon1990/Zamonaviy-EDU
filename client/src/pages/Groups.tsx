@@ -2,14 +2,15 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
+import { Textarea } from "@/components/ui/textarea";
 import { translations } from "@/lib/i18n";
-import { useGroups, useCreateGroup, useDeleteGroup, useTeachers } from "@/lib/api";
-import { Plus, Users, Clock, MapPin, Trash2, User } from "lucide-react";
+import { useGroups, useCreateGroup, useDeleteGroup, useTeachers, useImportGroupTemplate } from "@/lib/api";
+import { Plus, Users, Clock, MapPin, Trash2, User, FileText, Copy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,6 +24,16 @@ const WEEKDAYS = [
   { value: "Yakshanba", label: "Ya" },
 ];
 
+const TEMPLATE_EXAMPLE = `Guruh nomi: Ingliz tili A1
+Kunlari: seshanba/shanba
+Vaqti: 10:00
+Xona: 3-xona
+O'qituvchi: Abdushukur
+O'quvchilar:
+1.Jaloliddinova Mohinur +99894 001 52 48
+2.Abdulboqiyev Azamat +99893 053 85 31
+3.Fayzullayev Bilolxon +99893 405 98 98`;
+
 export default function Groups() {
   const { data: groupsData, isLoading } = useGroups();
   const groups = (groupsData || []) as any[];
@@ -30,9 +41,14 @@ export default function Groups() {
   const teachers = (teachersData || []) as any[];
   const createGroup = useCreateGroup();
   const deleteGroup = useDeleteGroup();
+  const importTemplate = useImportGroupTemplate();
   const { toast } = useToast();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [isTemplateOpen, setIsTemplateOpen] = useState(false);
+  const [templateText, setTemplateText] = useState("");
+  const [importResult, setImportResult] = useState<any>(null);
+  
   const [formData, setFormData] = useState({
     name: "",
     teacherId: "",
@@ -89,6 +105,43 @@ export default function Groups() {
     }
   };
 
+  const handleTemplateImport = async () => {
+    if (!templateText.trim()) {
+      toast({ title: "Xatolik", description: "Shablon matnini kiriting", variant: "destructive" });
+      return;
+    }
+    
+    try {
+      const result = await importTemplate.mutateAsync(templateText);
+      setImportResult(result);
+      toast({ 
+        title: "Muvaffaqiyat", 
+        description: `Guruh yaratildi! ${(result as any).totalStudents} ta o'quvchi qo'shildi.`
+      });
+    } catch (error: any) {
+      let errorMessage = "Import xatosi";
+      try {
+        if (error?.message) {
+          const cleanMessage = error.message.replace("API Error: ", "");
+          const errorData = JSON.parse(cleanMessage);
+          errorMessage = errorData?.error || errorMessage;
+        }
+      } catch {
+        errorMessage = error?.message || "Import xatosi";
+      }
+      toast({ 
+        title: "Xatolik", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const copyTemplateExample = () => {
+    navigator.clipboard.writeText(TEMPLATE_EXAMPLE);
+    toast({ title: "Nusxalandi", description: "Shablon namunasi nusxalandi" });
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -106,12 +159,109 @@ export default function Groups() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">{translations.groups.title}</h1>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto" data-testid="button-add-group">
-              <Plus className="mr-2 h-4 w-4" /> {translations.groups.addGroup}
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Dialog open={isTemplateOpen} onOpenChange={(open) => {
+            setIsTemplateOpen(open);
+            if (!open) {
+              setTemplateText("");
+              setImportResult(null);
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full sm:w-auto" data-testid="button-import-template">
+                <FileText className="mr-2 h-4 w-4" /> Shablon bilan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Shablon bilan guruh yaratish</DialogTitle>
+                <DialogDescription>
+                  Quyidagi formatda ma'lumotlarni kiriting yoki nusxalab qo'ying
+                </DialogDescription>
+              </DialogHeader>
+              
+              {!importResult ? (
+                <div className="space-y-4">
+                  <div className="bg-muted p-3 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-sm font-medium">Shablon namunasi:</Label>
+                      <Button variant="ghost" size="sm" onClick={copyTemplateExample}>
+                        <Copy className="h-4 w-4 mr-1" /> Nusxalash
+                      </Button>
+                    </div>
+                    <pre className="text-xs whitespace-pre-wrap text-muted-foreground font-mono bg-background p-2 rounded">
+{TEMPLATE_EXAMPLE}
+                    </pre>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Shablon matni</Label>
+                    <Textarea
+                      value={templateText}
+                      onChange={(e) => setTemplateText(e.target.value)}
+                      placeholder="Shablon matnini shu yerga qo'ying..."
+                      className="min-h-[200px] font-mono text-sm"
+                      data-testid="textarea-template"
+                    />
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-medium mb-1">Eslatma:</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li>O'qituvchi ismi tizimda mavjud bo'lishi kerak</li>
+                      <li>Kunlar: du/se/chor/pay/juma/sha/yak yoki to'liq nomi</li>
+                      <li>O'quvchi telefon raqami bo'sh joy bilan bo'lishi mumkin</li>
+                      <li>Mavjud o'quvchilar avtomatik guruhga qo'shiladi</li>
+                    </ul>
+                  </div>
+                  
+                  <Button 
+                    onClick={handleTemplateImport} 
+                    className="w-full" 
+                    disabled={importTemplate.isPending}
+                    data-testid="button-import-submit"
+                  >
+                    {importTemplate.isPending ? "Yuklanmoqda..." : "Import qilish"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                    <h3 className="font-semibold text-green-700 dark:text-green-400 mb-2">Muvaffaqiyatli yaratildi!</h3>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Guruh:</strong> {importResult.group?.name}</p>
+                      <p><strong>O'qituvchi:</strong> {importResult.teacher?.name}</p>
+                      <p><strong>Yangi o'quvchilar:</strong> {importResult.createdStudents} ta</p>
+                      <p><strong>Mavjud o'quvchilar:</strong> {importResult.existingStudents} ta</p>
+                      <p><strong>Jami:</strong> {importResult.totalStudents} ta o'quvchi guruhga qo'shildi</p>
+                    </div>
+                  </div>
+                  
+                  {importResult.errors && importResult.errors.length > 0 && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <p className="font-medium text-yellow-700 dark:text-yellow-400 text-sm mb-1">Ogohlantirishlar:</p>
+                      <ul className="text-xs text-yellow-600 dark:text-yellow-500 list-disc pl-4">
+                        {importResult.errors.map((err: string, i: number) => (
+                          <li key={i}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  <Button onClick={() => setIsTemplateOpen(false)} className="w-full">
+                    Yopish
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+          
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full sm:w-auto" data-testid="button-add-group">
+                <Plus className="mr-2 h-4 w-4" /> {translations.groups.addGroup}
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Yangi guruh yaratish</DialogTitle>
@@ -199,6 +349,7 @@ export default function Groups() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {groups && groups.length > 0 ? (

@@ -339,6 +339,179 @@ export async function registerRoutes(
     }
   });
 
+  // ===== TEMPLATE IMPORT =====
+  // Parse and import group with students from template format
+  app.post("/api/groups/import-template", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { template } = req.body;
+      
+      if (!template || typeof template !== "string") {
+        return res.status(400).json({ error: "Shablon matni kiritilmagan" });
+      }
+
+      // Parse template
+      const lines = template.split("\n").map(l => l.trim()).filter(l => l);
+      
+      let groupName = "";
+      let days: string[] = [];
+      let time = "";
+      let room = "";
+      let teacherName = "";
+      let students: { firstName: string; lastName: string; phone: string }[] = [];
+      
+      // Day name mappings (various formats)
+      const dayMappings: Record<string, string> = {
+        "dushanba": "Dushanba", "du": "Dushanba",
+        "seshanba": "Seshanba", "se": "Seshanba",
+        "chorshanba": "Chorshanba", "chor": "Chorshanba", "cho": "Chorshanba",
+        "payshanba": "Payshanba", "pay": "Payshanba", "pa": "Payshanba",
+        "juma": "Juma", "ju": "Juma",
+        "shanba": "Shanba", "sha": "Shanba",
+        "yakshanba": "Yakshanba", "yak": "Yakshanba", "ya": "Yakshanba",
+      };
+      
+      let parsingStudents = false;
+      
+      for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+        
+        if (lowerLine.startsWith("guruh nomi:") || lowerLine.startsWith("guruh:")) {
+          groupName = line.split(":").slice(1).join(":").trim();
+        } else if (lowerLine.startsWith("kunlari:") || lowerLine.startsWith("kunlar:")) {
+          const daysStr = line.split(":").slice(1).join(":").trim().toLowerCase();
+          // Split by / or , or space
+          const dayParts = daysStr.split(/[\/,\s]+/).filter(d => d);
+          days = dayParts
+            .map(d => dayMappings[d.toLowerCase()])
+            .filter(d => d) as string[];
+        } else if (lowerLine.startsWith("vaqti:") || lowerLine.startsWith("vaqt:")) {
+          time = line.split(":").slice(1).join(":").trim();
+        } else if (lowerLine.startsWith("xona:")) {
+          room = line.split(":").slice(1).join(":").trim();
+        } else if (lowerLine.startsWith("o'qituvchi:") || lowerLine.startsWith("oqituvchi:") || lowerLine.startsWith("ustoz:")) {
+          teacherName = line.split(":").slice(1).join(":").trim();
+        } else if (lowerLine.startsWith("o'quvchilar:") || lowerLine.startsWith("oquvchilar:") || lowerLine.startsWith("talabalar:")) {
+          parsingStudents = true;
+        } else if (parsingStudents && /^\d+\./.test(line)) {
+          // Parse student line: "1.Jaloliddinova Mohinur +99894 00152 48"
+          const match = line.match(/^\d+\.\s*(.+?)\s+(\+?\d[\d\s]+)$/);
+          if (match) {
+            const fullName = match[1].trim();
+            const phone = match[2].replace(/\s+/g, "").replace(/^\+/, "");
+            
+            // Split name into parts (last name first, then first name)
+            const nameParts = fullName.split(/\s+/);
+            let lastName = "";
+            let firstName = "";
+            
+            if (nameParts.length >= 2) {
+              lastName = nameParts[0];
+              firstName = nameParts.slice(1).join(" ");
+            } else {
+              firstName = fullName;
+            }
+            
+            students.push({ firstName, lastName, phone });
+          }
+        }
+      }
+      
+      // Validate required fields
+      if (!groupName) {
+        return res.status(400).json({ error: "Guruh nomi topilmadi" });
+      }
+      
+      // Find teacher by name
+      const teachers = await storage.getTeachers(tenantId);
+      const teacher = teachers.find(t => {
+        const fullName = `${t.firstName} ${t.lastName}`.toLowerCase();
+        const searchName = teacherName.toLowerCase();
+        return fullName.includes(searchName) || 
+               t.firstName.toLowerCase().includes(searchName) ||
+               t.lastName.toLowerCase().includes(searchName);
+      });
+      
+      if (!teacher) {
+        return res.status(400).json({ 
+          error: `O'qituvchi "${teacherName}" topilmadi`,
+          availableTeachers: teachers.map(t => `${t.firstName} ${t.lastName}`)
+        });
+      }
+      
+      // Create group
+      const group = await storage.createGroup({
+        tenantId,
+        name: groupName,
+        teacherId: teacher.id,
+        days: days.length > 0 ? days : ["Dushanba", "Chorshanba", "Juma"],
+        time: time || "09:00",
+        room: room || "",
+        maxStudents: 20,
+        subjectId: 0,
+        level: "Beginner",
+      });
+      
+      // Create students and add to group
+      const createdStudents: any[] = [];
+      const existingStudents: any[] = [];
+      const errors: string[] = [];
+      
+      for (const studentData of students) {
+        try {
+          // Check if student already exists by phone
+          const allStudents = await storage.getStudents(tenantId);
+          const normalizedPhone = studentData.phone.replace(/\D/g, "");
+          let student = allStudents.find(s => 
+            s.phone.replace(/\D/g, "") === normalizedPhone
+          );
+          
+          if (student) {
+            existingStudents.push(student);
+          } else {
+            // Create new student
+            student = await storage.createStudent({
+              tenantId,
+              firstName: studentData.firstName,
+              lastName: studentData.lastName,
+              phone: "+" + normalizedPhone,
+              parentPhone: "",
+              status: "active",
+              balance: 0,
+            });
+            createdStudents.push(student);
+          }
+          
+          // Add student to group if not already in it
+          const studentGroups = await storage.getStudentGroups(student.id);
+          const alreadyInGroup = studentGroups.some(sg => sg.groupId === group.id);
+          
+          if (!alreadyInGroup) {
+            await storage.addStudentToGroup({
+              studentId: student.id,
+              groupId: group.id,
+            });
+          }
+        } catch (err: any) {
+          errors.push(`${studentData.firstName} ${studentData.lastName}: ${err.message}`);
+        }
+      }
+      
+      res.status(201).json({
+        success: true,
+        group,
+        teacher: { id: teacher.id, name: `${teacher.firstName} ${teacher.lastName}` },
+        createdStudents: createdStudents.length,
+        existingStudents: existingStudents.length,
+        totalStudents: createdStudents.length + existingStudents.length,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error: any) {
+      console.error("Template import error:", error);
+      res.status(500).json({ error: error.message || "Import xatosi" });
+    }
+  });
+
   // ===== STUDENT GROUPS =====
   app.get("/api/students/:studentId/groups", async (req, res) => {
     try {

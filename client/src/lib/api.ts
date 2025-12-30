@@ -147,6 +147,21 @@ export function useDeleteGroup() {
   });
 }
 
+export function useImportGroupTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (template: string) => apiCall("/groups/import-template", { 
+      method: "POST", 
+      body: JSON.stringify({ template }) 
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groups"] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
+}
+
 // ===== PAYMENTS =====
 export function usePayments(studentId?: number) {
   return useQuery({
