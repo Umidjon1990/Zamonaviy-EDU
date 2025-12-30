@@ -622,6 +622,20 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/admin/plans/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      // Soft delete - just mark as inactive
+      const plan = await storage.updateSubscriptionPlan(id, { isActive: false });
+      if (!plan) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete plan" });
+    }
+  });
+
   // ===== SUPER ADMIN: TENANTS MANAGEMENT =====
   app.get("/api/admin/tenants", async (req, res) => {
     try {

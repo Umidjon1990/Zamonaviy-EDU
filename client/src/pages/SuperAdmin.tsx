@@ -9,12 +9,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Users, CreditCard, TrendingUp, Plus, Settings } from "lucide-react";
+import { Building2, Users, CreditCard, TrendingUp, Plus, Settings, Pencil, Trash2 } from "lucide-react";
 import type { Tenant, SubscriptionPlan } from "@shared/schema";
 
 export default function SuperAdmin() {
   const queryClient = useQueryClient();
   const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
+  const [isAddPlanOpen, setIsAddPlanOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
   const [newTenant, setNewTenant] = useState({
     name: "",
     slug: "",
@@ -28,6 +30,16 @@ export default function SuperAdmin() {
     adminPhone: "",
     adminPassword: "",
   });
+  const [newPlan, setNewPlan] = useState({
+    name: "",
+    price: 0,
+    maxStudents: 50,
+    maxTeachers: 5,
+    maxGroups: 10,
+    features: [] as string[],
+    isActive: true,
+  });
+  const [featureInput, setFeatureInput] = useState("");
 
   const { data: stats } = useQuery({
     queryKey: ["/api/admin/stats"],
@@ -85,6 +97,64 @@ export default function SuperAdmin() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
     },
   });
+
+  const createPlanMutation = useMutation({
+    mutationFn: async (data: typeof newPlan) => {
+      const res = await fetch("/api/admin/plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create plan");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/plans"] });
+      setIsAddPlanOpen(false);
+      setNewPlan({ name: "", price: 0, maxStudents: 50, maxTeachers: 5, maxGroups: 10, features: [], isActive: true });
+      setFeatureInput("");
+    },
+  });
+
+  const updatePlanMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<SubscriptionPlan> }) => {
+      const res = await fetch(`/api/admin/plans/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update plan");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/plans"] });
+      setEditingPlan(null);
+    },
+  });
+
+  const deletePlanMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/plans/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete plan");
+      return res.ok;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/plans"] });
+    },
+  });
+
+  const addFeature = () => {
+    if (featureInput.trim() && !newPlan.features.includes(featureInput.trim())) {
+      setNewPlan({ ...newPlan, features: [...newPlan.features, featureInput.trim()] });
+      setFeatureInput("");
+    }
+  };
+
+  const removeFeature = (feature: string) => {
+    setNewPlan({ ...newPlan, features: newPlan.features.filter(f => f !== feature) });
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -389,16 +459,143 @@ export default function SuperAdmin() {
         </TabsContent>
 
         <TabsContent value="plans" className="space-y-4">
-          <h2 className="text-xl font-semibold">Tarif rejalari</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold">Tarif rejalari</h2>
+            <Dialog open={isAddPlanOpen} onOpenChange={setIsAddPlanOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-plan">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Yangi tarif
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Yangi tarif qo'shish</DialogTitle>
+                  <DialogDescription>Tarif ma'lumotlarini kiriting</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="planName">Tarif nomi</Label>
+                    <Input
+                      id="planName"
+                      data-testid="input-plan-name"
+                      value={newPlan.name}
+                      onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })}
+                      placeholder="Masalan: Professional"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="planPrice">Narxi (so'm/oy)</Label>
+                    <Input
+                      id="planPrice"
+                      type="number"
+                      data-testid="input-plan-price"
+                      value={newPlan.price}
+                      onChange={(e) => setNewPlan({ ...newPlan, price: parseInt(e.target.value) || 0 })}
+                      placeholder="500000"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="maxStudents">O'quvchilar</Label>
+                      <Input
+                        id="maxStudents"
+                        type="number"
+                        data-testid="input-max-students"
+                        value={newPlan.maxStudents}
+                        onChange={(e) => setNewPlan({ ...newPlan, maxStudents: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="maxTeachers">O'qituvchilar</Label>
+                      <Input
+                        id="maxTeachers"
+                        type="number"
+                        data-testid="input-max-teachers"
+                        value={newPlan.maxTeachers}
+                        onChange={(e) => setNewPlan({ ...newPlan, maxTeachers: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="maxGroups">Guruhlar</Label>
+                      <Input
+                        id="maxGroups"
+                        type="number"
+                        data-testid="input-max-groups"
+                        value={newPlan.maxGroups}
+                        onChange={(e) => setNewPlan({ ...newPlan, maxGroups: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Xususiyatlar</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={featureInput}
+                        onChange={(e) => setFeatureInput(e.target.value)}
+                        placeholder="sms, telegram..."
+                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addFeature())}
+                      />
+                      <Button type="button" variant="outline" onClick={addFeature}>+</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {newPlan.features.map((f, idx) => (
+                        <Badge key={idx} variant="secondary" className="cursor-pointer" onClick={() => removeFeature(f)}>
+                          {f} ×
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddPlanOpen(false)}>Bekor qilish</Button>
+                  <Button 
+                    onClick={() => createPlanMutation.mutate(newPlan)}
+                    disabled={!newPlan.name || newPlan.price <= 0}
+                    data-testid="button-save-plan"
+                  >
+                    Saqlash
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-3">
             {plans.map((plan) => (
               <Card key={plan.id} data-testid={`card-plan-${plan.id}`}>
                 <CardHeader>
-                  <CardTitle>{plan.name}</CardTitle>
-                  <CardDescription>
-                    <span className="text-2xl font-bold text-primary">{formatPrice(plan.price)}</span>
-                    <span className="text-muted-foreground">/oy</span>
-                  </CardDescription>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle>{plan.name}</CardTitle>
+                      <CardDescription>
+                        <span className="text-2xl font-bold text-primary">{formatPrice(plan.price)}</span>
+                        <span className="text-muted-foreground">/oy</span>
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => setEditingPlan(plan)}
+                        data-testid={`button-edit-plan-${plan.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => {
+                          if (confirm("Bu tarifni o'chirmoqchimisiz?")) {
+                            deletePlanMutation.mutate(plan.id);
+                          }
+                        }}
+                        data-testid={`button-delete-plan-${plan.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex justify-between">
@@ -427,6 +624,78 @@ export default function SuperAdmin() {
               </Card>
             ))}
           </div>
+
+          {/* Edit Plan Dialog */}
+          <Dialog open={!!editingPlan} onOpenChange={(open) => !open && setEditingPlan(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Tarifni tahrirlash</DialogTitle>
+                <DialogDescription>{editingPlan?.name} tarifini o'zgartiring</DialogDescription>
+              </DialogHeader>
+              {editingPlan && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Tarif nomi</Label>
+                    <Input
+                      value={editingPlan.name}
+                      onChange={(e) => setEditingPlan({ ...editingPlan, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Narxi (so'm/oy)</Label>
+                    <Input
+                      type="number"
+                      value={editingPlan.price}
+                      onChange={(e) => setEditingPlan({ ...editingPlan, price: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label>O'quvchilar</Label>
+                      <Input
+                        type="number"
+                        value={editingPlan.maxStudents}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, maxStudents: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>O'qituvchilar</Label>
+                      <Input
+                        type="number"
+                        value={editingPlan.maxTeachers}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, maxTeachers: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Guruhlar</Label>
+                      <Input
+                        type="number"
+                        value={editingPlan.maxGroups}
+                        onChange={(e) => setEditingPlan({ ...editingPlan, maxGroups: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingPlan(null)}>Bekor qilish</Button>
+                <Button 
+                  onClick={() => editingPlan && updatePlanMutation.mutate({ 
+                    id: editingPlan.id, 
+                    data: {
+                      name: editingPlan.name,
+                      price: editingPlan.price,
+                      maxStudents: editingPlan.maxStudents,
+                      maxTeachers: editingPlan.maxTeachers,
+                      maxGroups: editingPlan.maxGroups,
+                    }
+                  })}
+                >
+                  Saqlash
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
     </div>
