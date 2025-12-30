@@ -30,6 +30,7 @@ export const users = pgTable("users", {
   role: text("role").notNull(), // super_admin, markaz_admin, teacher, manager, student, parent
   phone: text("phone"),
   salaryPercent: integer("salary_percent").default(0), // O'qituvchi oylik foizi (masalan 30%)
+  telegramChatId: text("telegram_chat_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -73,6 +74,7 @@ export const students = pgTable("students", {
   parentPhone: text("parent_phone").notNull(),
   status: text("status").notNull(), // active, paused, left
   balance: integer("balance").default(0).notNull(),
+  telegramChatId: text("telegram_chat_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

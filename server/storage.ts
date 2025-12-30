@@ -101,6 +101,12 @@ export interface IStorage {
     newLeads: number;
     monthlyIncome: number;
   }>;
+  
+  // Telegram
+  updateStudentTelegramChatId(studentId: number, chatId: string): Promise<void>;
+  updateUserTelegramChatId(userId: string, chatId: string): Promise<void>;
+  getStudentByTelegramChatId(chatId: string): Promise<Student | undefined>;
+  getUserByTelegramChatId(chatId: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -362,6 +368,25 @@ export class DatabaseStorage implements IStorage {
       newLeads: newLeads[0]?.count || 0,
       monthlyIncome: monthlyIncome[0]?.sum || 0,
     };
+  }
+  
+  // Telegram
+  async updateStudentTelegramChatId(studentId: number, chatId: string): Promise<void> {
+    await db.update(students).set({ telegramChatId: chatId }).where(eq(students.id, studentId));
+  }
+  
+  async updateUserTelegramChatId(userId: string, chatId: string): Promise<void> {
+    await db.update(users).set({ telegramChatId: chatId }).where(eq(users.id, userId));
+  }
+  
+  async getStudentByTelegramChatId(chatId: string): Promise<Student | undefined> {
+    const result = await db.select().from(students).where(eq(students.telegramChatId, chatId)).limit(1);
+    return result[0];
+  }
+  
+  async getUserByTelegramChatId(chatId: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.telegramChatId, chatId)).limit(1);
+    return result[0];
   }
 }
 
