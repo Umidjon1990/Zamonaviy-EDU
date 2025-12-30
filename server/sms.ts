@@ -48,6 +48,9 @@ export async function sendSMS(phone: string, message: string): Promise<{ success
       formattedPhone = "998" + formattedPhone.replace(/^0/, "");
     }
 
+    console.log(`SMS yuborilmoqda: ${formattedPhone}`);
+    console.log(`Xabar: ${message}`);
+
     const response = await fetch(`${ESKIZ_API_URL}/message/sms/send`, {
       method: "POST",
       headers: {
@@ -62,6 +65,7 @@ export async function sendSMS(phone: string, message: string): Promise<{ success
     });
 
     const data = await response.json();
+    console.log("Eskiz javob:", JSON.stringify(data));
 
     if (data.status === "success" || data.status === "waiting") {
       return { success: true, messageId: data.id };
@@ -91,22 +95,43 @@ export async function getBalance(): Promise<{ balance: number; error?: string }>
   }
 }
 
-// Test mode - Eskiz only allows these messages in test mode
-// Set to false when alpha-name is approved
-const TEST_MODE = false;
-const TEST_MESSAGE = "Bu Eskiz dan test";
+// Format number with spaces (e.g., 300000 -> "300 000")
+function formatAmount(amount: number): string {
+  return amount.toLocaleString('ru-RU').replace(/,/g, ' ');
+}
 
-// SMS Templates
+// SMS Templates - exactly matching Eskiz approved templates
 export const smsTemplates = {
-  paymentReminder: (name: string, group: string, amount: number) =>
-    TEST_MODE ? TEST_MESSAGE : `Hurmatli ${name}, ${group} guruhi uchun ${amount.toLocaleString()} so'm to'lov qilishingiz kerak. EduCRM`,
+  // Template 1: To'lov qabul qilindi
+  // "Assalomu alaykum, {name} ! Sizning {course} uchun {amount} so'm to'lovingiz qabul qilindi. Hurmat bilan, Zamonaviy Ta'lim Markazi."
+  paymentReceived: (name: string, course: string, amount: number) =>
+    `Assalomu alaykum, ${name} ! Sizning ${course} uchun ${formatAmount(amount)} so'm to'lovingiz qabul qilindi. Hurmat bilan, Zamonaviy Ta'lim Markazi.`,
   
-  paymentReceived: (name: string, amount: number, balance: number) =>
-    TEST_MODE ? TEST_MESSAGE : `Rahmat ${name}! ${amount.toLocaleString()} so'm to'lov qabul qilindi. Balansingiz: ${balance.toLocaleString()} so'm. EduCRM`,
+  // Template 2: Kam balans eslatma
+  // "Hurmatli {fullName}! Hisobingizda {balance} so'm qoldi. To'lovni o'z vaqtida amalga oshiringizni so'raymiz. Hurmat bilan, Zamonaviy Ta'lim Markazi."
+  lowBalance: (fullName: string, balance: number) =>
+    `Hurmatli ${fullName}! Hisobingizda ${formatAmount(balance)} so'm qoldi. To'lovni o'z vaqtida amalga oshiringizni so'raymiz. Hurmat bilan, Zamonaviy Ta'lim Markazi.`,
   
-  lowBalance: (name: string, balance: number) =>
-    TEST_MODE ? TEST_MESSAGE : `Hurmatli ${name}, balansingiz ${balance.toLocaleString()} so'm. Iltimos to'lovni amalga oshiring. EduCRM`,
-  
-  welcomeStudent: (name: string, group: string) =>
-    TEST_MODE ? TEST_MESSAGE : `Xush kelibsiz ${name}! Siz ${group} guruhiga qo'shildingiz. EduCRM`,
+  // Template 3: Darsga kelmadi
+  // "Assalomu alaykum, {name} ! Siz {group} guruhida soat {time} da {subject} darsiga qatnashmadingiz. Hurmat bilan, Zamonaviy Ta'lim Markazi."
+  absenceNotification: (name: string, group: string, time: string, subject: string) =>
+    `Assalomu alaykum, ${name} ! Siz ${group} guruhida soat ${time} da ${subject} darsiga qatnashmadingiz. Hurmat bilan, Zamonaviy Ta'lim Markazi.`,
 };
+
+// Send payment received SMS
+export async function sendPaymentReceivedSMS(phone: string, name: string, course: string, amount: number) {
+  const message = smsTemplates.paymentReceived(name, course, amount);
+  return sendSMS(phone, message);
+}
+
+// Send low balance reminder SMS
+export async function sendLowBalanceSMS(phone: string, fullName: string, balance: number) {
+  const message = smsTemplates.lowBalance(fullName, balance);
+  return sendSMS(phone, message);
+}
+
+// Send absence notification SMS
+export async function sendAbsenceSMS(phone: string, name: string, group: string, time: string, subject: string) {
+  const message = smsTemplates.absenceNotification(name, group, time, subject);
+  return sendSMS(phone, message);
+}

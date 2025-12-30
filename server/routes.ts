@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { sendSMS, getBalance, smsTemplates } from "./sms";
+import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
 import { notifyStudentAttendance, notifyStudentPayment } from "./telegram-bot";
 import {
   insertLeadSchema,
@@ -544,9 +544,57 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/sms/payment-reminder", async (req, res) => {
+  // Low balance reminder (approved template 2)
+  app.post("/api/sms/low-balance", async (req, res) => {
     try {
-      const { studentId, groupId, amount } = req.body;
+      const { studentId } = req.body;
+      const student = await storage.getStudent(studentId);
+      
+      if (!student) {
+        return res.status(404).json({ error: "O'quvchi topilmadi" });
+      }
+
+      const phone = student.parentPhone || student.phone;
+      if (!phone) {
+        return res.status(400).json({ error: "Telefon raqami yo'q" });
+      }
+
+      const fullName = `${student.lastName} ${student.firstName}`;
+      const result = await sendLowBalanceSMS(phone, fullName, student.balance || 0);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send low balance reminder" });
+    }
+  });
+
+  // Payment received (approved template 1)
+  app.post("/api/sms/payment-received", async (req, res) => {
+    try {
+      const { studentId, amount, groupId } = req.body;
+      const student = await storage.getStudent(studentId);
+      const group = groupId ? await storage.getGroup(groupId) : null;
+      
+      if (!student) {
+        return res.status(404).json({ error: "O'quvchi topilmadi" });
+      }
+
+      const phone = student.parentPhone || student.phone;
+      if (!phone) {
+        return res.status(400).json({ error: "Telefon raqami yo'q" });
+      }
+
+      const courseName = group?.name || "kurs";
+      const result = await sendPaymentReceivedSMS(phone, student.firstName, courseName, amount);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send payment confirmation" });
+    }
+  });
+
+  // Absence notification (approved template 3)
+  app.post("/api/sms/absence", async (req, res) => {
+    try {
+      const { studentId, groupId, time } = req.body;
       const student = await storage.getStudent(studentId);
       const group = await storage.getGroup(groupId);
       
@@ -559,33 +607,56 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Telefon raqami yo'q" });
       }
 
-      const message = smsTemplates.paymentReminder(student.firstName, group.name, amount);
-      const result = await sendSMS(phone, message);
+      const subject = await storage.getSubject(group.subjectId);
+      const subjectName = subject?.name || "dars";
+      const classTime = time || group.time?.split(" - ")[0] || "00:00";
+      
+      const result = await sendAbsenceSMS(phone, student.firstName, group.name, classTime, subjectName);
       res.json(result);
     } catch (error) {
-      res.status(500).json({ error: "Failed to send payment reminder" });
+      res.status(500).json({ error: "Failed to send absence notification" });
     }
   });
 
-  app.post("/api/sms/payment-received", async (req, res) => {
+  // Test SMS endpoint
+  app.post("/api/sms/test", async (req, res) => {
     try {
-      const { studentId, amount } = req.body;
-      const student = await storage.getStudent(studentId);
-      
-      if (!student) {
-        return res.status(404).json({ error: "O'quvchi topilmadi" });
+      const { phone, template, params } = req.body;
+      if (!phone || !template) {
+        return res.status(400).json({ error: "phone va template kerak" });
       }
 
-      const phone = student.parentPhone || student.phone;
-      if (!phone) {
-        return res.status(400).json({ error: "Telefon raqami yo'q" });
+      let message: string;
+      switch (template) {
+        case "paymentReceived":
+          message = smsTemplates.paymentReceived(
+            params?.name || "Test",
+            params?.course || "Test kursi",
+            params?.amount || 100000
+          );
+          break;
+        case "lowBalance":
+          message = smsTemplates.lowBalance(
+            params?.fullName || "Test Foydalanuvchi",
+            params?.balance || 50000
+          );
+          break;
+        case "absence":
+          message = smsTemplates.absenceNotification(
+            params?.name || "Test",
+            params?.group || "Test-1",
+            params?.time || "10:00",
+            params?.subject || "Ingliz tili"
+          );
+          break;
+        default:
+          return res.status(400).json({ error: "Noma'lum template" });
       }
 
-      const message = smsTemplates.paymentReceived(student.firstName, amount, student.balance || 0);
       const result = await sendSMS(phone, message);
-      res.json(result);
+      res.json({ ...result, message });
     } catch (error) {
-      res.status(500).json({ error: "Failed to send payment confirmation" });
+      res.status(500).json({ error: "Failed to send test SMS" });
     }
   });
 
