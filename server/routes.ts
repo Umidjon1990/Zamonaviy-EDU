@@ -590,6 +590,11 @@ export async function registerRoutes(
   app.get("/api/groups/:groupId/students", async (req, res) => {
     try {
       const groupId = parseInt(req.params.groupId);
+      const tenantId = getTenantId(req);
+      const group = await storage.getGroup(groupId);
+      if (!group || group.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Group not found" });
+      }
       const students = await storage.getStudentsByGroup(groupId);
       res.json(students);
     } catch (error) {
@@ -601,6 +606,11 @@ export async function registerRoutes(
   app.get("/api/teacher/:teacherId/students", async (req, res) => {
     try {
       const teacherId = req.params.teacherId;
+      const tenantId = getTenantId(req);
+      const teacher = await storage.getTeacher(teacherId);
+      if (!teacher || teacher.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
       const students = await storage.getStudentsByTeacher(teacherId);
       res.json(students);
     } catch (error) {
