@@ -71,6 +71,7 @@ export interface IStorage {
   deleteUser(id: string): Promise<boolean>;
   getTeachers(tenantId: number): Promise<User[]>;
   getTeacher(id: string): Promise<User | undefined>;
+  updateTeacher(id: string, teacher: Partial<InsertUser>): Promise<User | undefined>;
   getAdmins(tenantId: number): Promise<User[]>;
   
   // Leads
@@ -244,6 +245,11 @@ export class DatabaseStorage implements IStorage {
 
   async getTeacher(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(and(eq(users.id, id), eq(users.role, 'teacher'))).limit(1);
+    return result[0];
+  }
+
+  async updateTeacher(id: string, teacher: Partial<InsertUser>): Promise<User | undefined> {
+    const result = await db.update(users).set(teacher).where(and(eq(users.id, id), eq(users.role, 'teacher'))).returning();
     return result[0];
   }
   

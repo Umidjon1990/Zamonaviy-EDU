@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toggle } from "@/components/ui/toggle";
 import { translations } from "@/lib/i18n";
-import { useGroups, useCreateGroup, useDeleteGroup, useSubjects, useTeachers } from "@/lib/api";
+import { useGroups, useCreateGroup, useDeleteGroup, useTeachers } from "@/lib/api";
 import { Plus, Users, Clock, MapPin, Trash2, User } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -26,8 +26,6 @@ const WEEKDAYS = [
 export default function Groups() {
   const { data: groupsData, isLoading } = useGroups();
   const groups = (groupsData || []) as any[];
-  const { data: subjectsData } = useSubjects();
-  const subjects = (subjectsData || []) as any[];
   const { data: teachersData } = useTeachers();
   const teachers = (teachersData || []) as any[];
   const createGroup = useCreateGroup();
@@ -37,9 +35,7 @@ export default function Groups() {
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
-    subjectId: 0,
     teacherId: "",
-    level: "Beginner",
     days: [] as string[],
     time: "",
     room: "",
@@ -71,9 +67,7 @@ export default function Groups() {
       setIsOpen(false);
       setFormData({
         name: "",
-        subjectId: 0,
         teacherId: "",
-        level: "Beginner",
         days: [],
         time: "",
         room: "",
@@ -188,38 +182,16 @@ export default function Groups() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="subjectId">Fan</Label>
-                  <Select value={formData.subjectId.toString()} onValueChange={(value) => setFormData({ ...formData, subjectId: parseInt(value) })}>
-                    <SelectTrigger data-testid="select-subject">
-                      <SelectValue placeholder="Tanlang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subjects.map((s: any) => (
-                        <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="level">Daraja</Label>
-                  <Select value={formData.level} onValueChange={(value) => setFormData({ ...formData, level: value })}>
-                    <SelectTrigger data-testid="select-level">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Beginner">Boshlang'ich</SelectItem>
-                      <SelectItem value="Intermediate">O'rta</SelectItem>
-                      <SelectItem value="Advanced">Yuqori</SelectItem>
-                      <SelectItem value="A1">A1</SelectItem>
-                      <SelectItem value="A2">A2</SelectItem>
-                      <SelectItem value="B1">B1</SelectItem>
-                      <SelectItem value="B2">B2</SelectItem>
-                      <SelectItem value="C1">C1</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="maxStudents">Maksimal o'quvchilar soni</Label>
+                <Input
+                  id="maxStudents"
+                  type="number"
+                  min="1"
+                  value={formData.maxStudents}
+                  onChange={(e) => setFormData({ ...formData, maxStudents: parseInt(e.target.value) || 15 })}
+                  data-testid="input-maxStudents"
+                />
               </div>
               <Button type="submit" className="w-full" disabled={createGroup.isPending} data-testid="button-submit">
                 {createGroup.isPending ? "Saqlanmoqda..." : "Saqlash"}
@@ -239,13 +211,12 @@ export default function Groups() {
                     <p className="text-xs font-medium text-muted-foreground mb-1">Guruh</p>
                     <CardTitle className="text-xl" data-testid={`text-name-${group.id}`}>{group.name}</CardTitle>
                   </div>
-                  <Badge variant="secondary">{group.level}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="pb-4 space-y-3">
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Clock className="mr-2 h-4 w-4 text-primary" />
-                  <span>{group.days.join(", ")} • {group.time}</span>
+                  <span>{group.days?.join(", ") || ""} • {group.time}</span>
                 </div>
                 {group.room && (
                   <div className="flex items-center text-sm text-muted-foreground">

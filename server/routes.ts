@@ -547,6 +547,35 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/teachers/:id", async (req, res) => {
+    try {
+      const teacherId = req.params.id;
+      const tenantId = getTenantId(req);
+      const teacher = await storage.getTeacher(teacherId);
+      if (!teacher || teacher.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
+      
+      const { firstName, lastName, email, password, phone, salaryPercent } = req.body;
+      const updateData: any = {};
+      
+      if (firstName !== undefined) updateData.firstName = firstName;
+      if (lastName !== undefined) updateData.lastName = lastName;
+      if (email !== undefined) updateData.email = email;
+      if (phone !== undefined) updateData.phone = phone;
+      if (salaryPercent !== undefined) updateData.salaryPercent = salaryPercent;
+      
+      if (password && password.trim() !== "") {
+        updateData.password = await bcrypt.hash(password, 10);
+      }
+      
+      const updated = await storage.updateTeacher(teacherId, updateData);
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update teacher" });
+    }
+  });
+
   // Teacher login
   app.post("/api/auth/teacher-login", async (req, res) => {
     try {
@@ -557,7 +586,8 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Invalid credentials" });
       }
       
-      if (user.password !== password) {
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
       

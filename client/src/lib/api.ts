@@ -211,6 +211,14 @@ export function useCreateTeacher() {
   });
 }
 
+export function useUpdateTeacher() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: any) => apiCall(`/teachers/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["teachers"] }),
+  });
+}
+
 export function useDeleteTeacher() {
   const queryClient = useQueryClient();
   return useMutation({

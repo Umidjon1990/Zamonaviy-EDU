@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
 import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useGroups, useTeachers, useAddStudentToGroup } from "@/lib/api";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +27,8 @@ export default function Students() {
   const { toast } = useToast();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<any>(null);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -41,8 +43,11 @@ export default function Students() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { groupId, teacherId, ...studentData } = formData;
-      const newStudent = await createStudent.mutateAsync(studentData) as any;
+      const { groupId, teacherId, balance, ...studentData } = formData;
+      const newStudent = await createStudent.mutateAsync({
+        ...studentData,
+        balance: balance > 0 ? -balance : balance,
+      }) as any;
       
       if (groupId && groupId > 0 && newStudent?.id) {
         try {
@@ -57,6 +62,35 @@ export default function Students() {
       setFormData({ firstName: "", lastName: "", phone: "", parentPhone: "", status: "active", balance: 0, groupId: 0, teacherId: "" });
     } catch (error) {
       toast({ title: "Xatolik", description: "O'quvchi qo'shishda xatolik yuz berdi", variant: "destructive" });
+    }
+  };
+
+  const handleEdit = (student: any) => {
+    setEditingStudent(student);
+    setFormData({
+      firstName: student.firstName || "",
+      lastName: student.lastName || "",
+      phone: student.phone || "",
+      parentPhone: student.parentPhone || "",
+      status: student.status || "active",
+      balance: student.balance || 0,
+      groupId: 0,
+      teacherId: "",
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { groupId, teacherId, ...studentData } = formData;
+      await updateStudent.mutateAsync({ id: editingStudent.id, ...studentData });
+      toast({ title: "Muvaffaqiyat", description: "O'quvchi ma'lumotlari yangilandi" });
+      setIsEditOpen(false);
+      setEditingStudent(null);
+      setFormData({ firstName: "", lastName: "", phone: "", parentPhone: "", status: "active", balance: 0, groupId: 0, teacherId: "" });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Yangilashda xatolik yuz berdi", variant: "destructive" });
     }
   };
 
@@ -149,6 +183,18 @@ export default function Students() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="balance">Oylik to'lov (qarzdorlik)</Label>
+                <Input
+                  id="balance"
+                  type="number"
+                  value={formData.balance}
+                  onChange={(e) => setFormData({ ...formData, balance: parseInt(e.target.value) || 0 })}
+                  placeholder="500000"
+                  data-testid="input-balance"
+                />
+                <p className="text-xs text-muted-foreground">Bu summa avtomatik qarzdorlik sifatida qo'shiladi</p>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="groupId">Guruh</Label>
                 <Select value={formData.groupId.toString()} onValueChange={(value) => setFormData({ ...formData, groupId: parseInt(value) })}>
                   <SelectTrigger data-testid="select-group">
@@ -198,6 +244,86 @@ export default function Students() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>O'quvchini tahrirlash</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-firstName">Ism</Label>
+                <Input
+                  id="edit-firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  required
+                  data-testid="input-edit-firstName"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-lastName">Familiya</Label>
+                <Input
+                  id="edit-lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  required
+                  data-testid="input-edit-lastName"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">O'quvchi telefoni</Label>
+              <Input
+                id="edit-phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+998 90 123 45 67"
+                required
+                data-testid="input-edit-phone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-parentPhone">Ota-ona telefoni</Label>
+              <Input
+                id="edit-parentPhone"
+                value={formData.parentPhone}
+                onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
+                placeholder="+998 90 123 45 67"
+                required
+                data-testid="input-edit-parentPhone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-balance">Balans (UZS)</Label>
+              <Input
+                id="edit-balance"
+                type="number"
+                value={formData.balance}
+                onChange={(e) => setFormData({ ...formData, balance: parseInt(e.target.value) || 0 })}
+                data-testid="input-edit-balance"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Holat</Label>
+              <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                <SelectTrigger data-testid="select-edit-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Faol</SelectItem>
+                  <SelectItem value="paused">Muzlatilgan</SelectItem>
+                  <SelectItem value="left">Ketgan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" className="w-full" disabled={updateStudent.isPending} data-testid="button-edit-submit">
+              {updateStudent.isPending ? "Saqlanmoqda..." : "Saqlash"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center gap-2 max-w-sm">
         <div className="relative w-full">
@@ -255,6 +381,9 @@ export default function Students() {
                       </Select>
                     </TableCell>
                     <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(student)} data-testid={`button-edit-${student.id}`}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(student.id)} data-testid={`button-delete-${student.id}`}>
                         <Trash2 className="h-4 w-4" />
                       </Button>

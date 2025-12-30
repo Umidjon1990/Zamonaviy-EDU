@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useTeachers, useCreateTeacher, useDeleteTeacher } from "@/lib/api";
-import { Plus, Search, Trash2, Percent } from "lucide-react";
+import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher } from "@/lib/api";
+import { Plus, Search, Trash2, Percent, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -14,10 +14,13 @@ export default function Teachers() {
   const { data: teachersData, isLoading } = useTeachers();
   const teachers = (teachersData || []) as any[];
   const createTeacher = useCreateTeacher();
+  const updateTeacher = useUpdateTeacher();
   const deleteTeacher = useDeleteTeacher();
   const { toast } = useToast();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState<any>(null);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -36,6 +39,32 @@ export default function Teachers() {
       setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", salaryPercent: 30 });
     } catch (error) {
       toast({ title: "Xatolik", description: "O'qituvchi qo'shishda xatolik yuz berdi", variant: "destructive" });
+    }
+  };
+
+  const handleEdit = (teacher: any) => {
+    setEditingTeacher(teacher);
+    setFormData({
+      firstName: teacher.firstName || "",
+      lastName: teacher.lastName || "",
+      email: teacher.email || "",
+      password: "",
+      phone: teacher.phone || "",
+      salaryPercent: teacher.salaryPercent || 30,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateTeacher.mutateAsync({ id: editingTeacher.id, ...formData });
+      toast({ title: "Muvaffaqiyat", description: "O'qituvchi ma'lumotlari yangilandi" });
+      setIsEditOpen(false);
+      setEditingTeacher(null);
+      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", salaryPercent: 30 });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Yangilashda xatolik yuz berdi", variant: "destructive" });
     }
   };
 
@@ -155,6 +184,90 @@ export default function Teachers() {
         </Dialog>
       </div>
 
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>O'qituvchini tahrirlash</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-firstName">Ism</Label>
+                <Input
+                  id="edit-firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  required
+                  data-testid="input-edit-firstName"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-lastName">Familiya</Label>
+                <Input
+                  id="edit-lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  required
+                  data-testid="input-edit-lastName"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email (ixtiyoriy)</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="teacher@educrm.uz"
+                data-testid="input-edit-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-password">Yangi parol (bo'sh qoldirsa o'zgarmaydi)</Label>
+              <Input
+                id="edit-password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Yangi parol kiriting..."
+                data-testid="input-edit-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Telefon</Label>
+              <Input
+                id="edit-phone"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+998 90 123 45 67"
+                required
+                data-testid="input-edit-phone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-salaryPercent">Oylik foiz (%)</Label>
+              <div className="relative">
+                <Input
+                  id="edit-salaryPercent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formData.salaryPercent}
+                  onChange={(e) => setFormData({ ...formData, salaryPercent: parseInt(e.target.value) || 0 })}
+                  className="pr-10"
+                  data-testid="input-edit-salaryPercent"
+                />
+                <Percent className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+            <Button type="submit" className="w-full" disabled={updateTeacher.isPending} data-testid="button-edit-submit">
+              {updateTeacher.isPending ? "Saqlanmoqda..." : "Saqlash"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center gap-2 max-w-sm">
         <div className="relative w-full">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -194,6 +307,9 @@ export default function Teachers() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(teacher)} data-testid={`button-edit-${teacher.id}`}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(teacher.id)} data-testid={`button-delete-${teacher.id}`}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
