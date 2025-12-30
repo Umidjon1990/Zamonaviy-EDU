@@ -1,14 +1,41 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, serial, integer, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, varchar, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Subscription Plans (Tarif rejalari)
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // Starter, Professional, Enterprise
+  price: integer("price").notNull(), // Oylik narx (so'm)
+  maxStudents: integer("max_students").notNull(), // Maksimal o'quvchilar soni
+  maxTeachers: integer("max_teachers").notNull(), // Maksimal o'qituvchilar soni
+  maxGroups: integer("max_groups").notNull(), // Maksimal guruhlar soni
+  features: text("features").array(), // ["sms", "telegram", "reports", "api"]
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 
 // Tenants (Markazlar)
 export const tenants = pgTable("tenants", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  slug: text("slug"), // URL uchun: markaz-nomi (unique bo'ladi)
   phone: text("phone").notNull(),
+  email: text("email"),
   address: text("address"),
+  logo: text("logo"), // Logo URL
+  status: text("status").default("active").notNull(), // active, suspended, trial
+  planId: integer("plan_id"), // Hozirgi tarif
+  trialEndsAt: timestamp("trial_ends_at"), // Sinov muddati
+  subscriptionEndsAt: timestamp("subscription_ends_at"), // Obuna muddati
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -18,6 +45,27 @@ export const insertTenantSchema = createInsertSchema(tenants).omit({
 });
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type Tenant = typeof tenants.$inferSelect;
+
+// Tenant Subscriptions (Obuna tarixi)
+export const tenantSubscriptions = pgTable("tenant_subscriptions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  planId: integer("plan_id").notNull(),
+  status: text("status").notNull(), // active, expired, cancelled
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  amount: integer("amount").notNull(), // To'langan summa
+  paymentMethod: text("payment_method"), // payme, click, cash
+  paymentId: text("payment_id"), // Tashqi to'lov ID
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTenantSubscriptionSchema = createInsertSchema(tenantSubscriptions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertTenantSubscription = z.infer<typeof insertTenantSubscriptionSchema>;
+export type TenantSubscription = typeof tenantSubscriptions.$inferSelect;
 
 // Users (Foydalanuvchilar)
 export const users = pgTable("users", {

@@ -21,6 +21,10 @@ import {
   type InsertAttendance,
   type Payment,
   type InsertPayment,
+  type SubscriptionPlan,
+  type InsertSubscriptionPlan,
+  type TenantSubscription,
+  type InsertTenantSubscription,
   users,
   tenants,
   leads,
@@ -30,6 +34,8 @@ import {
   studentGroups,
   attendance,
   payments,
+  subscriptionPlans,
+  tenantSubscriptions,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -39,9 +45,23 @@ const pool = new Pool({
 const db = drizzle(pool);
 
 export interface IStorage {
+  // Subscription Plans
+  getSubscriptionPlans(): Promise<SubscriptionPlan[]>;
+  getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined>;
+  createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan>;
+  updateSubscriptionPlan(id: number, plan: Partial<InsertSubscriptionPlan>): Promise<SubscriptionPlan | undefined>;
+  
   // Tenants
+  getTenants(): Promise<Tenant[]>;
   getTenant(id: number): Promise<Tenant | undefined>;
+  getTenantBySlug(slug: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
+  updateTenant(id: number, tenant: Partial<InsertTenant>): Promise<Tenant | undefined>;
+  
+  // Tenant Subscriptions
+  getTenantSubscriptions(tenantId: number): Promise<TenantSubscription[]>;
+  createTenantSubscription(subscription: InsertTenantSubscription): Promise<TenantSubscription>;
+  updateTenantSubscription(id: number, subscription: Partial<InsertTenantSubscription>): Promise<TenantSubscription | undefined>;
   
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -111,14 +131,63 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Subscription Plans
+  async getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+    return await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.isActive, true));
+  }
+
+  async getSubscriptionPlan(id: number): Promise<SubscriptionPlan | undefined> {
+    const result = await db.select().from(subscriptionPlans).where(eq(subscriptionPlans.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createSubscriptionPlan(plan: InsertSubscriptionPlan): Promise<SubscriptionPlan> {
+    const result = await db.insert(subscriptionPlans).values(plan).returning();
+    return result[0];
+  }
+
+  async updateSubscriptionPlan(id: number, plan: Partial<InsertSubscriptionPlan>): Promise<SubscriptionPlan | undefined> {
+    const result = await db.update(subscriptionPlans).set(plan).where(eq(subscriptionPlans.id, id)).returning();
+    return result[0];
+  }
+
   // Tenants
+  async getTenants(): Promise<Tenant[]> {
+    return await db.select().from(tenants).orderBy(desc(tenants.createdAt));
+  }
+
   async getTenant(id: number): Promise<Tenant | undefined> {
     const result = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
     return result[0];
   }
 
+  async getTenantBySlug(slug: string): Promise<Tenant | undefined> {
+    const result = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
+    return result[0];
+  }
+
   async createTenant(tenant: InsertTenant): Promise<Tenant> {
     const result = await db.insert(tenants).values(tenant).returning();
+    return result[0];
+  }
+
+  async updateTenant(id: number, tenant: Partial<InsertTenant>): Promise<Tenant | undefined> {
+    const result = await db.update(tenants).set(tenant).where(eq(tenants.id, id)).returning();
+    return result[0];
+  }
+
+  // Tenant Subscriptions
+  async getTenantSubscriptions(tenantId: number): Promise<TenantSubscription[]> {
+    return await db.select().from(tenantSubscriptions).where(eq(tenantSubscriptions.tenantId, tenantId)).orderBy(desc(tenantSubscriptions.createdAt));
+  }
+
+  async createTenantSubscription(subscription: InsertTenantSubscription): Promise<TenantSubscription> {
+    const result = await db.insert(tenantSubscriptions).values(subscription).returning();
+    return result[0];
+  }
+
+  async updateTenantSubscription(id: number, subscription: Partial<InsertTenantSubscription>): Promise<TenantSubscription | undefined> {
+    const result = await db.update(tenantSubscriptions).set(subscription).where(eq(tenantSubscriptions.id, id)).returning();
     return result[0];
   }
 
