@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { sendSMS, getBalance, smsTemplates } from "./sms";
+import { notifyStudentAttendance, notifyStudentPayment } from "./telegram-bot";
 import {
   insertLeadSchema,
   insertStudentSchema,
@@ -270,6 +271,20 @@ export async function registerRoutes(
     try {
       const data = insertAttendanceSchema.parse({ ...req.body, tenantId: TENANT_ID });
       const attendance = await storage.createAttendance(data);
+      
+      // Send Telegram notification to student
+      if (data.studentId && data.groupId && data.status && data.date) {
+        const group = await storage.getGroup(data.groupId);
+        if (group) {
+          notifyStudentAttendance(
+            data.studentId, 
+            group.name, 
+            data.status as "present" | "absent",
+            new Date(data.date)
+          ).catch(err => console.error("Telegram notification error:", err));
+        }
+      }
+      
       res.status(201).json(attendance);
     } catch (error) {
       res.status(400).json({ error: "Invalid attendance data" });
@@ -322,9 +337,14 @@ export async function registerRoutes(
       if (payment.status === 'completed') {
         const student = await storage.getStudent(payment.studentId);
         if (student) {
+          const newBalance = student.balance + payment.amount;
           await storage.updateStudent(payment.studentId, {
-            balance: student.balance + payment.amount,
+            balance: newBalance,
           });
+          
+          // Send Telegram notification to student
+          notifyStudentPayment(payment.studentId, payment.amount, newBalance)
+            .catch(err => console.error("Telegram notification error:", err));
         }
       }
       

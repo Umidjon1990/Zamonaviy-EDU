@@ -156,6 +156,12 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
     ctx.session.teacherId = teacher.id;
     ctx.session.phone = phone;
 
+    // Save chat ID for notifications
+    const chatId = ctx.chat?.id?.toString();
+    if (chatId) {
+      await storage.updateUserTelegramChatId(teacher.id, chatId);
+    }
+
     await ctx.reply(
       `✅ Xush kelibsiz, ${teacher.firstName} ${teacher.lastName}!\n\n` +
       `👨‍🏫 Siz o'qituvchi sifatida aniqlandingiz.\n\n` +
@@ -198,6 +204,12 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
     ctx.session.userType = "student";
     ctx.session.studentId = student.id;
     ctx.session.phone = phone;
+
+    // Save chat ID for notifications
+    const chatId = ctx.chat?.id?.toString();
+    if (chatId) {
+      await storage.updateStudentTelegramChatId(student.id, chatId);
+    }
 
     await ctx.reply(
       `✅ Tabriklaymiz! Siz ${student.firstName} ${student.lastName} sifatida aniqlandingiz.\n\n` +
@@ -507,5 +519,242 @@ export async function sendTelegramMessage(chatId: string | number, message: stri
   } catch (error) {
     console.error("Telegram xabar yuborishda xatolik:", error);
     return false;
+  }
+}
+
+// ===== NOTIFICATION FUNCTIONS =====
+
+export async function notifyStudentAttendance(
+  studentId: number, 
+  groupName: string, 
+  status: "present" | "absent",
+  date: Date
+): Promise<boolean> {
+  const student = await storage.getStudent(studentId);
+  if (!student?.telegramChatId) return false;
+  
+  const dateStr = date.toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" });
+  const statusEmoji = status === "present" ? "✅" : "❌";
+  const statusText = status === "present" ? "Keldi" : "Kelmadi";
+  
+  const message = 
+    `📅 <b>Davomat qayd qilindi</b>\n\n` +
+    `👤 ${student.firstName} ${student.lastName}\n` +
+    `📖 Guruh: ${groupName}\n` +
+    `📆 Sana: ${dateStr}\n` +
+    `${statusEmoji} Holat: <b>${statusText}</b>`;
+  
+  return sendTelegramMessage(student.telegramChatId, message);
+}
+
+export async function notifyStudentPayment(
+  studentId: number,
+  amount: number,
+  newBalance: number
+): Promise<boolean> {
+  const student = await storage.getStudent(studentId);
+  if (!student?.telegramChatId) return false;
+  
+  const message = 
+    `💰 <b>To'lov qabul qilindi!</b>\n\n` +
+    `👤 ${student.firstName} ${student.lastName}\n` +
+    `💵 Miqdor: ${amount.toLocaleString()} so'm\n` +
+    `📊 Yangi balans: <b>${newBalance.toLocaleString()} so'm</b>\n\n` +
+    `Rahmat! 🙏`;
+  
+  return sendTelegramMessage(student.telegramChatId, message);
+}
+
+export async function notifyTeacherDailySchedule(teacherId: string): Promise<boolean> {
+  const teacher = await storage.getUser(teacherId);
+  if (!teacher?.telegramChatId) return false;
+  
+  const groups = await storage.getGroupsByTeacher(teacherId);
+  if (groups.length === 0) return false;
+  
+  const today = new Date();
+  const dayNames: Record<string, string> = {
+    "0": "Yakshanba", "1": "Du", "2": "Se", "3": "Chor", "4": "Pay", "5": "Juma", "6": "Shanba"
+  };
+  const todayShort = dayNames[today.getDay().toString()];
+  
+  // Filter groups that have class today
+  const todayGroups = groups.filter(g => g.days?.includes(todayShort));
+  
+  if (todayGroups.length === 0) return false;
+  
+  let message = 
+    `🌅 <b>Assalomu alaykum, ${teacher.firstName}!</b>\n\n` +
+    `📅 Bugun (${today.toLocaleDateString("uz-UZ", { weekday: "long", day: "numeric", month: "long" })}) sizda quyidagi darslar bor:\n\n`;
+  
+  for (const group of todayGroups.sort((a, b) => a.time.localeCompare(b.time))) {
+    const students = await storage.getStudentsByGroup(group.id);
+    message += `⏰ <b>${group.time}</b>\n`;
+    message += `📖 ${group.name}\n`;
+    message += `👥 O'quvchilar: ${students.length} ta\n`;
+    if (group.room) message += `🏫 Xona: ${group.room}\n`;
+    message += `\n`;
+  }
+  
+  message += `Omadli darslar! 📚`;
+  
+  return sendTelegramMessage(teacher.telegramChatId, message);
+}
+
+export async function notifyTeacherClassReminder(
+  teacherId: string,
+  groupName: string,
+  time: string,
+  room?: string | null
+): Promise<boolean> {
+  const teacher = await storage.getUser(teacherId);
+  if (!teacher?.telegramChatId) return false;
+  
+  let message = 
+    `⏰ <b>Dars eslatmasi!</b>\n\n` +
+    `📖 ${groupName}\n` +
+    `🕐 Vaqt: ${time}\n`;
+  
+  if (room) message += `🏫 Xona: ${room}\n`;
+  
+  message += `\n30 daqiqadan so'ng boshlanadi! 🔔`;
+  
+  return sendTelegramMessage(teacher.telegramChatId, message);
+}
+
+// Scheduled job to send daily schedules at 8:00 AM
+let dailyScheduleInterval: NodeJS.Timeout | null = null;
+let classReminderInterval: NodeJS.Timeout | null = null;
+let isCheckingReminders = false;
+let isSendingDailySchedules = false;
+
+export function startScheduledNotifications() {
+  // Stop any existing intervals first
+  stopScheduledNotifications();
+  
+  // Check every minute for scheduled notifications
+  classReminderInterval = setInterval(async () => {
+    if (isCheckingReminders) return; // Prevent overlapping
+    isCheckingReminders = true;
+    try {
+      await checkClassReminders();
+    } catch (error) {
+      console.error("Error checking class reminders:", error);
+    } finally {
+      isCheckingReminders = false;
+    }
+  }, 60000); // Every minute
+  
+  // Check for daily schedule at 8:00 AM
+  dailyScheduleInterval = setInterval(async () => {
+    if (isSendingDailySchedules) return; // Prevent overlapping
+    
+    const now = new Date();
+    // Uzbekistan is UTC+5
+    const uzHour = (now.getUTCHours() + 5) % 24;
+    const uzMinutes = now.getUTCMinutes();
+    
+    if (uzHour === 8 && uzMinutes === 0) {
+      isSendingDailySchedules = true;
+      try {
+        await sendDailySchedulesToAllTeachers();
+      } catch (error) {
+        console.error("Error sending daily schedules:", error);
+      } finally {
+        isSendingDailySchedules = false;
+      }
+    }
+  }, 60000); // Check every minute
+  
+  console.log("Telegram bildirish tizimi ishga tushdi");
+}
+
+export function stopScheduledNotifications() {
+  if (dailyScheduleInterval) {
+    clearInterval(dailyScheduleInterval);
+    dailyScheduleInterval = null;
+  }
+  if (classReminderInterval) {
+    clearInterval(classReminderInterval);
+    classReminderInterval = null;
+  }
+}
+
+async function sendDailySchedulesToAllTeachers() {
+  try {
+    const teachers = await storage.getTeachers(TENANT_ID);
+    
+    for (const teacher of teachers) {
+      if (teacher.telegramChatId) {
+        try {
+          await notifyTeacherDailySchedule(teacher.id);
+        } catch (error) {
+          console.error(`Error notifying teacher ${teacher.id}:`, error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error getting teachers for daily schedule:", error);
+  }
+}
+
+async function checkClassReminders() {
+  try {
+    const now = new Date();
+    // Uzbekistan is UTC+5
+    const uzHour = (now.getUTCHours() + 5) % 24;
+    const uzMinutes = now.getUTCMinutes();
+    
+    const dayNames: Record<string, string> = {
+      "0": "Yakshanba", "1": "Du", "2": "Se", "3": "Chor", "4": "Pay", "5": "Juma", "6": "Shanba"
+    };
+    const todayShort = dayNames[now.getDay().toString()];
+    
+    const teachers = await storage.getTeachers(TENANT_ID);
+    
+    for (const teacher of teachers) {
+      if (!teacher.telegramChatId) continue;
+      
+      try {
+        const groups = await storage.getGroupsByTeacher(teacher.id);
+        
+        for (const group of groups) {
+          if (!group.days || !group.days.includes(todayShort)) continue;
+          if (!group.time) continue;
+          
+          // Parse group time (e.g., "14:00 - 15:30")
+          const timeMatch = group.time.match(/(\d{1,2}):(\d{2})/);
+          if (!timeMatch) continue;
+          
+          const groupHour = parseInt(timeMatch[1]);
+          const groupMinute = parseInt(timeMatch[2]);
+          
+          // Check if it's 30 minutes before class
+          let reminderHour: number;
+          let reminderMinute: number;
+          
+          if (groupMinute >= 30) {
+            reminderHour = groupHour;
+            reminderMinute = groupMinute - 30;
+          } else {
+            reminderHour = groupHour - 1;
+            if (reminderHour < 0) reminderHour = 23;
+            reminderMinute = groupMinute + 30;
+          }
+          
+          if (uzHour === reminderHour && uzMinutes === reminderMinute) {
+            try {
+              await notifyTeacherClassReminder(teacher.id, group.name, group.time, group.room);
+            } catch (error) {
+              console.error(`Error sending reminder for group ${group.id}:`, error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing reminders for teacher ${teacher.id}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error("Error in checkClassReminders:", error);
   }
 }
