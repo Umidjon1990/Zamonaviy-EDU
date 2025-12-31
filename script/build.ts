@@ -14,7 +14,6 @@ const allowlist = [
   "express",
   "express-rate-limit",
   "express-session",
-  "grammy",
   "jsonwebtoken",
   "memorystore",
   "multer",
