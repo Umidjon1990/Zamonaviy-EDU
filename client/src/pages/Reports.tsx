@@ -429,17 +429,17 @@ _Zamonaviy-Edu_
       </div>
 
       <Tabs defaultValue="salary" className="space-y-4">
-        <TabsList className="glass-card p-1 h-auto">
-          <TabsTrigger value="salary" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2">
+        <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
+          <TabsTrigger value="salary" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <Banknote className="w-4 h-4" /> Oylik
           </TabsTrigger>
-          <TabsTrigger value="debtors" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2">
+          <TabsTrigger value="debtors" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <AlertTriangle className="w-4 h-4" /> Qarzdorlar
           </TabsTrigger>
-          <TabsTrigger value="payments" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2">
+          <TabsTrigger value="payments" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <CreditCard className="w-4 h-4" /> To'lovlar
           </TabsTrigger>
-          <TabsTrigger value="attendance" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2">
+          <TabsTrigger value="attendance" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <Calendar className="w-4 h-4" /> Davomat
           </TabsTrigger>
         </TabsList>
