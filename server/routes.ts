@@ -124,6 +124,7 @@ export async function registerRoutes(
   app.use("/api/groups", requireTenantAuth);
   app.use("/api/attendance", requireTenantAuth);
   app.use("/api/payments", requireTenantAuth);
+  app.use("/api/grades", requireTenantAuth);
   app.use("/api/teachers", requireTenantAuth);
   app.use("/api/stats", requireTenantAuth);
 
@@ -621,8 +622,21 @@ export async function registerRoutes(
 
   app.post("/api/attendance", async (req, res) => {
     try {
-      const data = insertAttendanceSchema.parse({ ...req.body, tenantId: getTenantId(req) });
-      const attendance = await storage.createAttendance(data);
+      const tenantId = getTenantId(req);
+      const data = insertAttendanceSchema.parse({ ...req.body, tenantId });
+      
+      // Check if attendance record already exists for this student/group/date
+      const existingRecords = await storage.getAttendance(tenantId, data.groupId, new Date(data.date));
+      const existingRecord = existingRecords.find((a: any) => a.studentId === data.studentId);
+      
+      let attendance;
+      if (existingRecord) {
+        // Update existing record
+        attendance = await storage.updateAttendance(existingRecord.id, { status: data.status });
+      } else {
+        // Create new record
+        attendance = await storage.createAttendance(data);
+      }
       
       // Send Telegram notification to student
       if (data.studentId && data.groupId && data.status && data.date) {
@@ -711,8 +725,6 @@ export async function registerRoutes(
   });
 
   // ===== GRADES =====
-  app.use("/api/grades", requireTenantAuth);
-  
   app.get("/api/grades", async (req, res) => {
     try {
       const groupId = req.query.groupId ? parseInt(req.query.groupId as string) : undefined;
@@ -729,8 +741,22 @@ export async function registerRoutes(
 
   app.post("/api/grades", async (req, res) => {
     try {
-      const data = insertGradeSchema.parse({ ...req.body, tenantId: getTenantId(req) });
-      const grade = await storage.createGrade(data);
+      const tenantId = getTenantId(req);
+      const data = insertGradeSchema.parse({ ...req.body, tenantId });
+      
+      // Check if grade record already exists for this student/group/date
+      const existingRecords = await storage.getGrades(tenantId, data.groupId, data.studentId, new Date(data.date));
+      const existingRecord = existingRecords.length > 0 ? existingRecords[0] : null;
+      
+      let grade;
+      if (existingRecord) {
+        // Update existing record
+        grade = await storage.updateGrade(existingRecord.id, { grade: data.grade, topic: data.topic });
+      } else {
+        // Create new record
+        grade = await storage.createGrade(data);
+      }
+      
       res.status(201).json(grade);
     } catch (error) {
       res.status(400).json({ error: "Invalid grade data" });

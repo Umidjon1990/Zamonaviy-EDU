@@ -11,6 +11,7 @@ import Groups from "@/pages/Groups";
 import Schedule from "@/pages/Schedule";
 import Payments from "@/pages/Payments";
 import Reports from "@/pages/Reports";
+import Attendance from "@/pages/Attendance";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
 import TeacherLogin from "@/pages/TeacherLogin";
@@ -52,6 +53,7 @@ function AdminRoutes() {
         <Route path="/groups" component={Groups} />
         <Route path="/schedule" component={Schedule} />
         <Route path="/payments" component={Payments} />
+        <Route path="/attendance" component={Attendance} />
         <Route path="/reports" component={Reports} />
         <Route path="/settings" component={Settings} />
         <Route component={NotFound} />

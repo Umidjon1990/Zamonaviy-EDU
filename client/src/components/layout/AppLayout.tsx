@@ -11,7 +11,8 @@ import {
   Menu,
   X,
   UserCheck,
-  FileText
+  FileText,
+  ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ const navItems = [
   { icon: UserCheck, label: "O'qituvchilar", href: "/teachers" },
   { icon: Users, label: translations.nav.groups, href: "/groups" },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule" },
+  { icon: ClipboardCheck, label: "Davomat", href: "/attendance" },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments" },
   { icon: FileText, label: "Moliya", href: "/reports" },
   { icon: Settings, label: translations.nav.settings, href: "/settings" },
