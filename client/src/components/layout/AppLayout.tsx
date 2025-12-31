@@ -27,7 +27,7 @@ const navItems = [
   { icon: Users, label: translations.nav.groups, href: "/groups" },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule" },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments" },
-  { icon: FileText, label: "Hisobotlar", href: "/reports" },
+  { icon: FileText, label: "Moliya", href: "/reports" },
   { icon: Settings, label: translations.nav.settings, href: "/settings" },
 ];
 
