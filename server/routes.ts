@@ -12,6 +12,7 @@ import {
   insertStudentGroupSchema,
   insertAttendanceSchema,
   insertPaymentSchema,
+  insertGradeSchema,
   insertTenantSchema,
   insertSubscriptionPlanSchema,
   insertTenantSubscriptionSchema,
@@ -706,6 +707,66 @@ export async function registerRoutes(
       res.status(201).json(payment);
     } catch (error) {
       res.status(400).json({ error: "Invalid payment data" });
+    }
+  });
+
+  // ===== GRADES =====
+  app.use("/api/grades", requireTenantAuth);
+  
+  app.get("/api/grades", async (req, res) => {
+    try {
+      const groupId = req.query.groupId ? parseInt(req.query.groupId as string) : undefined;
+      const studentId = req.query.studentId ? parseInt(req.query.studentId as string) : undefined;
+      const date = req.query.date ? new Date(req.query.date as string) : undefined;
+      const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      const grades = await storage.getGrades(getTenantId(req), groupId, studentId, date, month, year);
+      res.json(grades);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch grades" });
+    }
+  });
+
+  app.post("/api/grades", async (req, res) => {
+    try {
+      const data = insertGradeSchema.parse({ ...req.body, tenantId: getTenantId(req) });
+      const grade = await storage.createGrade(data);
+      res.status(201).json(grade);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid grade data" });
+    }
+  });
+
+  app.patch("/api/grades/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      const existing = await storage.getGradeById(id);
+      if (!existing || existing.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Grade not found" });
+      }
+      const grade = await storage.updateGrade(id, req.body);
+      res.json(grade);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update grade" });
+    }
+  });
+
+  app.delete("/api/grades/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      const existing = await storage.getGradeById(id);
+      if (!existing || existing.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Grade not found" });
+      }
+      const deleted = await storage.deleteGrade(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Grade not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete grade" });
     }
   });
 

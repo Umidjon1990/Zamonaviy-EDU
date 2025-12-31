@@ -225,3 +225,23 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 });
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
+
+// Grades (Baholar) - 1-5 ballik tizim
+export const grades = pgTable("grades", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  studentId: integer("student_id").notNull(),
+  groupId: integer("group_id").notNull(),
+  date: timestamp("date").notNull(),
+  grade: integer("grade").notNull(), // 1-5 ball
+  topic: text("topic"), // Mavzu nomi
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertGradeSchema = createInsertSchema(grades).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertGrade = z.infer<typeof insertGradeSchema>;
+export type Grade = typeof grades.$inferSelect;

@@ -21,6 +21,8 @@ import {
   type InsertAttendance,
   type Payment,
   type InsertPayment,
+  type Grade,
+  type InsertGrade,
   type SubscriptionPlan,
   type InsertSubscriptionPlan,
   type TenantSubscription,
@@ -34,6 +36,7 @@ import {
   studentGroups,
   attendance,
   payments,
+  grades,
   subscriptionPlans,
   tenantSubscriptions,
 } from "@shared/schema";
@@ -118,6 +121,13 @@ export interface IStorage {
   getPayments(tenantId: number, studentId?: number): Promise<Payment[]>;
   getPayment(id: number): Promise<Payment | undefined>;
   createPayment(payment: InsertPayment): Promise<Payment>;
+  
+  // Grades
+  getGrades(tenantId: number, groupId?: number, studentId?: number, date?: Date, month?: number, year?: number): Promise<Grade[]>;
+  getGradeById(id: number): Promise<Grade | undefined>;
+  createGrade(grade: InsertGrade): Promise<Grade>;
+  updateGrade(id: number, grade: Partial<InsertGrade>): Promise<Grade | undefined>;
+  deleteGrade(id: number): Promise<boolean>;
   
   // Statistics
   getStats(tenantId: number): Promise<{
@@ -446,6 +456,58 @@ export class DatabaseStorage implements IStorage {
   async createPayment(payment: InsertPayment): Promise<Payment> {
     const result = await db.insert(payments).values(payment).returning();
     return result[0];
+  }
+
+  // Grades
+  async getGrades(tenantId: number, groupId?: number, studentId?: number, date?: Date, month?: number, year?: number): Promise<Grade[]> {
+    const conditions = [eq(grades.tenantId, tenantId)];
+    
+    if (groupId) {
+      conditions.push(eq(grades.groupId, groupId));
+    }
+    
+    if (studentId) {
+      conditions.push(eq(grades.studentId, studentId));
+    }
+    
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      conditions.push(sql`${grades.date} >= ${startOfDay}`);
+      conditions.push(sql`${grades.date} <= ${endOfDay}`);
+    }
+    
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(sql`${grades.date} >= ${startDate}`);
+      conditions.push(sql`${grades.date} <= ${endDate}`);
+    }
+    
+    return await db.select().from(grades).where(and(...conditions)).orderBy(desc(grades.date));
+  }
+
+  async getGradeById(id: number): Promise<Grade | undefined> {
+    const result = await db.select().from(grades).where(eq(grades.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createGrade(grade: InsertGrade): Promise<Grade> {
+    const result = await db.insert(grades).values(grade).returning();
+    return result[0];
+  }
+
+  async updateGrade(id: number, grade: Partial<InsertGrade>): Promise<Grade | undefined> {
+    const result = await db.update(grades).set(grade).where(eq(grades.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteGrade(id: number): Promise<boolean> {
+    const result = await db.delete(grades).where(eq(grades.id, id));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   // Statistics
