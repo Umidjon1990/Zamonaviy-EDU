@@ -394,31 +394,43 @@ export default function Attendance() {
                           <Button
                             variant={att?.status === 'present' ? 'default' : 'outline'}
                             size="sm"
-                            className={`h-10 gap-1 ${att?.status === 'present' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                            className={`h-11 gap-1.5 font-medium transition-all ${
+                              att?.status === 'present' 
+                                ? 'bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white shadow-lg shadow-emerald-500/30 border-0' 
+                                : 'hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300'
+                            }`}
                             onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: 'present' })}
                             data-testid={`button-present-${student.id}`}
                           >
-                            <Check className="w-4 h-4" />
+                            <CheckCircle2 className="w-4 h-4" />
                             <span className="text-xs">Bor</span>
                           </Button>
                           <Button
                             variant={att?.status === 'absent' ? 'default' : 'outline'}
                             size="sm"
-                            className={`h-10 gap-1 ${att?.status === 'absent' ? 'bg-red-500 hover:bg-red-600' : ''}`}
+                            className={`h-11 gap-1.5 font-medium transition-all ${
+                              att?.status === 'absent' 
+                                ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white shadow-lg shadow-red-500/30 border-0' 
+                                : 'hover:bg-red-50 hover:text-red-600 hover:border-red-300'
+                            }`}
                             onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: 'absent' })}
                             data-testid={`button-absent-${student.id}`}
                           >
-                            <X className="w-4 h-4" />
+                            <XCircle className="w-4 h-4" />
                             <span className="text-xs">Yo'q</span>
                           </Button>
                           <Button
                             variant={att?.status === 'late' ? 'default' : 'outline'}
                             size="sm"
-                            className={`h-10 gap-1 ${att?.status === 'late' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
+                            className={`h-11 gap-1.5 font-medium transition-all ${
+                              att?.status === 'late' 
+                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/30 border-0' 
+                                : 'hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300'
+                            }`}
                             onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: 'late' })}
                             data-testid={`button-late-${student.id}`}
                           >
-                            <Clock className="w-4 h-4" />
+                            <AlertCircle className="w-4 h-4" />
                             <span className="text-xs">Kech</span>
                           </Button>
                         </div>
@@ -428,29 +440,41 @@ export default function Attendance() {
                       <div>
                         <Label className="text-xs font-medium text-muted-foreground mb-2 block">
                           Baho (1-5)
-                          {gr && <span className="ml-2 text-primary">• Joriy: {gr.grade}</span>}
+                          {gr && <span className="ml-2 text-primary font-semibold">• Joriy: {gr.grade}</span>}
                         </Label>
                         <div className="grid grid-cols-5 gap-2">
-                          {[1, 2, 3, 4, 5].map((grade) => (
-                            <Button
-                              key={grade}
-                              variant={gr?.grade === grade ? 'default' : 'outline'}
-                              size="sm"
-                              className={`h-10 text-base font-semibold ${
-                                gr?.grade === grade 
-                                  ? grade >= 4 
-                                    ? 'bg-emerald-500 hover:bg-emerald-600' 
-                                    : grade === 3 
-                                      ? 'bg-amber-500 hover:bg-amber-600'
-                                      : 'bg-red-500 hover:bg-red-600'
-                                  : ''
-                              }`}
-                              onClick={() => setGradeMutation.mutate({ studentId: student.id, grade })}
-                              data-testid={`button-grade-${grade}-${student.id}`}
-                            >
-                              {grade}
-                            </Button>
-                          ))}
+                          {[1, 2, 3, 4, 5].map((grade) => {
+                            const isSelected = gr?.grade === grade;
+                            const gradeColors = {
+                              1: isSelected 
+                                ? 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/30 border-0' 
+                                : 'hover:bg-red-50 hover:text-red-600 hover:border-red-300 text-red-500',
+                              2: isSelected 
+                                ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 border-0' 
+                                : 'hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 text-orange-500',
+                              3: isSelected 
+                                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/30 border-0' 
+                                : 'hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 text-amber-500',
+                              4: isSelected 
+                                ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30 border-0' 
+                                : 'hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 text-blue-500',
+                              5: isSelected 
+                                ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/30 border-0' 
+                                : 'hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 text-emerald-500',
+                            };
+                            return (
+                              <Button
+                                key={grade}
+                                variant={isSelected ? 'default' : 'outline'}
+                                size="sm"
+                                className={`h-11 text-lg font-bold transition-all ${gradeColors[grade as keyof typeof gradeColors]}`}
+                                onClick={() => setGradeMutation.mutate({ studentId: student.id, grade })}
+                                data-testid={`button-grade-${grade}-${student.id}`}
+                              >
+                                {grade}
+                              </Button>
+                            );
+                          })}
                         </div>
                       </div>
                     </CardContent>

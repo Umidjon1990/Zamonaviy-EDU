@@ -439,9 +439,6 @@ _Zamonaviy-Edu_
           <TabsTrigger value="payments" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <CreditCard className="w-4 h-4" /> To'lovlar
           </TabsTrigger>
-          <TabsTrigger value="attendance" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
-            <Calendar className="w-4 h-4" /> Davomat
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="salary" className="space-y-4 animate-slide-up">
@@ -658,45 +655,6 @@ _Zamonaviy-Edu_
           </Card>
         </TabsContent>
 
-        <TabsContent value="attendance" className="space-y-4 animate-slide-up">
-          <div className="flex gap-4">
-            <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-              <SelectTrigger className="w-[200px]" data-testid="select-group">
-                <SelectValue placeholder="Guruhni tanlang" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Barcha guruhlar</SelectItem>
-                {(groups || []).map((g: any) => (
-                  <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Card className="card-modern">
-            <CardHeader>
-              <CardTitle>Davomat statistikasi</CardTitle>
-              <CardDescription>
-                {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="text-center p-6 bg-emerald-50 rounded-xl border border-emerald-100">
-                  <div className="text-4xl font-bold text-emerald-600">{attendanceStats.present}</div>
-                  <div className="text-sm text-muted-foreground mt-1">Keldi</div>
-                </div>
-                <div className="text-center p-6 bg-red-50 rounded-xl border border-red-100">
-                  <div className="text-4xl font-bold text-red-600">{attendanceStats.absent}</div>
-                  <div className="text-sm text-muted-foreground mt-1">Kelmadi</div>
-                </div>
-                <div className="text-center p-6 bg-blue-50 rounded-xl border border-blue-100">
-                  <div className="text-4xl font-bold text-blue-600">{attendanceRate}%</div>
-                  <div className="text-sm text-muted-foreground mt-1">Davomat foizi</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );
