@@ -330,11 +330,12 @@ export default function SuperAdmin() {
                   Yangi markaz
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                   <DialogTitle>Yangi markaz qo'shish</DialogTitle>
                   <DialogDescription>Yangi o'quv markazi ma'lumotlarini kiriting</DialogDescription>
                 </DialogHeader>
+                <ScrollArea className="flex-1 max-h-[60vh] pr-4">
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Markaz nomi</Label>
@@ -482,6 +483,7 @@ export default function SuperAdmin() {
                     </div>
                   </div>
                 </div>
+                </ScrollArea>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsAddTenantOpen(false)}>
                     Bekor qilish
