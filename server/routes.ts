@@ -1399,6 +1399,51 @@ export async function registerRoutes(
     }
   });
 
+  // ===== SUPER ADMIN: SMS SETTINGS =====
+  app.get("/api/admin/tenants/:tenantId/sms", async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.tenantId);
+      const tenant = await storage.getTenant(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      res.json({
+        smsEnabled: tenant.smsEnabled,
+        smsCredits: tenant.smsCredits,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch SMS settings" });
+    }
+  });
+
+  app.post("/api/admin/tenants/:tenantId/sms", async (req, res) => {
+    try {
+      const tenantId = parseInt(req.params.tenantId);
+      const { smsEnabled, addCredits } = req.body;
+      
+      const tenant = await storage.getTenant(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+
+      const updateData: any = {};
+      if (typeof smsEnabled === 'boolean') {
+        updateData.smsEnabled = smsEnabled;
+      }
+      if (typeof addCredits === 'number' && addCredits > 0) {
+        updateData.smsCredits = tenant.smsCredits + addCredits;
+      }
+
+      const updatedTenant = await storage.updateTenant(tenantId, updateData);
+      res.json({
+        smsEnabled: updatedTenant!.smsEnabled,
+        smsCredits: updatedTenant!.smsCredits,
+      });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update SMS settings" });
+    }
+  });
+
   // ===== SUPER ADMIN: STATISTICS =====
   app.get("/api/admin/stats", async (req, res) => {
     try {

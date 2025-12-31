@@ -36,6 +36,8 @@ export const tenants = pgTable("tenants", {
   planId: integer("plan_id"), // Hozirgi tarif
   trialEndsAt: timestamp("trial_ends_at"), // Sinov muddati
   subscriptionEndsAt: timestamp("subscription_ends_at"), // Obuna muddati
+  smsEnabled: boolean("sms_enabled").default(false).notNull(), // SMS xizmati yoqilganmi
+  smsCredits: integer("sms_credits").default(0).notNull(), // Qolgan SMS krediti
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
