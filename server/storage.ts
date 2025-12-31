@@ -72,25 +72,25 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  deleteUser(id: string): Promise<boolean>;
+  deleteUser(id: string, tenantId: number): Promise<boolean>;
   getTeachers(tenantId: number): Promise<User[]>;
-  getTeacher(id: string): Promise<User | undefined>;
-  updateTeacher(id: string, teacher: Partial<InsertUser>): Promise<User | undefined>;
+  getTeacher(id: string, tenantId?: number): Promise<User | undefined>;
+  updateTeacher(id: string, tenantId: number, teacher: Partial<InsertUser>): Promise<User | undefined>;
   getAdmins(tenantId: number): Promise<User[]>;
   
   // Leads
   getLeads(tenantId: number): Promise<Lead[]>;
-  getLead(id: number): Promise<Lead | undefined>;
+  getLead(id: number, tenantId: number): Promise<Lead | undefined>;
   createLead(lead: InsertLead): Promise<Lead>;
-  updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
-  deleteLead(id: number): Promise<boolean>;
+  updateLead(id: number, tenantId: number, lead: Partial<InsertLead>): Promise<Lead | undefined>;
+  deleteLead(id: number, tenantId: number): Promise<boolean>;
   
   // Students
   getStudents(tenantId: number): Promise<Student[]>;
-  getStudent(id: number): Promise<Student | undefined>;
+  getStudent(id: number, tenantId?: number): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
-  updateStudent(id: number, student: Partial<InsertStudent>): Promise<Student | undefined>;
-  deleteStudent(id: number): Promise<boolean>;
+  updateStudent(id: number, tenantId: number, student: Partial<InsertStudent>): Promise<Student | undefined>;
+  deleteStudent(id: number, tenantId: number): Promise<boolean>;
   
   // Subjects
   getSubjects(tenantId: number): Promise<Subject[]>;
@@ -99,13 +99,13 @@ export interface IStorage {
   
   // Groups
   getGroups(tenantId: number): Promise<Group[]>;
-  getGroup(id: number): Promise<Group | undefined>;
+  getGroup(id: number, tenantId?: number): Promise<Group | undefined>;
   getGroupsByTeacher(teacherId: string): Promise<Group[]>;
   getStudentsByGroup(groupId: number): Promise<Student[]>;
   getStudentsByTeacher(teacherId: string): Promise<Student[]>;
   createGroup(group: InsertGroup): Promise<Group>;
-  updateGroup(id: number, group: Partial<InsertGroup>): Promise<Group | undefined>;
-  deleteGroup(id: number): Promise<boolean>;
+  updateGroup(id: number, tenantId: number, group: Partial<InsertGroup>): Promise<Group | undefined>;
+  deleteGroup(id: number, tenantId: number): Promise<boolean>;
   
   // Student Groups
   getStudentGroups(studentId: number): Promise<StudentGroup[]>;
@@ -114,21 +114,21 @@ export interface IStorage {
   
   // Attendance
   getAttendance(tenantId: number, groupId?: number, date?: Date, month?: number, year?: number): Promise<Attendance[]>;
-  getAttendanceById(id: number): Promise<Attendance | undefined>;
+  getAttendanceById(id: number, tenantId?: number): Promise<Attendance | undefined>;
   createAttendance(attendance: InsertAttendance): Promise<Attendance>;
-  updateAttendance(id: number, attendance: Partial<InsertAttendance>): Promise<Attendance | undefined>;
+  updateAttendance(id: number, tenantId: number, attendance: Partial<InsertAttendance>): Promise<Attendance | undefined>;
   
   // Payments
   getPayments(tenantId: number, studentId?: number): Promise<Payment[]>;
-  getPayment(id: number): Promise<Payment | undefined>;
+  getPayment(id: number, tenantId?: number): Promise<Payment | undefined>;
   createPayment(payment: InsertPayment): Promise<Payment>;
   
   // Grades
   getGrades(tenantId: number, groupId?: number, studentId?: number, date?: Date, month?: number, year?: number): Promise<Grade[]>;
-  getGradeById(id: number): Promise<Grade | undefined>;
+  getGradeById(id: number, tenantId?: number): Promise<Grade | undefined>;
   createGrade(grade: InsertGrade): Promise<Grade>;
-  updateGrade(id: number, grade: Partial<InsertGrade>): Promise<Grade | undefined>;
-  deleteGrade(id: number): Promise<boolean>;
+  updateGrade(id: number, tenantId: number, grade: Partial<InsertGrade>): Promise<Grade | undefined>;
+  deleteGrade(id: number, tenantId: number): Promise<boolean>;
   
   // Statistics
   getStats(tenantId: number): Promise<{
@@ -258,8 +258,8 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async deleteUser(id: string): Promise<boolean> {
-    const result = await db.delete(users).where(eq(users.id, id));
+  async deleteUser(id: string, tenantId: number): Promise<boolean> {
+    const result = await db.delete(users).where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -267,13 +267,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'teacher')));
   }
 
-  async getTeacher(id: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(and(eq(users.id, id), eq(users.role, 'teacher'))).limit(1);
+  async getTeacher(id: string, tenantId?: number): Promise<User | undefined> {
+    const conditions = [eq(users.id, id), eq(users.role, 'teacher')];
+    if (tenantId) conditions.push(eq(users.tenantId, tenantId));
+    const result = await db.select().from(users).where(and(...conditions)).limit(1);
     return result[0];
   }
 
-  async updateTeacher(id: string, teacher: Partial<InsertUser>): Promise<User | undefined> {
-    const result = await db.update(users).set(teacher).where(and(eq(users.id, id), eq(users.role, 'teacher'))).returning();
+  async updateTeacher(id: string, tenantId: number, teacher: Partial<InsertUser>): Promise<User | undefined> {
+    const result = await db.update(users).set(teacher).where(and(eq(users.id, id), eq(users.tenantId, tenantId), eq(users.role, 'teacher'))).returning();
     return result[0];
   }
   
@@ -286,8 +288,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(leads).where(eq(leads.tenantId, tenantId)).orderBy(desc(leads.createdAt));
   }
 
-  async getLead(id: number): Promise<Lead | undefined> {
-    const result = await db.select().from(leads).where(eq(leads.id, id)).limit(1);
+  async getLead(id: number, tenantId: number): Promise<Lead | undefined> {
+    const result = await db.select().from(leads).where(and(eq(leads.id, id), eq(leads.tenantId, tenantId))).limit(1);
     return result[0];
   }
 
@@ -296,13 +298,13 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async updateLead(id: number, lead: Partial<InsertLead>): Promise<Lead | undefined> {
-    const result = await db.update(leads).set({ ...lead, updatedAt: new Date() }).where(eq(leads.id, id)).returning();
+  async updateLead(id: number, tenantId: number, lead: Partial<InsertLead>): Promise<Lead | undefined> {
+    const result = await db.update(leads).set({ ...lead, updatedAt: new Date() }).where(and(eq(leads.id, id), eq(leads.tenantId, tenantId))).returning();
     return result[0];
   }
 
-  async deleteLead(id: number): Promise<boolean> {
-    const result = await db.delete(leads).where(eq(leads.id, id));
+  async deleteLead(id: number, tenantId: number): Promise<boolean> {
+    const result = await db.delete(leads).where(and(eq(leads.id, id), eq(leads.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -311,8 +313,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(students).where(eq(students.tenantId, tenantId)).orderBy(desc(students.createdAt));
   }
 
-  async getStudent(id: number): Promise<Student | undefined> {
-    const result = await db.select().from(students).where(eq(students.id, id)).limit(1);
+  async getStudent(id: number, tenantId?: number): Promise<Student | undefined> {
+    const conditions = [eq(students.id, id)];
+    if (tenantId) conditions.push(eq(students.tenantId, tenantId));
+    const result = await db.select().from(students).where(and(...conditions)).limit(1);
     return result[0];
   }
 
@@ -321,13 +325,13 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async updateStudent(id: number, student: Partial<InsertStudent>): Promise<Student | undefined> {
-    const result = await db.update(students).set({ ...student, updatedAt: new Date() }).where(eq(students.id, id)).returning();
+  async updateStudent(id: number, tenantId: number, student: Partial<InsertStudent>): Promise<Student | undefined> {
+    const result = await db.update(students).set({ ...student, updatedAt: new Date() }).where(and(eq(students.id, id), eq(students.tenantId, tenantId))).returning();
     return result[0];
   }
 
-  async deleteStudent(id: number): Promise<boolean> {
-    const result = await db.delete(students).where(eq(students.id, id));
+  async deleteStudent(id: number, tenantId: number): Promise<boolean> {
+    const result = await db.delete(students).where(and(eq(students.id, id), eq(students.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -351,8 +355,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(groups).where(eq(groups.tenantId, tenantId)).orderBy(desc(groups.createdAt));
   }
 
-  async getGroup(id: number): Promise<Group | undefined> {
-    const result = await db.select().from(groups).where(eq(groups.id, id)).limit(1);
+  async getGroup(id: number, tenantId?: number): Promise<Group | undefined> {
+    const conditions = [eq(groups.id, id)];
+    if (tenantId) conditions.push(eq(groups.tenantId, tenantId));
+    const result = await db.select().from(groups).where(and(...conditions)).limit(1);
     return result[0];
   }
 
@@ -387,13 +393,13 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async updateGroup(id: number, group: Partial<InsertGroup>): Promise<Group | undefined> {
-    const result = await db.update(groups).set(group).where(eq(groups.id, id)).returning();
+  async updateGroup(id: number, tenantId: number, group: Partial<InsertGroup>): Promise<Group | undefined> {
+    const result = await db.update(groups).set(group).where(and(eq(groups.id, id), eq(groups.tenantId, tenantId))).returning();
     return result[0];
   }
 
-  async deleteGroup(id: number): Promise<boolean> {
-    const result = await db.delete(groups).where(eq(groups.id, id));
+  async deleteGroup(id: number, tenantId: number): Promise<boolean> {
+    const result = await db.delete(groups).where(and(eq(groups.id, id), eq(groups.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -436,8 +442,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(attendance).where(and(...conditions)).orderBy(desc(attendance.date));
   }
 
-  async getAttendanceById(id: number): Promise<Attendance | undefined> {
-    const result = await db.select().from(attendance).where(eq(attendance.id, id)).limit(1);
+  async getAttendanceById(id: number, tenantId?: number): Promise<Attendance | undefined> {
+    const conditions = [eq(attendance.id, id)];
+    if (tenantId) conditions.push(eq(attendance.tenantId, tenantId));
+    const result = await db.select().from(attendance).where(and(...conditions)).limit(1);
     return result[0];
   }
 
@@ -446,8 +454,8 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async updateAttendance(id: number, att: Partial<InsertAttendance>): Promise<Attendance | undefined> {
-    const result = await db.update(attendance).set(att).where(eq(attendance.id, id)).returning();
+  async updateAttendance(id: number, tenantId: number, att: Partial<InsertAttendance>): Promise<Attendance | undefined> {
+    const result = await db.update(attendance).set(att).where(and(eq(attendance.id, id), eq(attendance.tenantId, tenantId))).returning();
     return result[0];
   }
 
@@ -462,8 +470,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(payments).where(and(...conditions)).orderBy(desc(payments.createdAt));
   }
 
-  async getPayment(id: number): Promise<Payment | undefined> {
-    const result = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+  async getPayment(id: number, tenantId?: number): Promise<Payment | undefined> {
+    const conditions = [eq(payments.id, id)];
+    if (tenantId) conditions.push(eq(payments.tenantId, tenantId));
+    const result = await db.select().from(payments).where(and(...conditions)).limit(1);
     return result[0];
   }
 
@@ -504,8 +514,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(grades).where(and(...conditions)).orderBy(desc(grades.date));
   }
 
-  async getGradeById(id: number): Promise<Grade | undefined> {
-    const result = await db.select().from(grades).where(eq(grades.id, id)).limit(1);
+  async getGradeById(id: number, tenantId?: number): Promise<Grade | undefined> {
+    const conditions = [eq(grades.id, id)];
+    if (tenantId) conditions.push(eq(grades.tenantId, tenantId));
+    const result = await db.select().from(grades).where(and(...conditions)).limit(1);
     return result[0];
   }
 
@@ -514,13 +526,13 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async updateGrade(id: number, grade: Partial<InsertGrade>): Promise<Grade | undefined> {
-    const result = await db.update(grades).set(grade).where(eq(grades.id, id)).returning();
+  async updateGrade(id: number, tenantId: number, grade: Partial<InsertGrade>): Promise<Grade | undefined> {
+    const result = await db.update(grades).set(grade).where(and(eq(grades.id, id), eq(grades.tenantId, tenantId))).returning();
     return result[0];
   }
 
-  async deleteGrade(id: number): Promise<boolean> {
-    const result = await db.delete(grades).where(eq(grades.id, id));
+  async deleteGrade(id: number, tenantId: number): Promise<boolean> {
+    const result = await db.delete(grades).where(and(eq(grades.id, id), eq(grades.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 

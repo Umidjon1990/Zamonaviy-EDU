@@ -72,8 +72,11 @@ Preferred communication style: Simple, everyday language.
   - Verify: `GET /api/super-admin/verify`
   - Credentials stored in environment secrets
 
-### Multi-Tenant Data Isolation
-- All tenant-specific routes extract tenant_id from session via `getTenantId(req)`
+### Multi-Tenant Data Isolation (Security Hardened)
+- **Storage Layer Enforcement**: All update/delete storage methods require tenantId parameter and enforce it in SQL WHERE clauses with AND conditions
+- **Read Methods with Tenant Scoping**: getStudent, getGroup, getTeacher, getPayment, getAttendanceById, getGradeById all accept optional tenantId for tenant-scoped queries
+- **Route Handler Consistency**: All tenant-specific routes extract tenant_id from session via `getTenantId(req)` and pass it to storage methods
+- **No Post-Fetch Checks**: Tenant validation happens at the database query level, not after fetching (prevents TOCTOU vulnerabilities)
 - User passwords are hashed with bcrypt (10 rounds)
 - Session data stored in PostgreSQL via connect-pg-simple
 - Suspended tenants cannot login (checked during authentication)

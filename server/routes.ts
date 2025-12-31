@@ -161,8 +161,8 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const lead = await storage.getLead(id);
-      if (!lead || lead.tenantId !== tenantId) {
+      const lead = await storage.getLead(id, tenantId);
+      if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
       res.json(lead);
@@ -185,11 +185,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const lead = await storage.getLead(id);
-      if (!lead || lead.tenantId !== tenantId) {
+      const lead = await storage.getLead(id, tenantId);
+      if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
-      const updated = await storage.updateLead(id, req.body);
+      const updated = await storage.updateLead(id, tenantId, req.body);
       res.json(updated);
     } catch (error) {
       res.status(400).json({ error: "Failed to update lead" });
@@ -200,11 +200,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const lead = await storage.getLead(id);
-      if (!lead || lead.tenantId !== tenantId) {
+      const lead = await storage.getLead(id, tenantId);
+      if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
-      await storage.deleteLead(id);
+      await storage.deleteLead(id, tenantId);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete lead" });
@@ -225,8 +225,8 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const student = await storage.getStudent(id);
-      if (!student || student.tenantId !== tenantId) {
+      const student = await storage.getStudent(id, tenantId);
+      if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
       res.json(student);
@@ -249,11 +249,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const existing = await storage.getStudent(id);
-      if (!existing || existing.tenantId !== tenantId) {
+      const existing = await storage.getStudent(id, tenantId);
+      if (!existing) {
         return res.status(404).json({ error: "Student not found" });
       }
-      const student = await storage.updateStudent(id, req.body);
+      const student = await storage.updateStudent(id, tenantId, req.body);
       res.json(student);
     } catch (error) {
       res.status(400).json({ error: "Failed to update student" });
@@ -264,11 +264,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const existing = await storage.getStudent(id);
-      if (!existing || existing.tenantId !== tenantId) {
+      const existing = await storage.getStudent(id, tenantId);
+      if (!existing) {
         return res.status(404).json({ error: "Student not found" });
       }
-      await storage.deleteStudent(id);
+      await storage.deleteStudent(id, tenantId);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete student" });
@@ -309,8 +309,8 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const group = await storage.getGroup(id);
-      if (!group || group.tenantId !== tenantId) {
+      const group = await storage.getGroup(id, tenantId);
+      if (!group) {
         return res.status(404).json({ error: "Group not found" });
       }
       res.json(group);
@@ -333,11 +333,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const existing = await storage.getGroup(id);
-      if (!existing || existing.tenantId !== tenantId) {
+      const existing = await storage.getGroup(id, tenantId);
+      if (!existing) {
         return res.status(404).json({ error: "Group not found" });
       }
-      const group = await storage.updateGroup(id, req.body);
+      const group = await storage.updateGroup(id, tenantId, req.body);
       res.json(group);
     } catch (error) {
       res.status(400).json({ error: "Failed to update group" });
@@ -348,11 +348,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const existing = await storage.getGroup(id);
-      if (!existing || existing.tenantId !== tenantId) {
+      const existing = await storage.getGroup(id, tenantId);
+      if (!existing) {
         return res.status(404).json({ error: "Group not found" });
       }
-      await storage.deleteGroup(id);
+      await storage.deleteGroup(id, tenantId);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete group" });
@@ -574,8 +574,8 @@ export async function registerRoutes(
     try {
       const studentId = parseInt(req.params.studentId);
       const tenantId = getTenantId(req);
-      const student = await storage.getStudent(studentId);
-      if (!student || student.tenantId !== tenantId) {
+      const student = await storage.getStudent(studentId, tenantId);
+      if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
       const groups = await storage.getStudentGroups(studentId);
@@ -589,12 +589,12 @@ export async function registerRoutes(
     try {
       const studentId = parseInt(req.params.studentId);
       const tenantId = getTenantId(req);
-      const student = await storage.getStudent(studentId);
-      if (!student || student.tenantId !== tenantId) {
+      const student = await storage.getStudent(studentId, tenantId);
+      if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
-      const group = await storage.getGroup(req.body.groupId);
-      if (!group || group.tenantId !== tenantId) {
+      const group = await storage.getGroup(req.body.groupId, tenantId);
+      if (!group) {
         return res.status(404).json({ error: "Group not found" });
       }
       const data = insertStudentGroupSchema.parse({ ...req.body, studentId });
@@ -610,8 +610,8 @@ export async function registerRoutes(
       const studentId = parseInt(req.params.studentId);
       const groupId = parseInt(req.params.groupId);
       const tenantId = getTenantId(req);
-      const student = await storage.getStudent(studentId);
-      if (!student || student.tenantId !== tenantId) {
+      const student = await storage.getStudent(studentId, tenantId);
+      if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
       const deleted = await storage.removeStudentFromGroup(studentId, groupId);
@@ -650,7 +650,7 @@ export async function registerRoutes(
       let attendance;
       if (existingRecord) {
         // Update existing record
-        attendance = await storage.updateAttendance(existingRecord.id, { status: data.status });
+        attendance = await storage.updateAttendance(existingRecord.id, tenantId, { status: data.status });
       } else {
         // Create new record
         attendance = await storage.createAttendance(data);
@@ -680,11 +680,11 @@ export async function registerRoutes(
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
       // Attendance records are created with tenantId, so we verify ownership
-      const existing = await storage.getAttendanceById(id);
-      if (!existing || existing.tenantId !== tenantId) {
+      const existing = await storage.getAttendanceById(id, tenantId);
+      if (!existing) {
         return res.status(404).json({ error: "Attendance record not found" });
       }
-      const attendance = await storage.updateAttendance(id, req.body);
+      const attendance = await storage.updateAttendance(id, tenantId, req.body);
       res.json(attendance);
     } catch (error) {
       res.status(400).json({ error: "Failed to update attendance" });
@@ -706,8 +706,8 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const payment = await storage.getPayment(id);
-      if (!payment || payment.tenantId !== tenantId) {
+      const payment = await storage.getPayment(id, tenantId);
+      if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
       res.json(payment);
@@ -723,10 +723,11 @@ export async function registerRoutes(
       
       // Update student balance
       if (payment.status === 'completed') {
-        const student = await storage.getStudent(payment.studentId);
+        const tenantId = getTenantId(req);
+        const student = await storage.getStudent(payment.studentId, tenantId);
         if (student) {
           const newBalance = student.balance + payment.amount;
-          await storage.updateStudent(payment.studentId, {
+          await storage.updateStudent(payment.studentId, tenantId, {
             balance: newBalance,
           });
           
@@ -769,7 +770,7 @@ export async function registerRoutes(
       let grade;
       if (existingRecord) {
         // Update existing record
-        grade = await storage.updateGrade(existingRecord.id, { grade: data.grade, topic: data.topic });
+        grade = await storage.updateGrade(existingRecord.id, tenantId, { grade: data.grade, topic: data.topic });
       } else {
         // Create new record
         grade = await storage.createGrade(data);
@@ -785,11 +786,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const existing = await storage.getGradeById(id);
-      if (!existing || existing.tenantId !== tenantId) {
+      const existing = await storage.getGradeById(id, tenantId);
+      if (!existing) {
         return res.status(404).json({ error: "Grade not found" });
       }
-      const grade = await storage.updateGrade(id, req.body);
+      const grade = await storage.updateGrade(id, tenantId, req.body);
       res.json(grade);
     } catch (error) {
       res.status(400).json({ error: "Failed to update grade" });
@@ -800,11 +801,11 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const existing = await storage.getGradeById(id);
-      if (!existing || existing.tenantId !== tenantId) {
+      const existing = await storage.getGradeById(id, tenantId);
+      if (!existing) {
         return res.status(404).json({ error: "Grade not found" });
       }
-      const deleted = await storage.deleteGrade(id);
+      const deleted = await storage.deleteGrade(id, tenantId);
       if (!deleted) {
         return res.status(404).json({ error: "Grade not found" });
       }
@@ -848,8 +849,8 @@ export async function registerRoutes(
     try {
       const teacherId = req.params.id;
       const tenantId = getTenantId(req);
-      const teacher = await storage.getTeacher(teacherId);
-      if (!teacher || teacher.tenantId !== tenantId) {
+      const teacher = await storage.getTeacher(teacherId, tenantId);
+      if (!teacher) {
         return res.status(404).json({ error: "Teacher not found" });
       }
       
@@ -866,7 +867,7 @@ export async function registerRoutes(
         updateData.password = await bcrypt.hash(password, 10);
       }
       
-      const updated = await storage.updateTeacher(teacherId, updateData);
+      const updated = await storage.updateTeacher(teacherId, tenantId, updateData);
       res.json(updated);
     } catch (error) {
       res.status(400).json({ error: "Failed to update teacher" });
@@ -918,8 +919,8 @@ export async function registerRoutes(
     try {
       const groupId = parseInt(req.params.groupId);
       const tenantId = getTenantId(req);
-      const group = await storage.getGroup(groupId);
-      if (!group || group.tenantId !== tenantId) {
+      const group = await storage.getGroup(groupId, tenantId);
+      if (!group) {
         return res.status(404).json({ error: "Group not found" });
       }
       const students = await storage.getStudentsByGroup(groupId);
@@ -934,8 +935,8 @@ export async function registerRoutes(
     try {
       const teacherId = req.params.teacherId;
       const tenantId = getTenantId(req);
-      const teacher = await storage.getTeacher(teacherId);
-      if (!teacher || teacher.tenantId !== tenantId) {
+      const teacher = await storage.getTeacher(teacherId, tenantId);
+      if (!teacher) {
         return res.status(404).json({ error: "Teacher not found" });
       }
       const students = await storage.getStudentsByTeacher(teacherId);
@@ -976,8 +977,13 @@ export async function registerRoutes(
   app.patch("/api/teacher/students/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
       const { firstName, lastName, phone, parentPhone } = req.body;
-      const student = await storage.updateStudent(id, { firstName, lastName, phone, parentPhone });
+      const existingStudent = await storage.getStudent(id, tenantId);
+      if (!existingStudent) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+      const student = await storage.updateStudent(id, tenantId, { firstName, lastName, phone, parentPhone });
       res.json(student);
     } catch (error) {
       res.status(400).json({ error: "Failed to update student" });
@@ -988,6 +994,18 @@ export async function registerRoutes(
   app.post("/api/teacher/move-student", async (req, res) => {
     try {
       const { studentId, fromGroupId, toGroupId } = req.body;
+      const tenantId = getTenantId(req);
+      // Verify student belongs to this tenant
+      const student = await storage.getStudent(studentId, tenantId);
+      if (!student) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+      // Verify both groups belong to this tenant
+      const fromGroup = await storage.getGroup(fromGroupId, tenantId);
+      const toGroup = await storage.getGroup(toGroupId, tenantId);
+      if (!fromGroup || !toGroup) {
+        return res.status(404).json({ error: "Group not found" });
+      }
       await storage.removeStudentFromGroup(studentId, fromGroupId);
       await storage.addStudentToGroup({ studentId, groupId: toGroupId });
       res.json({ success: true });
@@ -999,7 +1017,8 @@ export async function registerRoutes(
   app.delete("/api/teachers/:id", async (req, res) => {
     try {
       const id = req.params.id;
-      const deleted = await storage.deleteUser(id);
+      const tenantId = getTenantId(req);
+      const deleted = await storage.deleteUser(id, tenantId);
       if (!deleted) {
         return res.status(404).json({ error: "Teacher not found" });
       }
@@ -1046,7 +1065,8 @@ export async function registerRoutes(
   app.post("/api/sms/low-balance", async (req, res) => {
     try {
       const { studentId } = req.body;
-      const student = await storage.getStudent(studentId);
+      const tenantId = getTenantId(req);
+      const student = await storage.getStudent(studentId, tenantId);
       
       if (!student) {
         return res.status(404).json({ error: "O'quvchi topilmadi" });
@@ -1069,7 +1089,8 @@ export async function registerRoutes(
   app.post("/api/sms/payment-received", async (req, res) => {
     try {
       const { studentId, amount, groupId } = req.body;
-      const student = await storage.getStudent(studentId);
+      const tenantId = getTenantId(req);
+      const student = await storage.getStudent(studentId, tenantId);
       
       if (!student) {
         return res.status(404).json({ error: "O'quvchi topilmadi" });
@@ -1083,11 +1104,11 @@ export async function registerRoutes(
       let courseName = "umumiy kursi";
       
       // If groupId provided, use it; otherwise find student's first group
-      let group = groupId ? await storage.getGroup(groupId) : null;
+      let group = groupId ? await storage.getGroup(groupId, tenantId) : null;
       if (!group) {
         const studentGroupsList = await storage.getStudentGroups(studentId);
         if (studentGroupsList.length > 0) {
-          group = await storage.getGroup(studentGroupsList[0].groupId);
+          group = await storage.getGroup(studentGroupsList[0].groupId, tenantId);
         }
       }
       
@@ -1107,8 +1128,9 @@ export async function registerRoutes(
   app.post("/api/sms/absence", async (req, res) => {
     try {
       const { studentId, groupId, time } = req.body;
-      const student = await storage.getStudent(studentId);
-      const group = await storage.getGroup(groupId);
+      const tenantId = getTenantId(req);
+      const student = await storage.getStudent(studentId, tenantId);
+      const group = await storage.getGroup(groupId, tenantId);
       
       if (!student || !group) {
         return res.status(404).json({ error: "O'quvchi yoki guruh topilmadi" });
@@ -1183,8 +1205,8 @@ export async function registerRoutes(
       }
       
       // Validate student belongs to this tenant
-      const student = await storage.getStudent(studentId);
-      if (!student || student.tenantId !== tenantId) {
+      const student = await storage.getStudent(studentId, tenantId);
+      if (!student) {
         return res.status(403).json({ success: false, error: "O'quvchi topilmadi yoki ruxsat yo'q" });
       }
       
