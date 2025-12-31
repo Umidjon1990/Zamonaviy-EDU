@@ -1,4 +1,4 @@
-import { Bot, Context, session, SessionFlavor } from "grammy";
+import { Bot, Context, session, SessionFlavor, GrammyError, HttpError } from "grammy";
 import { storage } from "./storage";
 
 interface SessionData {
@@ -146,18 +146,34 @@ export async function startTelegramBot() {
     console.error("Telegram bot xatosi:", err);
   });
 
-  try {
-    console.log("Telegram bot ishga tushirilmoqda...");
-    const botInfo = await bot.api.getMe();
-    console.log("Bot ma'lumotlari:", botInfo.username, botInfo.id);
-    await bot.start({
-      onStart: (botInfo) => {
-        console.log("Telegram bot muvaffaqiyatli ishga tushdi:", botInfo.username);
-      },
-    });
-  } catch (error) {
-    console.error("Telegram bot ishga tushishda xatolik:", error);
-  }
+  // Retry logic for network issues
+  const maxRetries = 3;
+  let retryCount = 0;
+  
+  const startBot = async (): Promise<void> => {
+    if (!bot) return;
+    try {
+      console.log(`Telegram bot ishga tushirilmoqda... (urinish ${retryCount + 1}/${maxRetries})`);
+      const botInfo = await bot.api.getMe();
+      console.log("Bot ma'lumotlari:", botInfo.username, botInfo.id);
+      
+      bot.start({
+        onStart: (botInfo) => {
+          console.log("Telegram bot muvaffaqiyatli ishga tushdi:", botInfo.username);
+        },
+      });
+    } catch (error) {
+      retryCount++;
+      if (error instanceof HttpError && retryCount < maxRetries) {
+        console.log(`Telegram bot ulanish xatosi, qayta urinish ${retryCount}...`);
+        await new Promise(resolve => setTimeout(resolve, 5000)); // 5 soniya kutish
+        return startBot();
+      }
+      console.error("Telegram bot ishga tushishda xatolik:", error);
+    }
+  };
+  
+  await startBot();
 }
 
 function normalizePhone(phone: string): string {
