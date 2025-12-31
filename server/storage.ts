@@ -192,12 +192,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async decrementSmsCredits(tenantId: number): Promise<boolean> {
-    const tenant = await this.getTenant(tenantId);
-    if (!tenant || !tenant.smsEnabled || tenant.smsCredits <= 0) {
-      return false;
-    }
-    await db.update(tenants).set({ smsCredits: tenant.smsCredits - 1 }).where(eq(tenants.id, tenantId));
-    return true;
+    // Atomic update with concurrency-safe condition
+    const result = await db.update(tenants)
+      .set({ smsCredits: sql`${tenants.smsCredits} - 1` })
+      .where(and(
+        eq(tenants.id, tenantId),
+        eq(tenants.smsEnabled, true),
+        sql`${tenants.smsCredits} > 0`
+      ))
+      .returning();
+    return result.length > 0;
   }
 
   // Tenant Subscriptions

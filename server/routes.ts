@@ -127,6 +127,24 @@ export async function registerRoutes(
   app.use("/api/grades", requireTenantAuth);
   app.use("/api/teachers", requireTenantAuth);
   app.use("/api/stats", requireTenantAuth);
+  app.use("/api/tenant-sms", requireTenantAuth);
+
+  // ===== TENANT SMS STATUS =====
+  app.get("/api/tenant-sms", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const tenant = await storage.getTenant(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      res.json({
+        smsEnabled: tenant.smsEnabled,
+        smsCredits: tenant.smsCredits,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch SMS status" });
+    }
+  });
 
   // ===== LEADS =====
   app.get("/api/leads", async (req, res) => {

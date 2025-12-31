@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { translations } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { MessageSquare, AlertCircle, CheckCircle2 } from "lucide-react";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -29,6 +31,15 @@ export default function Settings() {
     queryKey: ["sms-balance"],
     queryFn: async () => {
       const res = await fetch("/api/sms/balance");
+      return res.json();
+    },
+  });
+
+  const { data: tenantSms } = useQuery({
+    queryKey: ["tenant-sms"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenant-sms");
+      if (!res.ok) return null;
       return res.json();
     },
   });
@@ -157,15 +168,48 @@ export default function Settings() {
 
         <Card>
           <CardHeader>
-            <CardTitle>SMS Balans</CardTitle>
-            <CardDescription>Eskiz.uz SMS xizmati</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              SMS xizmati
+            </CardTitle>
+            <CardDescription>Markaz SMS krediti va holati</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-sms-balance">
-              {smsBalance?.balance !== undefined ? `${smsBalance.balance.toLocaleString()} SMS` : "Yuklanmoqda..."}
-            </div>
-            {smsBalance?.error && (
-              <p className="text-sm text-destructive mt-2">{smsBalance.error}</p>
+          <CardContent className="space-y-4">
+            {tenantSms ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Xizmat holati:</span>
+                  {tenantSms.smsEnabled ? (
+                    <Badge className="bg-green-500 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Yoqilgan
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive" className="flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      O'chirilgan
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Qolgan kredit:</span>
+                  <div className="text-2xl font-bold" data-testid="text-sms-credits">
+                    {tenantSms.smsCredits.toLocaleString()} SMS
+                  </div>
+                </div>
+                {!tenantSms.smsEnabled && (
+                  <p className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
+                    SMS xizmati admin tomonidan yoqilmagan. Yoqish uchun administrator bilan bog'laning.
+                  </p>
+                )}
+                {tenantSms.smsEnabled && tenantSms.smsCredits <= 10 && (
+                  <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
+                    SMS kredit kam qoldi! Yangi kredit sotib olish uchun administrator bilan bog'laning.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground">Yuklanmoqda...</p>
             )}
           </CardContent>
         </Card>

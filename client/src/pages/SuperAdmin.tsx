@@ -10,7 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Users, CreditCard, TrendingUp, Plus, Settings, Pencil, Trash2, LogOut } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Building2, Users, CreditCard, TrendingUp, Plus, Settings, Pencil, Trash2, LogOut, MessageSquare } from "lucide-react";
 import { useLocation } from "wouter";
 import type { Tenant, SubscriptionPlan } from "@shared/schema";
 
@@ -72,6 +73,7 @@ export default function SuperAdmin() {
     adminPassword: "",
   });
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [smsAddCredits, setSmsAddCredits] = useState(0);
   const [newPlan, setNewPlan] = useState({
     name: "",
     price: 0,
@@ -185,6 +187,22 @@ export default function SuperAdmin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/plans"] });
+    },
+  });
+
+  const updateSmsMutation = useMutation({
+    mutationFn: async ({ tenantId, smsEnabled, addCredits }: { tenantId: number; smsEnabled?: boolean; addCredits?: number }) => {
+      const res = await fetch(`/api/admin/tenants/${tenantId}/sms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ smsEnabled, addCredits }),
+      });
+      if (!res.ok) throw new Error("Failed to update SMS settings");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
+      setSmsAddCredits(0);
     },
   });
 
@@ -488,8 +506,8 @@ export default function SuperAdmin() {
                   <TableHead>Slug</TableHead>
                   <TableHead>Telefon</TableHead>
                   <TableHead>Tarif</TableHead>
+                  <TableHead>SMS</TableHead>
                   <TableHead>Holat</TableHead>
-                  <TableHead>Sinov tugash</TableHead>
                   <TableHead>Obuna tugash</TableHead>
                   <TableHead>Amallar</TableHead>
                 </TableRow>
@@ -501,8 +519,17 @@ export default function SuperAdmin() {
                     <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
                     <TableCell>{tenant.phone}</TableCell>
                     <TableCell>{getPlanName(tenant.planId)}</TableCell>
+                    <TableCell>
+                      {tenant.smsEnabled ? (
+                        <Badge className="bg-green-500 flex items-center gap-1 w-fit">
+                          <MessageSquare className="h-3 w-3" />
+                          {tenant.smsCredits}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">O'chiq</Badge>
+                      )}
+                    </TableCell>
                     <TableCell>{getStatusBadge(tenant.status)}</TableCell>
-                    <TableCell>{formatDate(tenant.trialEndsAt)}</TableCell>
                     <TableCell>{formatDate(tenant.subscriptionEndsAt)}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
@@ -649,6 +676,98 @@ export default function SuperAdmin() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">Uzaytirish tugmasi statusni ham "Faol" ga o'zgartiradi</p>
+                  </div>
+                  
+                  {/* SMS Settings */}
+                  <div className="space-y-3 border-t pt-4">
+                    <Label className="flex items-center gap-2 text-base font-semibold">
+                      <MessageSquare className="h-4 w-4" />
+                      SMS xizmati
+                    </Label>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium">SMS yoqilgan</p>
+                        <p className="text-xs text-muted-foreground">Markaz SMS yuborishi mumkin</p>
+                      </div>
+                      <Switch
+                        checked={editingTenant.smsEnabled}
+                        onCheckedChange={(checked) => {
+                          updateSmsMutation.mutate({ tenantId: editingTenant.id, smsEnabled: checked });
+                          setEditingTenant({ ...editingTenant, smsEnabled: checked });
+                        }}
+                        data-testid="switch-sms-enabled"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Joriy SMS krediti:</span>
+                        <Badge variant={editingTenant.smsCredits > 0 ? "default" : "destructive"}>
+                          {editingTenant.smsCredits} SMS
+                        </Badge>
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          placeholder="SMS soni"
+                          value={smsAddCredits || ""}
+                          onChange={(e) => setSmsAddCredits(parseInt(e.target.value) || 0)}
+                          className="flex-1"
+                          data-testid="input-sms-credits"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (smsAddCredits > 0) {
+                              updateSmsMutation.mutate({ tenantId: editingTenant.id, addCredits: smsAddCredits });
+                              setEditingTenant({ ...editingTenant, smsCredits: editingTenant.smsCredits + smsAddCredits });
+                            }
+                          }}
+                          disabled={smsAddCredits <= 0 || updateSmsMutation.isPending}
+                          data-testid="button-add-sms-credits"
+                        >
+                          Kredit qo'shish
+                        </Button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            updateSmsMutation.mutate({ tenantId: editingTenant.id, addCredits: 100 });
+                            setEditingTenant({ ...editingTenant, smsCredits: editingTenant.smsCredits + 100 });
+                          }}
+                          data-testid="button-add-100-sms"
+                        >
+                          +100 SMS
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            updateSmsMutation.mutate({ tenantId: editingTenant.id, addCredits: 500 });
+                            setEditingTenant({ ...editingTenant, smsCredits: editingTenant.smsCredits + 500 });
+                          }}
+                          data-testid="button-add-500-sms"
+                        >
+                          +500 SMS
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            updateSmsMutation.mutate({ tenantId: editingTenant.id, addCredits: 1000 });
+                            setEditingTenant({ ...editingTenant, smsCredits: editingTenant.smsCredits + 1000 });
+                          }}
+                          data-testid="button-add-1000-sms"
+                        >
+                          +1000 SMS
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
