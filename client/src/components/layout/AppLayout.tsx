@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { 
   LayoutDashboard, 
@@ -19,6 +19,15 @@ import { translations } from "@/lib/i18n";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+const preloadPages = () => {
+  import("@/pages/Dashboard");
+  import("@/pages/Students");
+  import("@/pages/Payments");
+  import("@/pages/Groups");
+  import("@/pages/Leads");
+  import("@/pages/Reports");
+};
+
 const navItems = [
   { icon: LayoutDashboard, label: translations.nav.dashboard, href: "/" },
   { icon: Users, label: translations.nav.leads, href: "/leads" },
@@ -34,6 +43,11 @@ const navItems = [
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(preloadPages, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
