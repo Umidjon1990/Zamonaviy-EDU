@@ -47,9 +47,11 @@ export default function Login() {
         description: "Tizimga kirdingiz",
       });
 
-      // Invalidate auth query to refresh user state
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setLocation("/");
+      // Refetch auth query and redirect
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
+      
+      // Force page reload to ensure session is properly loaded
+      window.location.href = "/";
     } catch (error) {
       toast({
         title: "Xatolik",
