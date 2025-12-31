@@ -9,6 +9,11 @@ import { startTelegramBot, startScheduledNotifications } from "./telegram-bot";
 const app = express();
 const httpServer = createServer(app);
 
+// Trust proxy for Railway/production environments
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 // Validate required environment variables for security
 const SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET) {
@@ -31,6 +36,7 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     },
   })
