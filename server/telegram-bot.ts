@@ -32,6 +32,7 @@ export async function startTelegramBot() {
   }));
 
   bot.command("start", async (ctx) => {
+    console.log("Bot /start buyrug'i qabul qilindi:", ctx.from?.id);
     ctx.session.step = "awaiting_phone";
     ctx.session.userType = undefined;
     ctx.session.studentId = undefined;
@@ -146,8 +147,14 @@ export async function startTelegramBot() {
   });
 
   try {
-    await bot.start();
-    console.log("Telegram bot ishga tushdi!");
+    console.log("Telegram bot ishga tushirilmoqda...");
+    const botInfo = await bot.api.getMe();
+    console.log("Bot ma'lumotlari:", botInfo.username, botInfo.id);
+    await bot.start({
+      onStart: (botInfo) => {
+        console.log("Telegram bot muvaffaqiyatli ishga tushdi:", botInfo.username);
+      },
+    });
   } catch (error) {
     console.error("Telegram bot ishga tushishda xatolik:", error);
   }
