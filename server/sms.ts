@@ -1,3 +1,5 @@
+import { storage } from "./storage";
+
 const ESKIZ_API_URL = "https://notify.eskiz.uz/api";
 
 interface EskizToken {
@@ -118,20 +120,67 @@ export const smsTemplates = {
     `Assalomu alaykum, ${name} ! Siz ${group} guruhida soat ${time} da ${subject} darsiga qatnashmadingiz. Hurmat bilan, Zamonaviy Ta'lim Markazi.`,
 };
 
-// Send payment received SMS
-export async function sendPaymentReceivedSMS(phone: string, name: string, course: string, amount: number) {
+// Check if tenant can send SMS (enabled and has credits)
+export async function canSendSMS(tenantId: number): Promise<{ canSend: boolean; reason?: string }> {
+  const tenant = await storage.getTenant(tenantId);
+  if (!tenant) {
+    return { canSend: false, reason: "Tenant topilmadi" };
+  }
+  if (!tenant.smsEnabled) {
+    return { canSend: false, reason: "SMS xizmati yoqilmagan" };
+  }
+  if (tenant.smsCredits <= 0) {
+    return { canSend: false, reason: "SMS krediti tugagan" };
+  }
+  return { canSend: true };
+}
+
+// Send SMS with tenant credit deduction
+export async function sendTenantSMS(
+  tenantId: number,
+  phone: string,
+  message: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  // Check if tenant can send SMS
+  const { canSend, reason } = await canSendSMS(tenantId);
+  if (!canSend) {
+    return { success: false, error: reason };
+  }
+
+  // Send the SMS
+  const result = await sendSMS(phone, message);
+
+  // Decrement credits only if SMS was sent successfully
+  if (result.success) {
+    await storage.decrementSmsCredits(tenantId);
+  }
+
+  return result;
+}
+
+// Send payment received SMS (tenant-aware)
+export async function sendPaymentReceivedSMS(phone: string, name: string, course: string, amount: number, tenantId?: number) {
   const message = smsTemplates.paymentReceived(name, course, amount);
+  if (tenantId) {
+    return sendTenantSMS(tenantId, phone, message);
+  }
   return sendSMS(phone, message);
 }
 
-// Send low balance reminder SMS
-export async function sendLowBalanceSMS(phone: string, fullName: string, balance: number) {
+// Send low balance reminder SMS (tenant-aware)
+export async function sendLowBalanceSMS(phone: string, fullName: string, balance: number, tenantId?: number) {
   const message = smsTemplates.lowBalance(fullName, balance);
+  if (tenantId) {
+    return sendTenantSMS(tenantId, phone, message);
+  }
   return sendSMS(phone, message);
 }
 
-// Send absence notification SMS
-export async function sendAbsenceSMS(phone: string, name: string, group: string, time: string, subject: string) {
+// Send absence notification SMS (tenant-aware)
+export async function sendAbsenceSMS(phone: string, name: string, group: string, time: string, subject: string, tenantId?: number) {
   const message = smsTemplates.absenceNotification(name, group, time, subject);
+  if (tenantId) {
+    return sendTenantSMS(tenantId, phone, message);
+  }
   return sendSMS(phone, message);
 }

@@ -60,6 +60,7 @@ export interface IStorage {
   getTenantBySlug(slug: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
   updateTenant(id: number, tenant: Partial<InsertTenant>): Promise<Tenant | undefined>;
+  decrementSmsCredits(tenantId: number): Promise<boolean>;
   
   // Tenant Subscriptions
   getTenantSubscriptions(tenantId: number): Promise<TenantSubscription[]>;
@@ -188,6 +189,15 @@ export class DatabaseStorage implements IStorage {
   async updateTenant(id: number, tenant: Partial<InsertTenant>): Promise<Tenant | undefined> {
     const result = await db.update(tenants).set(tenant).where(eq(tenants.id, id)).returning();
     return result[0];
+  }
+
+  async decrementSmsCredits(tenantId: number): Promise<boolean> {
+    const tenant = await this.getTenant(tenantId);
+    if (!tenant || !tenant.smsEnabled || tenant.smsCredits <= 0) {
+      return false;
+    }
+    await db.update(tenants).set({ smsCredits: tenant.smsCredits - 1 }).where(eq(tenants.id, tenantId));
+    return true;
   }
 
   // Tenant Subscriptions
