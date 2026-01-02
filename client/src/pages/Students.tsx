@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ export default function Students() {
   const [isOpen, setIsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -113,6 +114,18 @@ export default function Students() {
       }
     }
   };
+
+  // Filter students by search query (name, phone, parent phone)
+  const filteredStudents = useMemo(() => {
+    if (!searchQuery.trim()) return students;
+    const query = searchQuery.toLowerCase().trim();
+    return students.filter((s: any) => {
+      const fullName = `${s.firstName} ${s.lastName}`.toLowerCase();
+      const phone = (s.phone || '').toLowerCase();
+      const parentPhone = (s.parentPhone || '').toLowerCase();
+      return fullName.includes(query) || phone.includes(query) || parentPhone.includes(query);
+    });
+  }, [students, searchQuery]);
 
   if (isLoading) {
     return (
@@ -328,8 +341,10 @@ export default function Students() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder={translations.common.search}
+            placeholder="Ism, familiya yoki telefon..."
             className="pl-9 bg-background"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="input-search-students"
           />
         </div>
@@ -349,8 +364,8 @@ export default function Students() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {students.length > 0 ? (
-                students.map((student: any) => (
+              {filteredStudents.length > 0 ? (
+                filteredStudents.map((student: any) => (
                   <TableRow key={student.id} data-testid={`row-student-${student.id}`}>
                     <TableCell className="font-medium" data-testid={`text-name-${student.id}`}>
                       {student.firstName} {student.lastName}
