@@ -422,8 +422,16 @@ export async function registerRoutes(
       let parsingStudents = false;
       let pendingStudentName = "";
       
+      // Debug: log parsed lines
+      console.log("Template lines:", lines);
+      
       for (const line of lines) {
         const lowerLine = line.toLowerCase();
+        
+        // Debug: check if this looks like a teacher line
+        if (line.toLowerCase().includes("qituvchi")) {
+          console.log("Found potential teacher line:", line);
+        }
         
         if (lowerLine.startsWith("guruh nomi:") || lowerLine.startsWith("guruh:")) {
           groupName = line.split(":").slice(1).join(":").trim();
