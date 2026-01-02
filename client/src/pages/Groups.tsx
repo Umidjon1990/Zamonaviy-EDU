@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Toggle } from "@/components/ui/toggle";
 import { Textarea } from "@/components/ui/textarea";
 import { translations } from "@/lib/i18n";
-import { useGroups, useCreateGroup, useDeleteGroup, useTeachers, useImportGroupTemplate } from "@/lib/api";
-import { Plus, Users, Clock, MapPin, Trash2, User, FileText, Copy } from "lucide-react";
+import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup, useTeachers, useImportGroupTemplate } from "@/lib/api";
+import { Plus, Users, Clock, MapPin, Trash2, User, FileText, Copy, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,15 +42,27 @@ export default function Groups() {
   const teachers = (teachersData || []) as any[];
   const createGroup = useCreateGroup();
   const deleteGroup = useDeleteGroup();
+  const updateGroup = useUpdateGroup();
   const importTemplate = useImportGroupTemplate();
   const { toast } = useToast();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<any>(null);
   const [isTemplateOpen, setIsTemplateOpen] = useState(false);
   const [templateText, setTemplateText] = useState("");
   const [importResult, setImportResult] = useState<any>(null);
   
   const [formData, setFormData] = useState({
+    name: "",
+    teacherId: "",
+    days: [] as string[],
+    time: "",
+    room: "",
+    maxStudents: 15,
+  });
+
+  const [editFormData, setEditFormData] = useState({
     name: "",
     teacherId: "",
     days: [] as string[],
@@ -66,6 +78,45 @@ export default function Groups() {
         ? prev.days.filter(d => d !== day)
         : [...prev.days, day]
     }));
+  };
+
+  const toggleEditDay = (day: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      days: prev.days.includes(day) 
+        ? prev.days.filter(d => d !== day)
+        : [...prev.days, day]
+    }));
+  };
+
+  const openEditDialog = (group: any) => {
+    setEditingGroup(group);
+    setEditFormData({
+      name: group.name || "",
+      teacherId: group.teacherId?.toString() || "",
+      days: group.days || [],
+      time: group.time || "",
+      room: group.room || "",
+      maxStudents: group.maxStudents || 15,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGroup) return;
+    
+    try {
+      await updateGroup.mutateAsync({ 
+        id: editingGroup.id, 
+        data: editFormData 
+      });
+      toast({ title: "Muvaffaqiyat", description: "Guruh yangilandi" });
+      setIsEditOpen(false);
+      setEditingGroup(null);
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Guruhni yangilashda xatolik", variant: "destructive" });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -350,6 +401,95 @@ export default function Groups() {
             </form>
           </DialogContent>
         </Dialog>
+
+          <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Guruhni tahrirlash</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">Guruh nomi</Label>
+                  <Input
+                    id="edit-name"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    placeholder="English Beginners A1"
+                    required
+                    data-testid="input-edit-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-time">Dars vaqti</Label>
+                  <Input
+                    id="edit-time"
+                    value={editFormData.time}
+                    onChange={(e) => setEditFormData({ ...editFormData, time: e.target.value })}
+                    placeholder="14:00 - 15:30"
+                    required
+                    data-testid="input-edit-time"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Kunlari</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAYS.map((day) => (
+                      <Toggle
+                        key={day.value}
+                        pressed={editFormData.days.includes(day.value)}
+                        onPressedChange={() => toggleEditDay(day.value)}
+                        variant="outline"
+                        size="sm"
+                        className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        data-testid={`toggle-edit-day-${day.value}`}
+                      >
+                        {day.label}
+                      </Toggle>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-room">Xona</Label>
+                  <Input
+                    id="edit-room"
+                    value={editFormData.room}
+                    onChange={(e) => setEditFormData({ ...editFormData, room: e.target.value })}
+                    placeholder="Xona 1"
+                    data-testid="input-edit-room"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-teacherId">O'qituvchi</Label>
+                  <Select value={editFormData.teacherId} onValueChange={(value) => setEditFormData({ ...editFormData, teacherId: value })}>
+                    <SelectTrigger data-testid="select-edit-teacher">
+                      <SelectValue placeholder="O'qituvchini tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teachers.map((t: any) => (
+                        <SelectItem key={t.id} value={t.id.toString()}>
+                          {t.firstName} {t.lastName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-maxStudents">Maksimal o'quvchilar soni</Label>
+                  <Input
+                    id="edit-maxStudents"
+                    type="number"
+                    min="1"
+                    value={editFormData.maxStudents}
+                    onChange={(e) => setEditFormData({ ...editFormData, maxStudents: parseInt(e.target.value) || 15 })}
+                    data-testid="input-edit-maxStudents"
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={updateGroup.isPending} data-testid="button-edit-submit">
+                  {updateGroup.isPending ? "Saqlanmoqda..." : "Saqlash"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -391,6 +531,9 @@ export default function Groups() {
                 </div>
               </CardContent>
               <CardFooter className="bg-muted/30 p-3 flex justify-end gap-2">
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => openEditDialog(group)} data-testid={`button-edit-${group.id}`}>
+                  <Pencil className="h-4 w-4 mr-1" /> Tahrirlash
+                </Button>
                 <Button variant="ghost" size="sm" className="text-xs text-destructive" onClick={() => handleDelete(group.id)}>
                   <Trash2 className="h-4 w-4 mr-1" /> O'chirish
                 </Button>
