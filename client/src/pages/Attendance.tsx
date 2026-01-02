@@ -24,6 +24,7 @@ export default function Attendance() {
   const [gradeTopic, setGradeTopic] = useState("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [pendingGrades, setPendingGrades] = useState<Record<number, number | null>>({});
+  const [pendingAttendance, setPendingAttendance] = useState<Record<number, string | null>>({});
 
   const { data: groupsData } = useQuery({
     queryKey: ["groups"],
@@ -380,60 +381,75 @@ export default function Attendance() {
                             className={`
                               ${att.status === 'present' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-200' : ''}
                               ${att.status === 'absent' ? 'bg-red-500/10 text-red-600 border-red-200' : ''}
-                              ${att.status === 'late' ? 'bg-amber-500/10 text-amber-600 border-amber-200' : ''}
+                              ${att.status === 'excused' || att.status === 'late' ? 'bg-amber-500/10 text-amber-600 border-amber-200' : ''}
                             `}
                           >
-                            {att.status === 'present' ? 'Bor' : att.status === 'absent' ? "Yo'q" : 'Kech'}
+                            {att.status === 'present' ? 'Bor' : att.status === 'absent' ? "Yo'q" : 'Sababli'}
                           </Badge>
                         )}
                       </div>
 
                       {/* Attendance Buttons */}
                       <div className="mb-4">
-                        <Label className="text-xs font-medium text-muted-foreground mb-2 block">Davomat</Label>
+                        <Label className="text-xs font-medium text-muted-foreground mb-2 block">
+                          Davomat
+                          {att && <span className="ml-2 text-primary font-semibold">• Saqlangan: {att.status === 'present' ? 'Bor' : att.status === 'absent' ? "Yo'q" : 'Sababli'}</span>}
+                          {pendingAttendance[student.id] && (
+                            <span className="ml-2 text-amber-600 font-semibold animate-pulse">• Tanlangan: {pendingAttendance[student.id] === 'present' ? 'Bor' : pendingAttendance[student.id] === 'absent' ? "Yo'q" : 'Sababli'}</span>
+                          )}
+                        </Label>
                         <div className="grid grid-cols-3 gap-2">
-                          <Button
-                            variant={att?.status === 'present' ? 'default' : 'outline'}
-                            size="sm"
-                            className={`h-11 gap-1.5 font-medium transition-all ${
-                              att?.status === 'present' 
-                                ? 'bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white shadow-lg shadow-emerald-500/30 border-0' 
-                                : 'hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300'
-                            }`}
-                            onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: 'present' })}
-                            data-testid={`button-present-${student.id}`}
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span className="text-xs">Bor</span>
-                          </Button>
-                          <Button
-                            variant={att?.status === 'absent' ? 'default' : 'outline'}
-                            size="sm"
-                            className={`h-11 gap-1.5 font-medium transition-all ${
-                              att?.status === 'absent' 
-                                ? 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white shadow-lg shadow-red-500/30 border-0' 
-                                : 'hover:bg-red-50 hover:text-red-600 hover:border-red-300'
-                            }`}
-                            onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: 'absent' })}
-                            data-testid={`button-absent-${student.id}`}
-                          >
-                            <XCircle className="w-4 h-4" />
-                            <span className="text-xs">Yo'q</span>
-                          </Button>
-                          <Button
-                            variant={att?.status === 'late' ? 'default' : 'outline'}
-                            size="sm"
-                            className={`h-11 gap-1.5 font-medium transition-all ${
-                              att?.status === 'late' 
-                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/30 border-0' 
-                                : 'hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300'
-                            }`}
-                            onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: 'late' })}
-                            data-testid={`button-late-${student.id}`}
-                          >
-                            <AlertCircle className="w-4 h-4" />
-                            <span className="text-xs">Kech</span>
-                          </Button>
+                          {(['present', 'absent', 'excused'] as const).map((status) => {
+                            const pending = pendingAttendance[student.id];
+                            const isPending = pending === status;
+                            const isSaved = att?.status === status && !pending;
+                            const isSelected = isPending || isSaved;
+                            const statusConfig = {
+                              present: {
+                                icon: <CheckCircle2 className="w-4 h-4" />,
+                                label: 'Bor',
+                                selectedClass: isPending 
+                                  ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/30 border-0 ring-2 ring-emerald-300 ring-offset-2'
+                                  : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/30 border-0',
+                                hoverClass: 'hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300',
+                              },
+                              absent: {
+                                icon: <XCircle className="w-4 h-4" />,
+                                label: "Yo'q",
+                                selectedClass: isPending
+                                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/30 border-0 ring-2 ring-red-300 ring-offset-2'
+                                  : 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/30 border-0',
+                                hoverClass: 'hover:bg-red-50 hover:text-red-600 hover:border-red-300',
+                              },
+                              excused: {
+                                icon: <AlertCircle className="w-4 h-4" />,
+                                label: 'Sababli',
+                                selectedClass: isPending
+                                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 border-0 ring-2 ring-amber-300 ring-offset-2'
+                                  : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/30 border-0',
+                                hoverClass: 'hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300',
+                              },
+                            };
+                            const config = statusConfig[status];
+                            return (
+                              <Button
+                                key={status}
+                                variant={isSelected ? 'default' : 'outline'}
+                                size="sm"
+                                className={`h-11 gap-1.5 font-medium transition-all ${isSelected ? config.selectedClass : config.hoverClass}`}
+                                onClick={() => {
+                                  setPendingAttendance(prev => ({
+                                    ...prev,
+                                    [student.id]: prev[student.id] === status ? null : status
+                                  }));
+                                }}
+                                data-testid={`button-${status}-${student.id}`}
+                              >
+                                {config.icon}
+                                <span className="text-xs">{config.label}</span>
+                              </Button>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -499,27 +515,6 @@ export default function Attendance() {
                               );
                             })}
                           </div>
-                          {pendingGrades[student.id] !== undefined && pendingGrades[student.id] !== null && (
-                            <Button
-                              size="sm"
-                              className="h-11 px-4 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-lg"
-                              onClick={() => {
-                                const grade = pendingGrades[student.id];
-                                if (grade) {
-                                  setGradeMutation.mutate({ studentId: student.id, grade });
-                                  setPendingGrades(prev => {
-                                    const newState = { ...prev };
-                                    delete newState[student.id];
-                                    return newState;
-                                  });
-                                }
-                              }}
-                              data-testid={`button-save-grade-${student.id}`}
-                            >
-                              <Check className="w-4 h-4 mr-1" />
-                              Saqlash
-                            </Button>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -528,6 +523,59 @@ export default function Attendance() {
               })
             )}
           </div>
+
+          {/* Save All Button */}
+          {(Object.keys(pendingGrades).some(k => pendingGrades[parseInt(k)] !== null) || 
+            Object.keys(pendingAttendance).some(k => pendingAttendance[parseInt(k)] !== null)) && (
+            <Card className="glass-card border-0 shadow-lg sticky bottom-4 animate-slide-up">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {Object.values(pendingAttendance).filter(v => v !== null).length} ta davomat, {Object.values(pendingGrades).filter(v => v !== null).length} ta baho
+                    </span>
+                    {" "}saqlanmagan
+                  </div>
+                  <Button
+                    size="lg"
+                    className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-lg px-8"
+                    onClick={async () => {
+                      let savedCount = 0;
+                      
+                      // Save all pending attendance
+                      for (const [studentIdStr, status] of Object.entries(pendingAttendance)) {
+                        if (status) {
+                          await markAttendanceMutation.mutateAsync({ studentId: parseInt(studentIdStr), status });
+                          savedCount++;
+                        }
+                      }
+                      
+                      // Save all pending grades
+                      for (const [studentIdStr, grade] of Object.entries(pendingGrades)) {
+                        if (grade) {
+                          await setGradeMutation.mutateAsync({ studentId: parseInt(studentIdStr), grade });
+                          savedCount++;
+                        }
+                      }
+                      
+                      // Clear pending states
+                      setPendingAttendance({});
+                      setPendingGrades({});
+                      
+                      toast({ 
+                        title: "Muvaffaqiyat", 
+                        description: `${savedCount} ta ma'lumot saqlandi` 
+                      });
+                    }}
+                    data-testid="button-save-all"
+                  >
+                    <Check className="w-5 h-5 mr-2" />
+                    Hammasini saqlash
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 
