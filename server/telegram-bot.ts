@@ -492,7 +492,8 @@ async function showTeacherGroups(ctx: BotContext, teacherId: string) {
     return;
   }
 
-  const groups = await storage.getGroupsByTeacher(teacherId);
+  const tenantId = ctx.session.tenantId || teacher.tenantId;
+  const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
   
   if (groups.length === 0) {
     await ctx.reply("Sizga hozircha guruh biriktirilmagan.");
@@ -529,7 +530,7 @@ async function showTeacherSalary(ctx: BotContext, teacherId: string) {
 
   const tenantId = ctx.session.tenantId || teacher.tenantId;
   const now = new Date();
-  const groups = await storage.getGroupsByTeacher(teacherId);
+  const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
   
   // Get all payments for this month
   const payments = await storage.getPayments(tenantId);
@@ -592,9 +593,8 @@ async function showTeacherAttendance(ctx: BotContext, teacherId: string) {
   }
 
   const now = new Date();
-  const groups = await storage.getGroupsByTeacher(teacherId);
-  
   const tenantIdForAttendance = ctx.session.tenantId || teacher.tenantId;
+  const groups = await storage.getGroupsByTeacher(teacherId, tenantIdForAttendance);
   const attendanceRecords = await storage.getAttendance(
     tenantIdForAttendance,
     undefined,
@@ -1017,7 +1017,7 @@ export async function notifyTeacherDailySchedule(teacherId: string): Promise<boo
   const teacher = await storage.getUser(teacherId);
   if (!teacher?.telegramChatId) return false;
   
-  const groups = await storage.getGroupsByTeacher(teacherId);
+  const groups = await storage.getGroupsByTeacher(teacherId, teacher.tenantId);
   if (groups.length === 0) return false;
   
   const today = new Date();
@@ -1193,7 +1193,7 @@ async function checkClassReminders() {
         if (!teacher.telegramChatId) continue;
         
         try {
-          const groups = await storage.getGroupsByTeacher(teacher.id);
+          const groups = await storage.getGroupsByTeacher(teacher.id, tenant.id);
           
           for (const group of groups) {
             if (!group.days || !group.days.includes(todayShort)) continue;
