@@ -35,6 +35,7 @@ export default function Payments() {
     payment: any;
     student: any;
     groupName?: string;
+    teacherName?: string;
   } | null>(null);
   const [formData, setFormData] = useState({
     studentId: 0,
@@ -97,11 +98,13 @@ export default function Payments() {
       
       const student = studentsList.find((s: any) => s.id === formData.studentId);
       const studentGroup = groupsList.find((g: any) => g.id === student?.groupId);
+      const teacher = studentGroup?.teacherId ? teachersList.find((t: any) => t.id === studentGroup.teacherId) : null;
       
       setReceiptData({
         payment: newPayment,
         student: student,
         groupName: studentGroup?.name,
+        teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : undefined,
       });
       
       setIsOpen(false);
@@ -389,6 +392,7 @@ export default function Payments() {
           payment={receiptData.payment}
           student={receiptData.student}
           groupName={receiptData.groupName}
+          teacherName={receiptData.teacherName}
           onClose={() => setReceiptData(null)}
         />
       )}

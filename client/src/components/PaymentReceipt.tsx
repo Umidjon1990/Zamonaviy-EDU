@@ -1,10 +1,11 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Printer, Download, Send, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
+import logoImg from "@/assets/logo.png";
 
 interface PaymentReceiptProps {
   payment: {
@@ -22,6 +23,7 @@ interface PaymentReceiptProps {
     phone: string;
   };
   groupName?: string;
+  teacherName?: string;
   tenantName?: string;
   onClose: () => void;
 }
@@ -35,6 +37,11 @@ function formatDate(dateString: string): string {
     year: "numeric",
     month: "long",
     day: "numeric",
+  });
+}
+
+function formatTime(dateString: string): string {
+  return new Date(dateString).toLocaleTimeString("uz-UZ", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -49,14 +56,13 @@ function getPaymentTypeLabel(type: string): string {
   }
 }
 
-export default function PaymentReceipt({ payment, student, groupName, tenantName, onClose }: PaymentReceiptProps) {
+const TELEGRAM_CHANNEL = "https://t.me/Zamonaviytalimuzkanali";
+
+export default function PaymentReceipt({ payment, student, groupName, teacherName, tenantName, onClose }: PaymentReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const handlePrint = () => {
-    const printContent = receiptRef.current;
-    if (!printContent) return;
-
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
@@ -66,38 +72,49 @@ export default function PaymentReceipt({ payment, student, groupName, tenantName
         <head>
           <title>To'lov cheki #${payment.id}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
-            .receipt { border: 2px dashed #ccc; padding: 20px; border-radius: 8px; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .header h1 { margin: 0; font-size: 18px; }
-            .header p { margin: 5px 0; color: #666; font-size: 12px; }
-            .divider { border-top: 1px dashed #ccc; margin: 15px 0; }
-            .row { display: flex; justify-content: space-between; margin: 8px 0; font-size: 14px; }
+            body { font-family: Arial, sans-serif; padding: 10px; max-width: 300px; margin: 0 auto; }
+            .receipt { border: 2px dashed #1a365d; padding: 15px; border-radius: 8px; }
+            .header { text-align: center; margin-bottom: 15px; }
+            .logo { width: 80px; height: 80px; margin: 0 auto 10px; }
+            .logo img { width: 100%; height: 100%; object-fit: contain; }
+            .title { margin: 0; font-size: 16px; color: #1a365d; font-weight: bold; }
+            .subtitle { margin: 5px 0; color: #666; font-size: 11px; }
+            .divider { border-top: 1px dashed #1a365d; margin: 12px 0; }
+            .row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 12px; }
             .row .label { color: #666; }
-            .row .value { font-weight: 500; }
-            .total { font-size: 18px; font-weight: bold; margin-top: 15px; }
-            .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #999; }
+            .row .value { font-weight: 500; text-align: right; max-width: 60%; }
+            .total { font-size: 16px; font-weight: bold; margin-top: 10px; color: #1a365d; }
+            .qr-section { text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #1a365d; }
+            .qr-section p { font-size: 10px; color: #666; margin: 5px 0; }
+            .qr-section a { color: #1a365d; font-size: 11px; }
+            .footer { text-align: center; margin-top: 10px; font-size: 10px; color: #999; }
             @media print { body { padding: 0; } }
           </style>
         </head>
         <body>
           <div class="receipt">
             <div class="header">
-              <h1>${tenantName || "O'quv Markaz"}</h1>
-              <p>To'lov cheki</p>
-              <p>#${payment.id}</p>
+              <div class="logo"><img src="${logoImg}" alt="Logo" /></div>
+              <h1 class="title">ZAMONAVIY TA'LIM</h1>
+              <p class="subtitle">To'lov cheki #${payment.id}</p>
             </div>
             <div class="divider"></div>
-            <div class="row"><span class="label">Sana:</span><span class="value">${formatDate(payment.createdAt)}</span></div>
             <div class="row"><span class="label">O'quvchi:</span><span class="value">${student.firstName} ${student.lastName}</span></div>
-            ${groupName ? `<div class="row"><span class="label">Kurs:</span><span class="value">${groupName}</span></div>` : ''}
+            ${teacherName ? `<div class="row"><span class="label">O'qituvchi:</span><span class="value">${teacherName}</span></div>` : ''}
+            ${groupName ? `<div class="row"><span class="label">Guruh:</span><span class="value">${groupName}</span></div>` : ''}
+            <div class="row"><span class="label">Summa:</span><span class="value">${formatAmount(payment.amount)} so'm</span></div>
+            <div class="row"><span class="label">Sana:</span><span class="value">${formatDate(payment.createdAt)}</span></div>
+            <div class="row"><span class="label">Vaqt:</span><span class="value">${formatTime(payment.createdAt)}</span></div>
             <div class="row"><span class="label">To'lov turi:</span><span class="value">${getPaymentTypeLabel(payment.paymentType)}</span></div>
-            ${payment.notes ? `<div class="row"><span class="label">Izoh:</span><span class="value">${payment.notes}</span></div>` : ''}
             <div class="divider"></div>
             <div class="row total"><span>Jami:</span><span>${formatAmount(payment.amount)} so'm</span></div>
+            <div class="qr-section">
+              <p>Telegram kanalimiz:</p>
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(TELEGRAM_CHANNEL)}" alt="QR Code" style="width:80px;height:80px;"/>
+              <p><a href="${TELEGRAM_CHANNEL}">@Zamonaviytalimuzkanali</a></p>
+            </div>
             <div class="footer">
               <p>Xaridingiz uchun rahmat!</p>
-              <p>${new Date().getFullYear()}</p>
             </div>
           </div>
         </body>
@@ -111,51 +128,69 @@ export default function PaymentReceipt({ payment, student, groupName, tenantName
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
-      format: [80, 150],
+      format: [80, 180],
     });
 
     const centerX = 40;
-    let y = 10;
+    let y = 15;
 
-    doc.setFontSize(12);
-    doc.text(tenantName || "O'quv Markaz", centerX, y, { align: "center" });
+    doc.setFontSize(14);
+    doc.setTextColor(26, 54, 93);
+    doc.text("ZAMONAVIY TA'LIM", centerX, y, { align: "center" });
     y += 6;
     
-    doc.setFontSize(10);
-    doc.text("To'lov cheki", centerX, y, { align: "center" });
-    y += 5;
-    doc.text(`#${payment.id}`, centerX, y, { align: "center" });
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`To'lov cheki #${payment.id}`, centerX, y, { align: "center" });
     y += 8;
 
+    doc.setDrawColor(26, 54, 93);
     doc.setLineWidth(0.1);
     doc.setLineDashPattern([1, 1], 0);
     doc.line(5, y, 75, y);
     y += 6;
 
     doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
     
     const addRow = (label: string, value: string) => {
+      doc.setTextColor(100, 100, 100);
       doc.text(label, 5, y);
-      doc.text(value, 75, y, { align: "right" });
-      y += 5;
+      doc.setTextColor(0, 0, 0);
+      const maxWidth = 45;
+      const lines = doc.splitTextToSize(value, maxWidth);
+      doc.text(lines, 75, y, { align: "right" });
+      y += lines.length > 1 ? 8 : 5;
     };
 
-    addRow("Sana:", formatDate(payment.createdAt).substring(0, 20));
     addRow("O'quvchi:", `${student.firstName} ${student.lastName}`);
-    if (groupName) addRow("Kurs:", groupName);
+    if (teacherName) addRow("O'qituvchi:", teacherName);
+    if (groupName) addRow("Guruh:", groupName);
+    addRow("Summa:", `${formatAmount(payment.amount)} so'm`);
+    addRow("Sana:", formatDate(payment.createdAt));
+    addRow("Vaqt:", formatTime(payment.createdAt));
     addRow("To'lov turi:", getPaymentTypeLabel(payment.paymentType));
-    if (payment.notes) addRow("Izoh:", payment.notes.substring(0, 20));
     
     y += 2;
     doc.line(5, y, 75, y);
     y += 6;
 
-    doc.setFontSize(11);
+    doc.setFontSize(12);
+    doc.setTextColor(26, 54, 93);
     doc.text("Jami:", 5, y);
     doc.text(`${formatAmount(payment.amount)} so'm`, 75, y, { align: "right" });
     y += 10;
 
     doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Telegram kanalimiz:", centerX, y, { align: "center" });
+    y += 4;
+    doc.setTextColor(26, 54, 93);
+    doc.text("@Zamonaviytalimuzkanali", centerX, y, { align: "center" });
+    y += 8;
+
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
     doc.text("Xaridingiz uchun rahmat!", centerX, y, { align: "center" });
 
     doc.save(`chek_${payment.id}.pdf`);
@@ -172,6 +207,7 @@ export default function PaymentReceipt({ payment, student, groupName, tenantName
           paymentId: payment.id,
           amount: payment.amount,
           groupName: groupName,
+          teacherName: teacherName,
         }),
       });
 
@@ -196,7 +232,7 @@ export default function PaymentReceipt({ payment, student, groupName, tenantName
         <Button 
           variant="ghost" 
           size="icon" 
-          className="absolute right-2 top-2"
+          className="absolute right-2 top-2 z-10"
           onClick={onClose}
           data-testid="button-close-receipt"
         >
@@ -204,49 +240,79 @@ export default function PaymentReceipt({ payment, student, groupName, tenantName
         </Button>
         
         <div ref={receiptRef}>
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-lg">{tenantName || "O'quv Markaz"}</CardTitle>
-            <p className="text-sm text-muted-foreground">To'lov cheki #{payment.id}</p>
-          </CardHeader>
-          
-          <CardContent className="space-y-3">
-            <Separator className="border-dashed" />
+          <CardContent className="pt-6 space-y-4">
+            {/* Logo and Header */}
+            <div className="text-center">
+              <img src={logoImg} alt="Logo" className="w-20 h-20 mx-auto mb-2 object-contain" />
+              <h2 className="text-lg font-bold text-[#1a365d]">ZAMONAVIY TA'LIM</h2>
+              <p className="text-sm text-muted-foreground">To'lov cheki #{payment.id}</p>
+            </div>
             
+            <Separator className="border-dashed border-[#1a365d]" />
+            
+            {/* Receipt Details */}
             <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">O'quvchi:</span>
+                <span className="font-medium">{student.firstName} {student.lastName}</span>
+              </div>
+              {teacherName && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">O'qituvchi:</span>
+                  <span className="font-medium">{teacherName}</span>
+                </div>
+              )}
+              {groupName && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Guruh:</span>
+                  <span className="font-medium">{groupName}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Summa:</span>
+                <span className="font-medium">{formatAmount(payment.amount)} so'm</span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Sana:</span>
                 <span className="font-medium">{formatDate(payment.createdAt)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">O'quvchi:</span>
-                <span className="font-medium">{student.firstName} {student.lastName}</span>
+                <span className="text-muted-foreground">Vaqt:</span>
+                <span className="font-medium">{formatTime(payment.createdAt)}</span>
               </div>
-              {groupName && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Kurs:</span>
-                  <span className="font-medium">{groupName}</span>
-                </div>
-              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">To'lov turi:</span>
                 <span className="font-medium">{getPaymentTypeLabel(payment.paymentType)}</span>
               </div>
-              {payment.notes && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Izoh:</span>
-                  <span className="font-medium">{payment.notes}</span>
-                </div>
-              )}
             </div>
             
-            <Separator className="border-dashed" />
+            <Separator className="border-dashed border-[#1a365d]" />
             
-            <div className="flex justify-between items-center text-lg font-bold">
+            {/* Total */}
+            <div className="flex justify-between items-center text-lg font-bold text-[#1a365d]">
               <span>Jami:</span>
-              <span className="text-primary">{formatAmount(payment.amount)} so'm</span>
+              <span>{formatAmount(payment.amount)} so'm</span>
             </div>
             
-            <p className="text-center text-xs text-muted-foreground pt-2">
+            {/* QR Code Section */}
+            <div className="text-center pt-2 border-t border-dashed border-[#1a365d]">
+              <p className="text-xs text-muted-foreground mb-2">Telegram kanalimiz:</p>
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`} 
+                alt="QR Code"
+                className="w-20 h-20 mx-auto"
+              />
+              <a 
+                href={TELEGRAM_CHANNEL} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-[#1a365d] hover:underline mt-2 block"
+              >
+                @Zamonaviytalimuzkanali
+              </a>
+            </div>
+            
+            <p className="text-center text-xs text-muted-foreground">
               Xaridingiz uchun rahmat!
             </p>
           </CardContent>
