@@ -106,9 +106,9 @@ export default function Payments() {
       const student = studentsList.find((s: any) => s.id === formData.studentId);
       
       // Fetch student's groups from API
-      let studentGroup = null;
-      let teacher = null;
-      let subject = null;
+      let studentGroup: any = null;
+      let teacher: any = null;
+      let subject: any = null;
       try {
         const groupsResponse = await fetch(`/api/students/${formData.studentId}/groups`);
         if (groupsResponse.ok) {
@@ -240,7 +240,6 @@ export default function Payments() {
                   <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
                     {filteredStudents.length > 0 ? (
                       filteredStudents.slice(0, 20).map((s: any) => {
-                        const { group, teacher } = getStudentInfo(s);
                         const isSelected = formData.studentId === s.id;
                         return (
                           <div
@@ -264,12 +263,6 @@ export default function Payments() {
                                 <Phone className="w-3 h-3" />
                                 {s.phone || '-'}
                               </span>
-                              {group && (
-                                <span className="flex items-center gap-1">
-                                  <GraduationCap className="w-3 h-3" />
-                                  {group.name}
-                                </span>
-                              )}
                             </div>
                           </div>
                         );
@@ -300,25 +293,6 @@ export default function Payments() {
                           {(selectedStudent.balance || 0).toLocaleString()} UZS
                         </span>
                       </div>
-                      {(() => {
-                        const { group, teacher } = getStudentInfo(selectedStudent);
-                        return (
-                          <>
-                            {group && (
-                              <div className="flex items-center gap-2">
-                                <GraduationCap className="w-3 h-3 text-muted-foreground" />
-                                <span>{group.name}</span>
-                              </div>
-                            )}
-                            {teacher && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-3 h-3 text-muted-foreground" />
-                                <span>{teacher.firstName} {teacher.lastName}</span>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
                     </div>
                   </div>
                 )}
