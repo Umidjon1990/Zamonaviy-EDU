@@ -66,6 +66,8 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`;
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -88,13 +90,15 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
             .qr-section p { font-size: 10px; color: #666; margin: 5px 0; }
             .qr-section a { color: #1a365d; font-size: 11px; }
             .footer { text-align: center; margin-top: 10px; font-size: 10px; color: #999; }
-            @media print { body { padding: 0; } }
+            .loading { text-align: center; padding: 20px; }
+            @media print { body { padding: 0; } .loading { display: none; } }
           </style>
         </head>
         <body>
-          <div class="receipt">
+          <div class="loading" id="loading">Rasmlar yuklanmoqda...</div>
+          <div class="receipt" id="receipt" style="display:none;">
             <div class="header">
-              <div class="logo"><img src="${logoImg}" alt="Logo" /></div>
+              <div class="logo"><img id="logo-img" src="${logoImg}" alt="Logo" /></div>
               <h1 class="title">ZAMONAVIY TA'LIM</h1>
               <p class="subtitle">To'lov cheki #${payment.id}</p>
             </div>
@@ -110,18 +114,47 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
             <div class="row total"><span>Jami:</span><span>${formatAmount(payment.amount)} so'm</span></div>
             <div class="qr-section">
               <p>Telegram kanalimiz:</p>
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(TELEGRAM_CHANNEL)}" alt="QR Code" style="width:80px;height:80px;"/>
+              <img id="qr-img" src="${qrCodeUrl}" alt="QR Code" style="width:80px;height:80px;"/>
               <p><a href="${TELEGRAM_CHANNEL}">@Zamonaviytalimuzkanali</a></p>
             </div>
             <div class="footer">
               <p>Xaridingiz uchun rahmat!</p>
             </div>
           </div>
+          <script>
+            var imagesLoaded = 0;
+            var totalImages = 2;
+            
+            function checkAllLoaded() {
+              imagesLoaded++;
+              if (imagesLoaded >= totalImages) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('receipt').style.display = 'block';
+                setTimeout(function() { window.print(); }, 100);
+              }
+            }
+            
+            var logoImg = document.getElementById('logo-img');
+            var qrImg = document.getElementById('qr-img');
+            
+            if (logoImg.complete) { checkAllLoaded(); } 
+            else { logoImg.onload = checkAllLoaded; logoImg.onerror = checkAllLoaded; }
+            
+            if (qrImg.complete) { checkAllLoaded(); } 
+            else { qrImg.onload = checkAllLoaded; qrImg.onerror = checkAllLoaded; }
+            
+            setTimeout(function() {
+              if (imagesLoaded < totalImages) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('receipt').style.display = 'block';
+                window.print();
+              }
+            }, 3000);
+          </script>
         </body>
       </html>
     `);
     printWindow.document.close();
-    printWindow.print();
   };
 
   const handleDownloadPDF = () => {
