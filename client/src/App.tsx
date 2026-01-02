@@ -7,9 +7,9 @@ import { lazy, Suspense } from "react";
 
 // Rollar uchun ruxsat berilgan yo'llar
 const roleRouteAccess: Record<string, string[]> = {
-  markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/attendance", "/reports", "/settings"],
-  manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/attendance", "/reports"],
-  teacher: ["/students", "/schedule", "/attendance", "/teacher-salary"],
+  markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/reports", "/settings"],
+  manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/reports"],
+  teacher: ["/students", "/schedule", "/teacher-salary"],
 };
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
@@ -21,7 +21,6 @@ const Subjects = lazy(() => import("@/pages/Subjects"));
 const Schedule = lazy(() => import("@/pages/Schedule"));
 const Payments = lazy(() => import("@/pages/Payments"));
 const Reports = lazy(() => import("@/pages/Reports"));
-const Attendance = lazy(() => import("@/pages/Attendance"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const TeacherSalary = lazy(() => import("@/pages/TeacherSalary"));
 const Login = lazy(() => import("@/pages/Login"));
@@ -91,7 +90,6 @@ function AdminRoutes() {
           <Route path="/subjects" component={Subjects} />
           <Route path="/schedule" component={Schedule} />
           <Route path="/payments" component={Payments} />
-          <Route path="/attendance" component={Attendance} />
           <Route path="/reports" component={Reports} />
           <Route path="/teacher-salary" component={TeacherSalary} />
           <Route path="/settings" component={Settings} />
