@@ -214,6 +214,19 @@ export function useCreatePayment() {
   });
 }
 
+export function useUpdatePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: number; amount?: number; paymentType?: string; notes?: string; status?: string }) => 
+      apiCall(`/payments/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
+}
+
 // ===== ATTENDANCE =====
 export function useAttendance(groupId?: number, date?: string) {
   const params = new URLSearchParams();

@@ -877,6 +877,43 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/payments/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      
+      const existingPayment = await storage.getPayment(id, tenantId);
+      if (!existingPayment) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+      
+      const { amount, paymentType, notes, status } = req.body;
+      const oldAmount = existingPayment.amount;
+      const newAmount = amount !== undefined ? amount : oldAmount;
+      
+      const updatedPayment = await storage.updatePayment(id, tenantId, {
+        amount: newAmount,
+        paymentType: paymentType || existingPayment.paymentType,
+        notes: notes !== undefined ? notes : existingPayment.notes,
+        status: status || existingPayment.status,
+      });
+      
+      if (updatedPayment && existingPayment.status === 'completed' && newAmount !== oldAmount) {
+        const student = await storage.getStudent(existingPayment.studentId, tenantId);
+        if (student) {
+          const balanceDiff = newAmount - oldAmount;
+          await storage.updateStudent(existingPayment.studentId, tenantId, {
+            balance: student.balance + balanceDiff,
+          });
+        }
+      }
+      
+      res.json(updatedPayment);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update payment" });
+    }
+  });
+
   // ===== TEACHER SALARY =====
   app.get("/api/teacher/salary", async (req, res) => {
     try {

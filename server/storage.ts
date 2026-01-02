@@ -127,6 +127,7 @@ export interface IStorage {
   getPayments(tenantId: number, studentId?: number): Promise<Payment[]>;
   getPayment(id: number, tenantId?: number): Promise<Payment | undefined>;
   createPayment(payment: InsertPayment): Promise<Payment>;
+  updatePayment(id: number, tenantId: number, data: Partial<InsertPayment>): Promise<Payment | undefined>;
   
   // Grades
   getGrades(tenantId: number, groupId?: number, studentId?: number, date?: Date, month?: number, year?: number): Promise<Grade[]>;
@@ -552,6 +553,11 @@ export class DatabaseStorage implements IStorage {
 
   async createPayment(payment: InsertPayment): Promise<Payment> {
     const result = await db.insert(payments).values(payment).returning();
+    return result[0];
+  }
+
+  async updatePayment(id: number, tenantId: number, data: Partial<InsertPayment>): Promise<Payment | undefined> {
+    const result = await db.update(payments).set(data).where(and(eq(payments.id, id), eq(payments.tenantId, tenantId))).returning();
     return result[0];
   }
 

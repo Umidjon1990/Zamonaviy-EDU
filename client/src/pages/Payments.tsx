@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { usePayments, useCreatePayment, useStudents, useGroups, useTeachers } from "@/lib/api";
-import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet } from "lucide-react";
+import { usePayments, useCreatePayment, useUpdatePayment, useStudents, useGroups, useTeachers } from "@/lib/api";
+import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import PaymentReceipt from "@/components/PaymentReceipt";
@@ -21,6 +21,7 @@ export default function Payments() {
   const { data: groups } = useGroups();
   const { data: teachers } = useTeachers();
   const createPayment = useCreatePayment();
+  const updatePayment = useUpdatePayment();
   
   const studentsList = Array.isArray(students) ? students : [];
   const groupsList = Array.isArray(groups) ? groups : [];
@@ -39,6 +40,14 @@ export default function Payments() {
   } | null>(null);
   const [formData, setFormData] = useState({
     studentId: 0,
+    amount: 0,
+    paymentType: "cash",
+    status: "completed",
+    notes: "",
+  });
+  
+  const [editPayment, setEditPayment] = useState<any>(null);
+  const [editFormData, setEditFormData] = useState({
     amount: 0,
     paymentType: "cash",
     status: "completed",
@@ -112,6 +121,32 @@ export default function Payments() {
       setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "" });
     } catch (error) {
       toast({ title: "Xatolik", description: "To'lovni qabul qilishda xatolik", variant: "destructive" });
+    }
+  };
+
+  const handleEditClick = (payment: any) => {
+    setEditPayment(payment);
+    setEditFormData({
+      amount: payment.amount,
+      paymentType: payment.paymentType,
+      status: payment.status,
+      notes: payment.notes || "",
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editPayment) return;
+    
+    try {
+      await updatePayment.mutateAsync({
+        id: editPayment.id,
+        ...editFormData,
+      });
+      toast({ title: "Muvaffaqiyat", description: "To'lov yangilandi" });
+      setEditPayment(null);
+    } catch (error) {
+      toast({ title: "Xatolik", description: "To'lovni yangilashda xatolik", variant: "destructive" });
     }
   };
 
@@ -351,6 +386,7 @@ export default function Payments() {
                 <TableHead>Sana</TableHead>
                 <TableHead>To'lov turi</TableHead>
                 <TableHead>Holat</TableHead>
+                <TableHead className="w-[60px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -373,11 +409,21 @@ export default function Payments() {
                          payment.status === "pending" ? "Kutilmoqda" : "Bekor qilingan"}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleEditClick(payment)}
+                        data-testid={`button-edit-payment-${payment.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Hozircha to'lovlar yo'q.
                   </TableCell>
                 </TableRow>
@@ -396,6 +442,77 @@ export default function Payments() {
           onClose={() => setReceiptData(null)}
         />
       )}
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={!!editPayment} onOpenChange={(open) => !open && setEditPayment(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>To'lovni tahrirlash</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm font-medium">O'quvchi: {editPayment && getStudentName(editPayment.studentId)}</p>
+              <p className="text-xs text-muted-foreground">
+                Sana: {editPayment && new Date(editPayment.createdAt).toLocaleDateString('uz-UZ')}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-amount">Summa (UZS)</Label>
+              <Input
+                id="edit-amount"
+                type="number"
+                value={editFormData.amount}
+                onChange={(e) => setEditFormData({ ...editFormData, amount: parseInt(e.target.value) || 0 })}
+                data-testid="input-edit-amount"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-paymentType">To'lov turi</Label>
+              <Select value={editFormData.paymentType} onValueChange={(value) => setEditFormData({ ...editFormData, paymentType: value })}>
+                <SelectTrigger data-testid="select-edit-paymentType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Naqd pul</SelectItem>
+                  <SelectItem value="card">Plastik karta</SelectItem>
+                  <SelectItem value="bank_transfer">Bank o'tkazmasi</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Holat</Label>
+              <Select value={editFormData.status} onValueChange={(value) => setEditFormData({ ...editFormData, status: value })}>
+                <SelectTrigger data-testid="select-edit-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completed">To'langan</SelectItem>
+                  <SelectItem value="pending">Kutilmoqda</SelectItem>
+                  <SelectItem value="cancelled">Bekor qilingan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-notes">Izoh</Label>
+              <Input
+                id="edit-notes"
+                value={editFormData.notes}
+                onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                placeholder="Izoh"
+                data-testid="input-edit-notes"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setEditPayment(null)}>
+                Bekor qilish
+              </Button>
+              <Button type="submit" className="flex-1" disabled={updatePayment.isPending} data-testid="button-save-edit">
+                {updatePayment.isPending ? "Saqlanmoqda..." : "Saqlash"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
