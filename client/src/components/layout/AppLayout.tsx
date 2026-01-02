@@ -81,22 +81,22 @@ export function AppLayout({ children, userRole, userName = "Foydalanuvchi" }: Ap
         <span className="font-display font-bold text-xl tracking-tight">Zamonaviy-Edu</span>
       </div>
 
-      <nav className="flex-1 px-4 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location === item.href;
           return (
             <Link key={item.href} href={item.href}>
               <div
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
+                  "flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-colors cursor-pointer touch-manipulation",
                   isActive
                     ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground active:bg-sidebar-accent/70"
                 )}
                 onClick={() => setIsMobileOpen(false)}
               >
-                <item.icon className="w-5 h-5" />
-                {item.label}
+                <item.icon className="w-5 h-5 shrink-0" />
+                <span className="truncate">{item.label}</span>
               </div>
             </Link>
           );
@@ -148,10 +148,10 @@ export function AppLayout({ children, userRole, userName = "Foydalanuvchi" }: Ap
           <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="-mr-2">
-                <Menu className="w-5 h-5" />
+                <Menu className="w-6 h-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+            <SheetContent side="left" className="p-0 w-[280px] sm:w-[300px] border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
               <SidebarContent />
             </SheetContent>
           </Sheet>
