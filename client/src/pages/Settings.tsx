@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,15 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { translations } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
-import { MessageSquare, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { MessageSquare, AlertCircle, CheckCircle2, Image, Upload, Loader2 } from "lucide-react";
 
 export default function Settings() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   
   const [centerInfo, setCenterInfo] = useState({
     name: "Zamonaviy-Edu Learning Center",
@@ -26,6 +29,103 @@ export default function Settings() {
     marketingEnabled: false,
     darkMode: false,
   });
+
+  const [branding, setBranding] = useState({
+    logo: "",
+    receiptTitle: "",
+    telegramChannel: "",
+  });
+
+  const { data: brandingData, isLoading: isBrandingLoading } = useQuery({
+    queryKey: ["branding"],
+    queryFn: async () => {
+      const res = await fetch("/api/branding");
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (brandingData) {
+      setBranding({
+        logo: brandingData.logo || "",
+        receiptTitle: brandingData.receiptTitle || "",
+        telegramChannel: brandingData.telegramChannel || "",
+      });
+    }
+  }, [brandingData]);
+
+  const brandingMutation = useMutation({
+    mutationFn: async (data: { logo?: string; receiptTitle?: string; telegramChannel?: string }) => {
+      const res = await fetch("/api/branding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update branding");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["branding"] });
+      toast({ title: "Muvaffaqiyat", description: "Brending sozlamalari saqlandi" });
+    },
+    onError: () => {
+      toast({ title: "Xatolik", description: "Saqlashda xatolik yuz berdi", variant: "destructive" });
+    },
+  });
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Xatolik", description: "Faqat rasm fayllari yuklash mumkin", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Xatolik", description: "Rasm 5MB dan kichik bo'lishi kerak", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const urlRes = await fetch("/api/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+      
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json();
+
+      await fetch(uploadURL, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+
+      setBranding(prev => ({ ...prev, logo: objectPath }));
+      await brandingMutation.mutateAsync({ logo: objectPath });
+      toast({ title: "Muvaffaqiyat", description: "Logo muvaffaqiyatli yuklandi" });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Logo yuklashda xatolik yuz berdi", variant: "destructive" });
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
+
+  const handleSaveBranding = async () => {
+    brandingMutation.mutate({
+      receiptTitle: branding.receiptTitle,
+      telegramChannel: branding.telegramChannel,
+    });
+  };
 
   const { data: smsBalance } = useQuery({
     queryKey: ["sms-balance"],
@@ -211,6 +311,100 @@ export default function Settings() {
             ) : (
               <p className="text-muted-foreground">Yuklanmoqda...</p>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Image className="h-5 w-5" />
+              Brending sozlamalari
+            </CardTitle>
+            <CardDescription>Chek va hujjatlarda ko'rinadigan markaz logosi va ma'lumotlari</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <Label>Markaz logosi</Label>
+                <div className="flex items-center gap-4">
+                  <div className="w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted overflow-hidden">
+                    {branding.logo ? (
+                      <img 
+                        src={branding.logo} 
+                        alt="Logo" 
+                        className="w-full h-full object-contain"
+                        data-testid="img-logo-preview"
+                      />
+                    ) : (
+                      <Image className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={logoInputRef}
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                      data-testid="input-logo-file"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={isUploadingLogo}
+                      data-testid="button-upload-logo"
+                    >
+                      {isUploadingLogo ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Yuklanmoqda...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Logo yuklash
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">PNG, JPG. Max 5MB</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="receipt-title">Chekdagi markaz nomi</Label>
+                  <Input
+                    id="receipt-title"
+                    value={branding.receiptTitle}
+                    onChange={(e) => setBranding({ ...branding, receiptTitle: e.target.value })}
+                    placeholder="Masalan: Zamonaviy O'quv Markazi"
+                    data-testid="input-receipt-title"
+                  />
+                  <p className="text-xs text-muted-foreground">To'lov chekida ko'rinadigan markaz nomi</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="telegram-channel">Telegram kanal</Label>
+                  <Input
+                    id="telegram-channel"
+                    value={branding.telegramChannel}
+                    onChange={(e) => setBranding({ ...branding, telegramChannel: e.target.value })}
+                    placeholder="@markaznomi yoki https://t.me/markaznomi"
+                    data-testid="input-telegram-channel"
+                  />
+                  <p className="text-xs text-muted-foreground">Chekda QR kod bilan ko'rsatiladi</p>
+                </div>
+              </div>
+            </div>
+
+            <Button 
+              onClick={handleSaveBranding} 
+              disabled={brandingMutation.isPending}
+              data-testid="button-save-branding"
+            >
+              {brandingMutation.isPending ? "Saqlanmoqda..." : "Saqlash"}
+            </Button>
           </CardContent>
         </Card>
       </div>

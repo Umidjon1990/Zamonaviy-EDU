@@ -31,7 +31,9 @@ export const tenants = pgTable("tenants", {
   phone: text("phone").notNull(),
   email: text("email"),
   address: text("address"),
-  logo: text("logo"), // Logo URL
+  logo: text("logo"), // Logo URL (object storage path)
+  receiptTitle: text("receipt_title"), // Chekdagi markaz nomi
+  telegramChannel: text("telegram_channel"), // Telegram kanal havolasi
   status: text("status").default("active").notNull(), // active, suspended, trial
   planId: integer("plan_id"), // Hozirgi tarif
   trialEndsAt: timestamp("trial_ends_at"), // Sinov muddati

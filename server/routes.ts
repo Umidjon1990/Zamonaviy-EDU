@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
 import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt } from "./telegram-bot";
+import { verifyObjectPath } from "./replit_integrations/object_storage/routes";
 import {
   insertLeadSchema,
   insertStudentSchema,
@@ -161,6 +162,81 @@ export async function registerRoutes(
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch SMS status" });
+    }
+  });
+
+  // ===== TENANT BRANDING =====
+  app.use("/api/branding", requireTenantAuth);
+
+  app.get("/api/branding", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const tenant = await storage.getTenant(tenantId);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+      res.json({
+        logo: tenant.logo,
+        receiptTitle: tenant.receiptTitle,
+        telegramChannel: tenant.telegramChannel,
+        name: tenant.name,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch branding" });
+    }
+  });
+
+  app.patch("/api/branding", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { logo, receiptTitle, telegramChannel } = req.body;
+
+      // Validate logo path - must be a valid signed object storage path with correct tenant ownership
+      let validatedLogo = logo;
+      if (logo) {
+        // Logo path must start with /objects/
+        if (!logo.startsWith("/objects/")) {
+          return res.status(400).json({ error: "Invalid logo path" });
+        }
+        
+        // Verify HMAC signature and tenant ownership
+        const verification = verifyObjectPath(logo, tenantId);
+        if (!verification.valid) {
+          return res.status(403).json({ error: "Access denied - invalid logo signature or tenant mismatch" });
+        }
+        
+        // Store the verified object path (without signature) for serving
+        validatedLogo = verification.objectPath;
+      }
+
+      // Normalize and validate telegram channel
+      let validatedTelegramChannel = telegramChannel;
+      if (telegramChannel) {
+        // Remove any HTML/script tags for security
+        const sanitized = telegramChannel.replace(/<[^>]*>/g, "").trim();
+        // Only allow valid telegram formats: @username, t.me/username, or https://t.me/username
+        if (sanitized.startsWith("@") || sanitized.includes("t.me/") || sanitized.length === 0) {
+          validatedTelegramChannel = sanitized;
+        } else {
+          return res.status(400).json({ error: "Invalid telegram channel format" });
+        }
+      }
+
+      // Sanitize receipt title - remove any HTML tags
+      const validatedReceiptTitle = receiptTitle ? receiptTitle.replace(/<[^>]*>/g, "").trim() : receiptTitle;
+
+      const updated = await storage.updateTenant(tenantId, {
+        logo: validatedLogo,
+        receiptTitle: validatedReceiptTitle,
+        telegramChannel: validatedTelegramChannel,
+      });
+      res.json({
+        logo: updated?.logo,
+        receiptTitle: updated?.receiptTitle,
+        telegramChannel: updated?.telegramChannel,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update branding" });
     }
   });
 

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
 import { usePayments, useCreatePayment, useUpdatePayment, useDeletePayment, useStudents, useGroups, useTeachers, useSubjects } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet, Pencil, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +22,14 @@ export default function Payments() {
   const { data: groups } = useGroups();
   const { data: teachers } = useTeachers();
   const { data: subjects } = useSubjects();
+  const { data: brandingData } = useQuery({
+    queryKey: ["branding"],
+    queryFn: async () => {
+      const res = await fetch("/api/branding");
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
@@ -454,6 +463,11 @@ export default function Payments() {
           groupName={receiptData.groupName}
           subjectName={receiptData.subjectName}
           teacherName={receiptData.teacherName}
+          branding={brandingData ? {
+            logo: brandingData.logo,
+            receiptTitle: brandingData.receiptTitle,
+            telegramChannel: brandingData.telegramChannel,
+          } : undefined}
           onClose={() => setReceiptData(null)}
         />
       )}

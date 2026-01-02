@@ -26,6 +26,11 @@ interface PaymentReceiptProps {
   subjectName?: string;
   teacherName?: string;
   tenantName?: string;
+  branding?: {
+    logo?: string;
+    receiptTitle?: string;
+    telegramChannel?: string;
+  };
   onClose: () => void;
 }
 
@@ -57,17 +62,27 @@ function getPaymentTypeLabel(type: string): string {
   }
 }
 
-const TELEGRAM_CHANNEL = "https://t.me/Zamonaviytalimuzkanali";
+const DEFAULT_TELEGRAM_CHANNEL = "https://t.me/Zamonaviytalimuzkanali";
 
-export default function PaymentReceipt({ payment, student, groupName, subjectName, teacherName, tenantName, onClose }: PaymentReceiptProps) {
+export default function PaymentReceipt({ payment, student, groupName, subjectName, teacherName, tenantName, branding, onClose }: PaymentReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  const displayTitle = branding?.receiptTitle || tenantName || "ZAMONAVIY TA'LIM";
+  const displayLogo = branding?.logo || logoImg;
+  const telegramChannel = branding?.telegramChannel || DEFAULT_TELEGRAM_CHANNEL;
+  const telegramHandle = telegramChannel.includes("t.me/") 
+    ? "@" + telegramChannel.split("t.me/")[1]
+    : telegramChannel.startsWith("@") 
+      ? telegramChannel 
+      : "@" + telegramChannel;
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`;
+    const telegramUrl = telegramChannel.startsWith("http") ? telegramChannel : `https://t.me/${telegramChannel.replace("@", "")}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(telegramUrl)}`;
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -100,8 +115,8 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
           <div class="loading" id="loading">Rasmlar yuklanmoqda...</div>
           <div class="receipt" id="receipt" style="display:none;">
             <div class="header">
-              <div class="logo"><img id="logo-img" src="${logoImg}" alt="Logo" /></div>
-              <h1 class="title">ZAMONAVIY TA'LIM</h1>
+              <div class="logo"><img id="logo-img" src="${displayLogo}" alt="Logo" /></div>
+              <h1 class="title">${displayTitle}</h1>
               <p class="subtitle">To'lov cheki #${payment.id}</p>
             </div>
             <div class="divider"></div>
@@ -118,7 +133,7 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
             <div class="qr-section">
               <p>Telegram kanalimiz:</p>
               <img id="qr-img" src="${qrCodeUrl}" alt="QR Code" style="width:80px;height:80px;"/>
-              <p><a href="${TELEGRAM_CHANNEL}">@Zamonaviytalimuzkanali</a></p>
+              <p><a href="${telegramUrl}">${telegramHandle}</a></p>
             </div>
             <div class="footer">
               <p>Xaridingiz uchun rahmat!</p>
@@ -172,7 +187,7 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
 
     doc.setFontSize(14);
     doc.setTextColor(26, 54, 93);
-    doc.text("ZAMONAVIY TA'LIM", centerX, y, { align: "center" });
+    doc.text(displayTitle, centerX, y, { align: "center" });
     y += 6;
     
     doc.setFontSize(9);
@@ -222,7 +237,7 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
     doc.text("Telegram kanalimiz:", centerX, y, { align: "center" });
     y += 4;
     doc.setTextColor(26, 54, 93);
-    doc.text("@Zamonaviytalimuzkanali", centerX, y, { align: "center" });
+    doc.text(telegramHandle, centerX, y, { align: "center" });
     y += 8;
 
     doc.setFontSize(8);
@@ -279,8 +294,8 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
           <CardContent className="pt-6 space-y-4">
             {/* Logo and Header */}
             <div className="text-center">
-              <img src={logoImg} alt="Logo" className="w-20 h-20 mx-auto mb-2 object-contain" />
-              <h2 className="text-lg font-bold text-[#1a365d]">ZAMONAVIY TA'LIM</h2>
+              <img src={displayLogo} alt="Logo" className="w-20 h-20 mx-auto mb-2 object-contain" />
+              <h2 className="text-lg font-bold text-[#1a365d]">{displayTitle}</h2>
               <p className="text-sm text-muted-foreground">To'lov cheki #{payment.id}</p>
             </div>
             
@@ -340,18 +355,18 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
             <div className="text-center pt-2 border-t border-dashed border-[#1a365d]">
               <p className="text-xs text-muted-foreground mb-2">Telegram kanalimiz:</p>
               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`} 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(telegramChannel.startsWith("http") ? telegramChannel : `https://t.me/${telegramChannel.replace("@", "")}`)}`} 
                 alt="QR Code"
                 className="w-20 h-20 mx-auto"
                 style={{ imageRendering: 'crisp-edges' }}
               />
               <a 
-                href={TELEGRAM_CHANNEL} 
+                href={telegramChannel.startsWith("http") ? telegramChannel : `https://t.me/${telegramChannel.replace("@", "")}`} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-xs text-[#1a365d] hover:underline mt-2 block"
               >
-                @Zamonaviytalimuzkanali
+                {telegramHandle}
               </a>
             </div>
             
