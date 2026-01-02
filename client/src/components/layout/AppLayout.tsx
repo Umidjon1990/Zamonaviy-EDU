@@ -11,7 +11,8 @@ import {
   Menu,
   X,
   UserCheck,
-  FileText
+  FileText,
+  ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,21 +29,40 @@ const preloadPages = () => {
   import("@/pages/Reports");
 };
 
-const navItems = [
-  { icon: LayoutDashboard, label: translations.nav.dashboard, href: "/" },
-  { icon: Users, label: translations.nav.leads, href: "/leads" },
-  { icon: GraduationCap, label: translations.nav.students, href: "/students" },
-  { icon: UserCheck, label: "O'qituvchilar", href: "/teachers" },
-  { icon: Users, label: translations.nav.groups, href: "/groups" },
-  { icon: Calendar, label: translations.nav.schedule, href: "/schedule" },
-  { icon: CreditCard, label: translations.nav.payments, href: "/payments" },
-  { icon: FileText, label: "Moliya", href: "/reports" },
-  { icon: Settings, label: translations.nav.settings, href: "/settings" },
+const allNavItems = [
+  { icon: LayoutDashboard, label: translations.nav.dashboard, href: "/", roles: ["markaz_admin", "manager"] },
+  { icon: Users, label: translations.nav.leads, href: "/leads", roles: ["markaz_admin", "manager"] },
+  { icon: GraduationCap, label: translations.nav.students, href: "/students", roles: ["markaz_admin", "manager", "teacher"] },
+  { icon: UserCheck, label: "O'qituvchilar", href: "/teachers", roles: ["markaz_admin"] },
+  { icon: Users, label: translations.nav.groups, href: "/groups", roles: ["markaz_admin", "manager"] },
+  { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "manager", "teacher"] },
+  { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin", "manager"] },
+  { icon: ClipboardCheck, label: "Davomat", href: "/attendance", roles: ["markaz_admin", "manager", "teacher"] },
+  { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin", "manager", "teacher"] },
+  { icon: Settings, label: translations.nav.settings, href: "/settings", roles: ["markaz_admin"] },
 ];
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+interface AppLayoutProps {
+  children: React.ReactNode;
+  userRole?: string;
+  userName?: string;
+}
+
+export function AppLayout({ children, userRole, userName = "Foydalanuvchi" }: AppLayoutProps) {
+  // Xavfsiz default - agar rol noma'lum bo'lsa, hech narsa ko'rsatilmaydi
+  const safeRole = userRole || "";
+  const navItems = allNavItems.filter(item => item.roles.includes(safeRole));
   const [location] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout xatosi:", error);
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(preloadPages, 100);
@@ -81,22 +101,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </nav>
 
       <div className="p-4 border-t border-sidebar-border space-y-3">
-        <Link href="/teacher-login">
-          <Button variant="outline" size="sm" className="w-full justify-start gap-2" data-testid="link-teacher-login">
-            <GraduationCap className="w-4 h-4" />
-            O'qituvchi portali
-          </Button>
-        </Link>
         <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50">
           <Avatar className="h-9 w-9 border border-sidebar-border">
-            <AvatarImage src="https://github.com/shadcn.png" />
-            <AvatarFallback>AD</AvatarFallback>
+            <AvatarFallback>{userName.split(' ').map(n => n[0]).join('').toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">Admin User</p>
-            <p className="text-xs text-sidebar-foreground/60 truncate">admin@educrm.uz</p>
+            <p className="text-sm font-medium truncate">{userName}</p>
+            <p className="text-xs text-sidebar-foreground/60 truncate">
+              {userRole === 'markaz_admin' ? 'Administrator' : userRole === 'teacher' ? "O'qituvchi" : userRole === 'manager' ? 'Menejer' : userRole}
+            </p>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-sidebar-foreground/70 hover:text-sidebar-foreground">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+            onClick={handleLogout}
+            data-testid="button-logout"
+          >
             <LogOut className="w-4 h-4" />
           </Button>
         </div>

@@ -1,9 +1,16 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { lazy, Suspense } from "react";
+
+// Rollar uchun ruxsat berilgan yo'llar
+const roleRouteAccess: Record<string, string[]> = {
+  markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/schedule", "/payments", "/attendance", "/reports", "/settings"],
+  manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/attendance", "/reports"],
+  teacher: ["/students", "/schedule", "/attendance", "/reports"],
+};
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Leads = lazy(() => import("@/pages/Leads"));
@@ -31,6 +38,7 @@ function PageLoader() {
 }
 
 function AdminRoutes() {
+  const [location] = useLocation();
   const { data: user, isLoading } = useQuery({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
@@ -53,8 +61,24 @@ function AdminRoutes() {
     return <Login />;
   }
 
+  // Rol tekshirish
+  const userRole = user.role || "";
+  const allowedPaths = roleRouteAccess[userRole];
+  
+  // Noma'lum rol - login sahifasiga yo'naltirish
+  if (!allowedPaths || allowedPaths.length === 0) {
+    // Session ni tozalash va login sahifasiga yo'naltirish
+    fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    return <Redirect to="/login" />;
+  }
+  
+  // Agar joriy sahifa ruxsatsiz bo'lsa, birinchi ruxsat berilgan sahifaga yo'naltirish
+  if (!allowedPaths.includes(location)) {
+    return <Redirect to={allowedPaths[0]} />;
+  }
+
   return (
-    <AppLayout>
+    <AppLayout userRole={user.role} userName={`${user.firstName} ${user.lastName}`}>
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={Dashboard} />
