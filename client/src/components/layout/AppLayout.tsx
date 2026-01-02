@@ -12,7 +12,8 @@ import {
   X,
   UserCheck,
   FileText,
-  ClipboardCheck
+  ClipboardCheck,
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ const allNavItems = [
   { icon: GraduationCap, label: translations.nav.students, href: "/students", roles: ["markaz_admin", "manager", "teacher"] },
   { icon: UserCheck, label: "O'qituvchilar", href: "/teachers", roles: ["markaz_admin"] },
   { icon: Users, label: translations.nav.groups, href: "/groups", roles: ["markaz_admin", "manager"] },
+  { icon: BookOpen, label: "Fanlar", href: "/subjects", roles: ["markaz_admin"] },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "manager", "teacher"] },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin", "manager"] },
   { icon: ClipboardCheck, label: "Davomat", href: "/attendance", roles: ["markaz_admin", "manager", "teacher"] },

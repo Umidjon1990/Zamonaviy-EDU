@@ -318,6 +318,54 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/subjects/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      const updateData = insertSubjectSchema.partial().parse(req.body);
+      const subject = await storage.updateSubject(id, tenantId, updateData);
+      if (!subject) {
+        return res.status(404).json({ error: "Fan topilmadi" });
+      }
+      res.json(subject);
+    } catch (error) {
+      res.status(400).json({ error: "Fanni yangilashda xatolik" });
+    }
+  });
+
+  app.delete("/api/subjects/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      
+      // Check if subject is linked to any groups
+      const groups = await storage.getGroups(tenantId);
+      const linkedGroups = groups.filter(g => g.subjectId === id);
+      if (linkedGroups.length > 0) {
+        return res.status(400).json({ 
+          error: `Bu fan ${linkedGroups.length} ta guruhga bog'langan. Avval guruhlarni o'chiring yoki boshqa fanga o'tkazing.` 
+        });
+      }
+      
+      // Check if subject is linked to any teachers
+      const teachers = await storage.getTeachers(tenantId);
+      const linkedTeachers = teachers.filter(t => t.subjectId === id);
+      if (linkedTeachers.length > 0) {
+        return res.status(400).json({ 
+          error: `Bu fan ${linkedTeachers.length} ta o'qituvchiga bog'langan. Avval o'qituvchilarni boshqa fanga o'tkazing.` 
+        });
+      }
+      
+      const deleted = await storage.deleteSubject(id, tenantId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Fan topilmadi" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({ error: "Fanni o'chirishda xatolik" });
+    }
+  });
+
   // ===== GROUPS =====
   app.get("/api/groups", async (req, res) => {
     try {

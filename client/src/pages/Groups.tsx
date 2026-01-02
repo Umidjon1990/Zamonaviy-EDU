@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Toggle } from "@/components/ui/toggle";
 import { Textarea } from "@/components/ui/textarea";
 import { translations } from "@/lib/i18n";
-import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup, useTeachers, useImportGroupTemplate } from "@/lib/api";
-import { Plus, Users, Clock, MapPin, Trash2, User, FileText, Copy, Pencil } from "lucide-react";
+import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup, useTeachers, useSubjects, useImportGroupTemplate } from "@/lib/api";
+import { Plus, Users, Clock, MapPin, Trash2, User, FileText, Copy, Pencil, BookOpen } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -40,6 +40,8 @@ export default function Groups() {
   const groups = (groupsData || []) as any[];
   const { data: teachersData } = useTeachers();
   const teachers = (teachersData || []) as any[];
+  const { data: subjectsData } = useSubjects();
+  const subjects = (subjectsData || []) as any[];
   const createGroup = useCreateGroup();
   const deleteGroup = useDeleteGroup();
   const updateGroup = useUpdateGroup();
@@ -56,6 +58,7 @@ export default function Groups() {
   const [formData, setFormData] = useState({
     name: "",
     teacherId: "",
+    subjectId: "",
     days: [] as string[],
     time: "",
     room: "",
@@ -65,6 +68,7 @@ export default function Groups() {
   const [editFormData, setEditFormData] = useState({
     name: "",
     teacherId: "",
+    subjectId: "",
     days: [] as string[],
     time: "",
     room: "",
@@ -94,6 +98,7 @@ export default function Groups() {
     setEditFormData({
       name: group.name || "",
       teacherId: group.teacherId?.toString() || "",
+      subjectId: group.subjectId?.toString() || "",
       days: group.days || [],
       time: group.time || "",
       room: group.room || "",
@@ -107,9 +112,13 @@ export default function Groups() {
     if (!editingGroup) return;
     
     try {
+      const submitData = {
+        ...editFormData,
+        subjectId: editFormData.subjectId ? parseInt(editFormData.subjectId) : null,
+      };
       await updateGroup.mutateAsync({ 
         id: editingGroup.id, 
-        data: editFormData 
+        data: submitData 
       });
       toast({ title: "Muvaffaqiyat", description: "Guruh yangilandi" });
       setIsEditOpen(false);
@@ -130,12 +139,17 @@ export default function Groups() {
       return;
     }
     try {
-      await createGroup.mutateAsync(formData);
+      const submitData = {
+        ...formData,
+        subjectId: formData.subjectId ? parseInt(formData.subjectId) : null,
+      };
+      await createGroup.mutateAsync(submitData);
       toast({ title: "Muvaffaqiyat", description: "Yangi guruh yaratildi" });
       setIsOpen(false);
       setFormData({
         name: "",
         teacherId: "",
+        subjectId: "",
         days: [],
         time: "",
         room: "",
@@ -385,6 +399,21 @@ export default function Groups() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="subjectId">Fan</Label>
+                <Select value={formData.subjectId} onValueChange={(value) => setFormData({ ...formData, subjectId: value })}>
+                  <SelectTrigger data-testid="select-subject">
+                    <SelectValue placeholder="Fanni tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id.toString()}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="maxStudents">Maksimal o'quvchilar soni</Label>
                 <Input
                   id="maxStudents"
@@ -468,6 +497,21 @@ export default function Groups() {
                       {teachers.map((t: any) => (
                         <SelectItem key={t.id} value={t.id.toString()}>
                           {t.firstName} {t.lastName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-subjectId">Fan</Label>
+                  <Select value={editFormData.subjectId} onValueChange={(value) => setEditFormData({ ...editFormData, subjectId: value })}>
+                    <SelectTrigger data-testid="select-edit-subject">
+                      <SelectValue placeholder="Fanni tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subjects.map((s: any) => (
+                        <SelectItem key={s.id} value={s.id.toString()}>
+                          {s.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

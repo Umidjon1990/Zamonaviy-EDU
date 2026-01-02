@@ -79,6 +79,7 @@ export const users = pgTable("users", {
   lastName: text("last_name").notNull(),
   role: text("role").notNull(), // super_admin, markaz_admin, teacher, manager, student, parent
   phone: text("phone"),
+  subjectId: integer("subject_id"), // O'qituvchi o'qitadigan fan
   salaryPercent: integer("salary_percent").default(0), // O'qituvchi oylik foizi (masalan 30%)
   telegramChatId: text("telegram_chat_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -5,14 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher } from "@/lib/api";
-import { Plus, Search, Trash2, Percent, Pencil } from "lucide-react";
+import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useSubjects } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Search, Trash2, Percent, Pencil, BookOpen } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Teachers() {
   const { data: teachersData, isLoading } = useTeachers();
   const teachers = (teachersData || []) as any[];
+  const { data: subjectsData } = useSubjects();
+  const subjects = (subjectsData || []) as any[];
   const createTeacher = useCreateTeacher();
   const updateTeacher = useUpdateTeacher();
   const deleteTeacher = useDeleteTeacher();
@@ -27,16 +30,21 @@ export default function Teachers() {
     email: "",
     password: "",
     phone: "",
+    subjectId: "",
     salaryPercent: 30,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createTeacher.mutateAsync(formData);
+      const submitData = {
+        ...formData,
+        subjectId: formData.subjectId ? parseInt(formData.subjectId) : null,
+      };
+      await createTeacher.mutateAsync(submitData);
       toast({ title: "Muvaffaqiyat", description: "Yangi o'qituvchi qo'shildi" });
       setIsOpen(false);
-      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", salaryPercent: 30 });
+      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", subjectId: "", salaryPercent: 30 });
     } catch (error) {
       toast({ title: "Xatolik", description: "O'qituvchi qo'shishda xatolik yuz berdi", variant: "destructive" });
     }
@@ -50,6 +58,7 @@ export default function Teachers() {
       email: teacher.email || "",
       password: "",
       phone: teacher.phone || "",
+      subjectId: teacher.subjectId?.toString() || "",
       salaryPercent: teacher.salaryPercent || 30,
     });
     setIsEditOpen(true);
@@ -58,11 +67,15 @@ export default function Teachers() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateTeacher.mutateAsync({ id: editingTeacher.id, ...formData });
+      const submitData = {
+        ...formData,
+        subjectId: formData.subjectId ? parseInt(formData.subjectId) : null,
+      };
+      await updateTeacher.mutateAsync({ id: editingTeacher.id, ...submitData });
       toast({ title: "Muvaffaqiyat", description: "O'qituvchi ma'lumotlari yangilandi" });
       setIsEditOpen(false);
       setEditingTeacher(null);
-      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", salaryPercent: 30 });
+      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", subjectId: "", salaryPercent: 30 });
     } catch (error) {
       toast({ title: "Xatolik", description: "Yangilashda xatolik yuz berdi", variant: "destructive" });
     }
@@ -160,6 +173,21 @@ export default function Teachers() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="subjectId">Fan (ixtiyoriy)</Label>
+                <Select value={formData.subjectId} onValueChange={(value) => setFormData({ ...formData, subjectId: value })}>
+                  <SelectTrigger data-testid="select-subject">
+                    <SelectValue placeholder="Fanni tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id.toString()}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="salaryPercent">Oylik foiz (%)</Label>
                 <div className="relative">
                   <Input
@@ -244,6 +272,21 @@ export default function Teachers() {
                 required
                 data-testid="input-edit-phone"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-subjectId">Fan (ixtiyoriy)</Label>
+              <Select value={formData.subjectId} onValueChange={(value) => setFormData({ ...formData, subjectId: value })}>
+                <SelectTrigger data-testid="select-edit-subject">
+                  <SelectValue placeholder="Fanni tanlang" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subjects.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id.toString()}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-salaryPercent">Oylik foiz (%)</Label>

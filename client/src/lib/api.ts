@@ -125,6 +125,22 @@ export function useCreateSubject() {
   });
 }
 
+export function useUpdateSubject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: any) => apiCall(`/subjects/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects"] }),
+  });
+}
+
+export function useDeleteSubject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiCall(`/subjects/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects"] }),
+  });
+}
+
 // ===== GROUPS =====
 export function useGroups() {
   return useQuery({

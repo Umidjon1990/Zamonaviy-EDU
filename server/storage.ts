@@ -96,6 +96,8 @@ export interface IStorage {
   getSubjects(tenantId: number): Promise<Subject[]>;
   getSubject(id: number): Promise<Subject | undefined>;
   createSubject(subject: InsertSubject): Promise<Subject>;
+  updateSubject(id: number, tenantId: number, data: Partial<InsertSubject>): Promise<Subject | undefined>;
+  deleteSubject(id: number, tenantId: number): Promise<boolean>;
   
   // Groups
   getGroups(tenantId: number): Promise<Group[]>;
@@ -351,6 +353,16 @@ export class DatabaseStorage implements IStorage {
   async createSubject(subject: InsertSubject): Promise<Subject> {
     const result = await db.insert(subjects).values(subject).returning();
     return result[0];
+  }
+
+  async updateSubject(id: number, tenantId: number, data: Partial<InsertSubject>): Promise<Subject | undefined> {
+    const result = await db.update(subjects).set(data).where(and(eq(subjects.id, id), eq(subjects.tenantId, tenantId))).returning();
+    return result[0];
+  }
+
+  async deleteSubject(id: number, tenantId: number): Promise<boolean> {
+    const result = await db.delete(subjects).where(and(eq(subjects.id, id), eq(subjects.tenantId, tenantId)));
+    return result.rowCount !== null && result.rowCount > 0;
   }
 
   // Groups
