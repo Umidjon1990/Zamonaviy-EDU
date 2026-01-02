@@ -9,7 +9,7 @@ import { lazy, Suspense } from "react";
 const roleRouteAccess: Record<string, string[]> = {
   markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/reports", "/settings"],
   manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/reports"],
-  teacher: ["/students", "/schedule", "/teacher-salary"],
+  teacher: ["/students", "/schedule", "/attendance", "/teacher-salary"],
 };
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
@@ -19,6 +19,7 @@ const Teachers = lazy(() => import("@/pages/Teachers"));
 const Groups = lazy(() => import("@/pages/Groups"));
 const Subjects = lazy(() => import("@/pages/Subjects"));
 const Schedule = lazy(() => import("@/pages/Schedule"));
+const Attendance = lazy(() => import("@/pages/Attendance"));
 const Payments = lazy(() => import("@/pages/Payments"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const Settings = lazy(() => import("@/pages/Settings"));
@@ -89,6 +90,7 @@ function AdminRoutes() {
           <Route path="/groups" component={Groups} />
           <Route path="/subjects" component={Subjects} />
           <Route path="/schedule" component={Schedule} />
+          <Route path="/attendance" component={Attendance} />
           <Route path="/payments" component={Payments} />
           <Route path="/reports" component={Reports} />
           <Route path="/teacher-salary" component={TeacherSalary} />

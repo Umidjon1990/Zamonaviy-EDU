@@ -37,6 +37,7 @@ const allNavItems = [
   { icon: Users, label: translations.nav.groups, href: "/groups", roles: ["markaz_admin", "manager"] },
   { icon: BookOpen, label: "Fanlar", href: "/subjects", roles: ["markaz_admin"] },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "manager", "teacher"] },
+  { icon: Calendar, label: "Davomat", href: "/attendance", roles: ["teacher"] },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin", "manager"] },
   { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin", "manager"] },
   { icon: FileText, label: "Oylik", href: "/teacher-salary", roles: ["teacher"] },
