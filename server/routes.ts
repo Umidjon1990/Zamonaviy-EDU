@@ -40,6 +40,24 @@ export async function registerRoutes(
     return req.session.tenantId;
   };
 
+  // Get user ID from session
+  const getUserId = (req: any): string => {
+    if (!req.session.userId) {
+      throw new Error("User ID not found in session");
+    }
+    return req.session.userId;
+  };
+
+  // Get user role from session
+  const getUserRole = (req: any): string => {
+    return req.session.role || "";
+  };
+
+  // Check if user is teacher
+  const isTeacher = (req: any): boolean => {
+    return req.session.role === "teacher";
+  };
+
   // Login for tenant admins/staff
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -214,6 +232,11 @@ export async function registerRoutes(
   // ===== STUDENTS =====
   app.get("/api/students", async (req, res) => {
     try {
+      // O'qituvchi faqat o'z o'quvchilarini ko'radi
+      if (isTeacher(req)) {
+        const students = await storage.getStudentsByTeacher(getUserId(req), getTenantId(req));
+        return res.json(students);
+      }
       const students = await storage.getStudents(getTenantId(req));
       res.json(students);
     } catch (error) {
@@ -298,6 +321,11 @@ export async function registerRoutes(
   // ===== GROUPS =====
   app.get("/api/groups", async (req, res) => {
     try {
+      // O'qituvchi faqat o'z guruhlarini ko'radi
+      if (isTeacher(req)) {
+        const groups = await storage.getGroupsByTeacher(getUserId(req), getTenantId(req));
+        return res.json(groups);
+      }
       const groups = await storage.getGroups(getTenantId(req));
       res.json(groups);
     } catch (error) {
@@ -631,6 +659,13 @@ export async function registerRoutes(
       const date = req.query.date ? new Date(req.query.date as string) : undefined;
       const month = req.query.month ? parseInt(req.query.month as string) : undefined;
       const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      
+      // O'qituvchi faqat o'z guruhlarining davomatini ko'radi
+      if (isTeacher(req)) {
+        const attendance = await storage.getAttendanceByTeacher(getUserId(req), getTenantId(req), groupId, month, year);
+        return res.json(attendance);
+      }
+      
       const attendance = await storage.getAttendance(getTenantId(req), groupId, date, month, year);
       res.json(attendance);
     } catch (error) {
@@ -695,6 +730,13 @@ export async function registerRoutes(
   app.get("/api/payments", async (req, res) => {
     try {
       const studentId = req.query.studentId ? parseInt(req.query.studentId as string) : undefined;
+      
+      // O'qituvchi faqat o'z o'quvchilarining to'lovlarini ko'radi
+      if (isTeacher(req)) {
+        const payments = await storage.getPaymentsByTeacher(getUserId(req), getTenantId(req));
+        return res.json(payments);
+      }
+      
       const payments = await storage.getPayments(getTenantId(req), studentId);
       res.json(payments);
     } catch (error) {
@@ -740,6 +782,23 @@ export async function registerRoutes(
       res.status(201).json(payment);
     } catch (error) {
       res.status(400).json({ error: "Invalid payment data" });
+    }
+  });
+
+  // ===== TEACHER SALARY =====
+  app.get("/api/teacher/salary", async (req, res) => {
+    try {
+      if (!isTeacher(req)) {
+        return res.status(403).json({ error: "Faqat o'qituvchilar uchun" });
+      }
+      
+      const month = req.query.month ? parseInt(req.query.month as string) : new Date().getMonth() + 1;
+      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+      
+      const salary = await storage.getTeacherSalary(getUserId(req), getTenantId(req), month, year);
+      res.json(salary);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch teacher salary" });
     }
   });
 
@@ -903,11 +962,17 @@ export async function registerRoutes(
     }
   });
 
-  // Get teacher's groups
-  app.get("/api/teacher/:teacherId/groups", async (req, res) => {
+  // Get teacher's groups (xavfsiz - faqat o'z guruhlarini)
+  app.get("/api/teacher/:teacherId/groups", requireTenantAuth, async (req, res) => {
     try {
-      const teacherId = req.params.teacherId;
-      const groups = await storage.getGroupsByTeacher(teacherId);
+      const tenantId = getTenantId(req);
+      // O'qituvchi faqat o'z guruhlarini ko'ra oladi
+      const teacherId = isTeacher(req) ? getUserId(req) : req.params.teacherId;
+      const teacher = await storage.getTeacher(teacherId, tenantId);
+      if (!teacher) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
+      const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
       res.json(groups);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch groups" });
@@ -915,13 +980,17 @@ export async function registerRoutes(
   });
 
   // Get students in a group
-  app.get("/api/groups/:groupId/students", async (req, res) => {
+  app.get("/api/groups/:groupId/students", requireTenantAuth, async (req, res) => {
     try {
       const groupId = parseInt(req.params.groupId);
       const tenantId = getTenantId(req);
       const group = await storage.getGroup(groupId, tenantId);
       if (!group) {
         return res.status(404).json({ error: "Group not found" });
+      }
+      // O'qituvchi faqat o'z guruhidagi o'quvchilarni ko'ra oladi
+      if (isTeacher(req) && group.teacherId !== getUserId(req)) {
+        return res.status(403).json({ error: "Access denied" });
       }
       const students = await storage.getStudentsByGroup(groupId);
       res.json(students);
@@ -930,28 +999,42 @@ export async function registerRoutes(
     }
   });
 
-  // Get all students for a teacher (across all their groups)
-  app.get("/api/teacher/:teacherId/students", async (req, res) => {
+  // Get all students for a teacher (across all their groups) - xavfsiz
+  app.get("/api/teacher/:teacherId/students", requireTenantAuth, async (req, res) => {
     try {
-      const teacherId = req.params.teacherId;
       const tenantId = getTenantId(req);
+      // O'qituvchi faqat o'z o'quvchilarini ko'ra oladi
+      const teacherId = isTeacher(req) ? getUserId(req) : req.params.teacherId;
       const teacher = await storage.getTeacher(teacherId, tenantId);
       if (!teacher) {
         return res.status(404).json({ error: "Teacher not found" });
       }
-      const students = await storage.getStudentsByTeacher(teacherId);
+      const students = await storage.getStudentsByTeacher(teacherId, tenantId);
       res.json(students);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch students" });
     }
   });
 
-  // Teacher creates a student
-  app.post("/api/teacher/students", async (req, res) => {
+  // Teacher creates a student - xavfsiz
+  app.post("/api/teacher/students", requireTenantAuth, async (req, res) => {
     try {
+      if (!isTeacher(req)) {
+        return res.status(403).json({ error: "Faqat o'qituvchilar uchun" });
+      }
+      const tenantId = getTenantId(req);
       const { firstName, lastName, phone, parentPhone, groupId } = req.body;
+      
+      // Guruh o'qituvchiga tegishliligini tekshirish
+      if (groupId) {
+        const group = await storage.getGroup(parseInt(groupId), tenantId);
+        if (!group || group.teacherId !== getUserId(req)) {
+          return res.status(403).json({ error: "Bu guruhga o'quvchi qo'sha olmaysiz" });
+        }
+      }
+      
       const student = await storage.createStudent({
-        tenantId: getTenantId(req),
+        tenantId,
         firstName,
         lastName,
         phone,
@@ -973,16 +1056,23 @@ export async function registerRoutes(
     }
   });
 
-  // Teacher updates a student (no delete allowed)
-  app.patch("/api/teacher/students/:id", async (req, res) => {
+  // Teacher updates a student (no delete allowed) - xavfsiz
+  app.patch("/api/teacher/students/:id", requireTenantAuth, async (req, res) => {
     try {
+      if (!isTeacher(req)) {
+        return res.status(403).json({ error: "Faqat o'qituvchilar uchun" });
+      }
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
       const { firstName, lastName, phone, parentPhone } = req.body;
-      const existingStudent = await storage.getStudent(id, tenantId);
-      if (!existingStudent) {
-        return res.status(404).json({ error: "Student not found" });
+      
+      // O'quvchi o'qituvchiga tegishliligini tekshirish
+      const teacherStudents = await storage.getStudentsByTeacher(getUserId(req), tenantId);
+      const isOwnStudent = teacherStudents.some(s => s.id === id);
+      if (!isOwnStudent) {
+        return res.status(403).json({ error: "Bu o'quvchini tahrirlay olmaysiz" });
       }
+      
       const student = await storage.updateStudent(id, tenantId, { firstName, lastName, phone, parentPhone });
       res.json(student);
     } catch (error) {

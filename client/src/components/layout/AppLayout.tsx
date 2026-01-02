@@ -38,7 +38,8 @@ const allNavItems = [
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "manager", "teacher"] },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin", "manager"] },
   { icon: ClipboardCheck, label: "Davomat", href: "/attendance", roles: ["markaz_admin", "manager", "teacher"] },
-  { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin", "manager", "teacher"] },
+  { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin", "manager"] },
+  { icon: FileText, label: "Oylik", href: "/teacher-salary", roles: ["teacher"] },
   { icon: Settings, label: translations.nav.settings, href: "/settings", roles: ["markaz_admin"] },
 ];
 

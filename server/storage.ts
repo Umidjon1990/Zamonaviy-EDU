@@ -100,9 +100,12 @@ export interface IStorage {
   // Groups
   getGroups(tenantId: number): Promise<Group[]>;
   getGroup(id: number, tenantId?: number): Promise<Group | undefined>;
-  getGroupsByTeacher(teacherId: string): Promise<Group[]>;
+  getGroupsByTeacher(teacherId: string, tenantId: number): Promise<Group[]>;
   getStudentsByGroup(groupId: number): Promise<Student[]>;
-  getStudentsByTeacher(teacherId: string): Promise<Student[]>;
+  getStudentsByTeacher(teacherId: string, tenantId: number): Promise<Student[]>;
+  getPaymentsByTeacher(teacherId: string, tenantId: number): Promise<Payment[]>;
+  getAttendanceByTeacher(teacherId: string, tenantId: number, groupId?: number, month?: number, year?: number): Promise<Attendance[]>;
+  getTeacherSalary(teacherId: string, tenantId: number, month: number, year: number): Promise<{ totalPayments: number; salaryPercent: number; salary: number }>;
   createGroup(group: InsertGroup): Promise<Group>;
   updateGroup(id: number, tenantId: number, group: Partial<InsertGroup>): Promise<Group | undefined>;
   deleteGroup(id: number, tenantId: number): Promise<boolean>;
@@ -362,8 +365,8 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async getGroupsByTeacher(teacherId: string): Promise<Group[]> {
-    return await db.select().from(groups).where(eq(groups.teacherId, teacherId)).orderBy(desc(groups.createdAt));
+  async getGroupsByTeacher(teacherId: string, tenantId: number): Promise<Group[]> {
+    return await db.select().from(groups).where(and(eq(groups.teacherId, teacherId), eq(groups.tenantId, tenantId))).orderBy(desc(groups.createdAt));
   }
 
   async getStudentsByGroup(groupId: number): Promise<Student[]> {
@@ -375,8 +378,8 @@ export class DatabaseStorage implements IStorage {
     return result.map(r => r.student);
   }
 
-  async getStudentsByTeacher(teacherId: string): Promise<Student[]> {
-    const teacherGroups = await this.getGroupsByTeacher(teacherId);
+  async getStudentsByTeacher(teacherId: string, tenantId: number): Promise<Student[]> {
+    const teacherGroups = await this.getGroupsByTeacher(teacherId, tenantId);
     const groupIds = teacherGroups.map(g => g.id);
     if (groupIds.length === 0) return [];
     
@@ -384,8 +387,66 @@ export class DatabaseStorage implements IStorage {
       .selectDistinct({ student: students })
       .from(studentGroups)
       .innerJoin(students, eq(studentGroups.studentId, students.id))
-      .where(inArray(studentGroups.groupId, groupIds));
+      .where(and(inArray(studentGroups.groupId, groupIds), eq(students.tenantId, tenantId)));
     return result.map(r => r.student);
+  }
+
+  async getPaymentsByTeacher(teacherId: string, tenantId: number): Promise<Payment[]> {
+    const teacherStudents = await this.getStudentsByTeacher(teacherId, tenantId);
+    const studentIds = teacherStudents.map(s => s.id);
+    if (studentIds.length === 0) return [];
+    
+    return await db.select().from(payments)
+      .where(and(inArray(payments.studentId, studentIds), eq(payments.tenantId, tenantId)))
+      .orderBy(desc(payments.createdAt));
+  }
+
+  async getAttendanceByTeacher(teacherId: string, tenantId: number, groupId?: number, month?: number, year?: number): Promise<Attendance[]> {
+    const teacherGroups = await this.getGroupsByTeacher(teacherId, tenantId);
+    const groupIds = groupId ? [groupId] : teacherGroups.map(g => g.id);
+    if (groupIds.length === 0) return [];
+    
+    const conditions = [inArray(attendance.groupId, groupIds), eq(attendance.tenantId, tenantId)];
+    
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(sql`${attendance.date} >= ${startDate}`);
+      conditions.push(sql`${attendance.date} <= ${endDate}`);
+    }
+    
+    return await db.select().from(attendance).where(and(...conditions)).orderBy(desc(attendance.date));
+  }
+
+  async getTeacherSalary(teacherId: string, tenantId: number, month: number, year: number): Promise<{ totalPayments: number; salaryPercent: number; salary: number }> {
+    const teacher = await this.getTeacher(teacherId, tenantId);
+    const salaryPercent = teacher?.salaryPercent || 0;
+    
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    endDate.setHours(23, 59, 59, 999);
+    
+    const teacherStudents = await this.getStudentsByTeacher(teacherId, tenantId);
+    const studentIds = teacherStudents.map(s => s.id);
+    if (studentIds.length === 0) {
+      return { totalPayments: 0, salaryPercent, salary: 0 };
+    }
+    
+    const result = await db.select({ total: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
+      .from(payments)
+      .where(and(
+        inArray(payments.studentId, studentIds),
+        eq(payments.tenantId, tenantId),
+        eq(payments.status, 'completed'),
+        sql`${payments.createdAt} >= ${startDate}`,
+        sql`${payments.createdAt} <= ${endDate}`
+      ));
+    
+    const totalPayments = Number(result[0]?.total || 0);
+    const salary = Math.round(totalPayments * salaryPercent / 100);
+    
+    return { totalPayments, salaryPercent, salary };
   }
 
   async createGroup(group: InsertGroup): Promise<Group> {
