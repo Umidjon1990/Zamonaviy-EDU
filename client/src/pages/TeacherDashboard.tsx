@@ -331,7 +331,7 @@ export default function TeacherDashboard() {
         </div>
 
         {/* Modern Tabs */}
-        <Tabs defaultValue="groups" className="space-y-6">
+        <Tabs defaultValue="attendance" className="space-y-6">
           <TabsList className="glass-card p-1 h-auto">
             <TabsTrigger value="groups" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2.5 transition-all">
               <Users className="w-4 h-4" /> Guruhlarim
