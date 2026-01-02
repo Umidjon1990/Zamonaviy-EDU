@@ -422,16 +422,10 @@ export async function registerRoutes(
       let parsingStudents = false;
       let pendingStudentName = "";
       
-      // Debug: log parsed lines
-      console.log("Template lines:", lines);
-      
       for (const line of lines) {
         const lowerLine = line.toLowerCase();
-        
-        // Debug: check if this looks like a teacher line
-        if (line.toLowerCase().includes("qituvchi")) {
-          console.log("Found potential teacher line:", line);
-        }
+        // Barcha apostrof turlarini standartlash
+        const normalizedLine = lowerLine.replace(/[''`'ʻʼ'ʹʽ‛´]/g, "'");
         
         if (lowerLine.startsWith("guruh nomi:") || lowerLine.startsWith("guruh:")) {
           groupName = line.split(":").slice(1).join(":").trim();
@@ -446,9 +440,9 @@ export async function registerRoutes(
           time = line.split(":").slice(1).join(":").trim();
         } else if (lowerLine.startsWith("xona:") || lowerLine.startsWith("xonasi:")) {
           room = line.split(":").slice(1).join(":").trim();
-        } else if (/^o[''`'ʻʼ]?qituvchi:/i.test(line) || lowerLine.startsWith("ustoz:") || lowerLine.startsWith("teacher:")) {
+        } else if (normalizedLine.startsWith("o'qituvchi") || lowerLine.startsWith("ustoz:") || lowerLine.startsWith("teacher:") || lowerLine.startsWith("oqituvchi")) {
           teacherName = line.split(":").slice(1).join(":").trim();
-        } else if (/o[''`'ʻʼ]?quvchilar/i.test(line) || lowerLine.startsWith("talabalar:") || lowerLine.startsWith("students:")) {
+        } else if (normalizedLine.includes("o'quvchilar") || lowerLine.startsWith("talabalar:") || lowerLine.startsWith("students:") || lowerLine.includes("oquvchilar")) {
           parsingStudents = true;
         } else if (parsingStudents) {
           // Check if this line looks like a phone number
