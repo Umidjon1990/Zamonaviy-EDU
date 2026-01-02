@@ -507,15 +507,51 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Guruh nomi topilmadi" });
       }
       
-      // Find teacher by name
+      // Find teacher by name - aniq moslik
       const teachers = await storage.getTeachers(tenantId);
-      const teacher = teachers.find(t => {
-        const fullName = `${t.firstName} ${t.lastName}`.toLowerCase();
-        const searchName = teacherName.toLowerCase();
-        return fullName.includes(searchName) || 
-               t.firstName.toLowerCase().includes(searchName) ||
-               t.lastName.toLowerCase().includes(searchName);
+      const searchName = teacherName.toLowerCase().trim();
+      
+      // Agar o'qituvchi nomi bo'sh bo'lsa, xato qaytarish
+      if (!searchName) {
+        return res.status(400).json({ 
+          error: "O'qituvchi nomi kiritilmagan. Iltimos shablonga O'qituvchi: qatorini qo'shing",
+          availableTeachers: teachers.map(t => `${t.firstName} ${t.lastName}`)
+        });
+      }
+      
+      // 1. Avval to'liq ism-familiya bo'yicha aniq qidirish
+      let teacher = teachers.find(t => {
+        const fullName = `${t.firstName} ${t.lastName}`.toLowerCase().trim();
+        const fullNameReversed = `${t.lastName} ${t.firstName}`.toLowerCase().trim();
+        return fullName === searchName || fullNameReversed === searchName;
       });
+      
+      // 2. Agar topilmasa, faqat ism bo'yicha aniq qidirish
+      if (!teacher) {
+        teacher = teachers.find(t => 
+          t.firstName.toLowerCase().trim() === searchName ||
+          t.lastName.toLowerCase().trim() === searchName
+        );
+      }
+      
+      // 3. Agar hali ham topilmasa, qisman moslik (lekin faqat bitta natija bo'lsa)
+      if (!teacher) {
+        const partialMatches = teachers.filter(t => {
+          const fullName = `${t.firstName} ${t.lastName}`.toLowerCase();
+          return fullName.includes(searchName) || 
+                 t.firstName.toLowerCase().includes(searchName) ||
+                 t.lastName.toLowerCase().includes(searchName);
+        });
+        
+        if (partialMatches.length === 1) {
+          teacher = partialMatches[0];
+        } else if (partialMatches.length > 1) {
+          return res.status(400).json({ 
+            error: `"${teacherName}" - bir nechta o'qituvchi topildi. Iltimos to'liq ism-familiyani kiriting`,
+            matchingTeachers: partialMatches.map(t => `${t.firstName} ${t.lastName}`)
+          });
+        }
+      }
       
       if (!teacher) {
         return res.status(400).json({ 
