@@ -933,35 +933,6 @@ export async function registerRoutes(
     }
   });
 
-  // Teacher login
-  app.post("/api/auth/teacher-login", async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      const user = await storage.getUserByEmail(email);
-      
-      if (!user || user.role !== "teacher") {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-      
-      const isValidPassword = await bcrypt.compare(password, user.password);
-      if (!isValidPassword) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-      
-      res.json({
-        token: `teacher_${user.id}_${Date.now()}`,
-        teacher: {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-        },
-      });
-    } catch (error) {
-      res.status(500).json({ error: "Login failed" });
-    }
-  });
-
   // Get teacher's groups (xavfsiz - faqat o'z guruhlarini)
   app.get("/api/teacher/:teacherId/groups", requireTenantAuth, async (req, res) => {
     try {
