@@ -81,17 +81,17 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
             .logo { width: 70px; height: 70px; margin: 0 auto 10px; }
             .logo img { width: 100%; height: 100%; object-fit: contain; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
             .title { margin: 0; font-size: 16px; color: #1a365d; font-weight: bold; }
-            .subtitle { margin: 5px 0; color: #666; font-size: 11px; }
+            .subtitle { margin: 5px 0; color: #333; font-size: 11px; }
             .divider { border-top: 1px dashed #1a365d; margin: 12px 0; }
             .row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 12px; }
-            .row .label { color: #666; }
+            .row .label { color: #333; font-weight: 600; }
             .row .value { font-weight: 500; text-align: right; max-width: 60%; }
             .total { font-size: 16px; font-weight: bold; margin-top: 10px; color: #1a365d; }
             .qr-section { text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #1a365d; }
-            .qr-section p { font-size: 10px; color: #666; margin: 5px 0; }
-            .qr-section a { color: #1a365d; font-size: 11px; }
+            .qr-section p { font-size: 10px; color: #333; margin: 5px 0; }
+            .qr-section a { color: #1a365d; font-size: 11px; font-weight: 600; }
             .qr-section img { image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; image-rendering: pixelated; }
-            .footer { text-align: center; margin-top: 10px; font-size: 10px; color: #999; }
+            .footer { text-align: center; margin-top: 10px; font-size: 10px; color: #333; }
             .loading { text-align: center; padding: 20px; }
             @media print { body { padding: 0; } .loading { display: none; } }
           </style>

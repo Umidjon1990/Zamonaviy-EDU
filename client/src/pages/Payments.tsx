@@ -76,13 +76,7 @@ export default function Payments() {
     return studentsList.find((s: any) => s.id === formData.studentId);
   }, [studentsList, formData.studentId]);
 
-  // Get student's group and teacher
-  const getStudentInfo = (student: any) => {
-    if (!student) return { group: null, teacher: null };
-    const group = groupsList.find((g: any) => g.id === student.groupId);
-    const teacher = group ? teachersList.find((t: any) => t.id === group.teacherId) : null;
-    return { group, teacher };
-  };
+  // Note: Student group info is fetched via API when needed
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,9 +104,25 @@ export default function Payments() {
       }
       
       const student = studentsList.find((s: any) => s.id === formData.studentId);
-      const studentGroup = groupsList.find((g: any) => g.id === student?.groupId);
-      const teacher = studentGroup?.teacherId ? teachersList.find((t: any) => t.id === studentGroup.teacherId) : null;
-      const subject = studentGroup?.subjectId ? subjectsList.find((s: any) => s.id === studentGroup.subjectId) : null;
+      
+      // Fetch student's groups from API
+      let studentGroup = null;
+      let teacher = null;
+      let subject = null;
+      try {
+        const groupsResponse = await fetch(`/api/students/${formData.studentId}/groups`);
+        if (groupsResponse.ok) {
+          const studentGroupsData = await groupsResponse.json();
+          if (studentGroupsData.length > 0) {
+            const firstGroupId = studentGroupsData[0].groupId;
+            studentGroup = groupsList.find((g: any) => g.id === firstGroupId);
+            teacher = studentGroup?.teacherId ? teachersList.find((t: any) => t.id === studentGroup.teacherId) : null;
+            subject = studentGroup?.subjectId ? subjectsList.find((s: any) => s.id === studentGroup.subjectId) : null;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch student groups:", err);
+      }
       
       setReceiptData({
         payment: newPayment,
