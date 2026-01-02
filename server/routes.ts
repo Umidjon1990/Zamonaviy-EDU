@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
-import { storage } from "./storage";
+import { storage, DuplicatePhoneError } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
 import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt } from "./telegram-bot";
 import { verifyObjectPath } from "./replit_integrations/object_storage/routes";
@@ -340,6 +340,9 @@ export async function registerRoutes(
       const student = await storage.createStudent(data);
       res.status(201).json(student);
     } catch (error) {
+      if (error instanceof DuplicatePhoneError) {
+        return res.status(409).json({ error: error.message });
+      }
       res.status(400).json({ error: "Invalid student data" });
     }
   });
@@ -355,6 +358,9 @@ export async function registerRoutes(
       const student = await storage.updateStudent(id, tenantId, req.body);
       res.json(student);
     } catch (error) {
+      if (error instanceof DuplicatePhoneError) {
+        return res.status(409).json({ error: error.message });
+      }
       res.status(400).json({ error: "Failed to update student" });
     }
   });
@@ -1151,6 +1157,9 @@ export async function registerRoutes(
       });
       res.status(201).json(teacher);
     } catch (error) {
+      if (error instanceof DuplicatePhoneError) {
+        return res.status(409).json({ error: error.message });
+      }
       res.status(400).json({ error: "Failed to create teacher" });
     }
   });
@@ -1180,6 +1189,9 @@ export async function registerRoutes(
       const updated = await storage.updateTeacher(teacherId, tenantId, updateData);
       res.json(updated);
     } catch (error) {
+      if (error instanceof DuplicatePhoneError) {
+        return res.status(409).json({ error: error.message });
+      }
       res.status(400).json({ error: "Failed to update teacher" });
     }
   });

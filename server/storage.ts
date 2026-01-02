@@ -47,6 +47,20 @@ const pool = new Pool({
 
 const db = drizzle(pool);
 
+// Telefon raqamini normalizatsiya qilish (faqat raqamlar)
+export function normalizePhone(phone: string | null | undefined): string {
+  if (!phone) return "";
+  return phone.replace(/\D/g, "");
+}
+
+// Duplicate phone error class
+export class DuplicatePhoneError extends Error {
+  constructor(public entityType: "student" | "teacher", public phone: string) {
+    super(`${entityType === "student" ? "O'quvchi" : "O'qituvchi"} telefon raqami (${phone}) allaqachon mavjud`);
+    this.name = "DuplicatePhoneError";
+  }
+}
+
 export interface IStorage {
   // Subscription Plans
   getSubscriptionPlans(): Promise<SubscriptionPlan[]>;
@@ -261,6 +275,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
+    // O'qituvchi uchun telefon raqamini tekshirish
+    if (user.role === 'teacher' && user.phone && user.tenantId) {
+      const normalizedPhone = normalizePhone(user.phone);
+      if (normalizedPhone) {
+        const existing = await db.select().from(users).where(
+          and(
+            eq(users.tenantId, user.tenantId),
+            eq(users.role, 'teacher'),
+            sql`REGEXP_REPLACE(${users.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`
+          )
+        ).limit(1);
+        if (existing.length > 0) {
+          throw new DuplicatePhoneError("teacher", user.phone);
+        }
+      }
+    }
     const result = await db.insert(users).values(user).returning();
     return result[0];
   }
@@ -282,6 +312,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTeacher(id: string, tenantId: number, teacher: Partial<InsertUser>): Promise<User | undefined> {
+    // Telefon raqamini tekshirish (o'zidan boshqa)
+    if (teacher.phone) {
+      const normalizedPhone = normalizePhone(teacher.phone);
+      if (normalizedPhone) {
+        const existing = await db.select().from(users).where(
+          and(
+            eq(users.tenantId, tenantId),
+            eq(users.role, 'teacher'),
+            sql`${users.id} != ${id}`,
+            sql`REGEXP_REPLACE(${users.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`
+          )
+        ).limit(1);
+        if (existing.length > 0) {
+          throw new DuplicatePhoneError("teacher", teacher.phone);
+        }
+      }
+    }
     const result = await db.update(users).set(teacher).where(and(eq(users.id, id), eq(users.tenantId, tenantId), eq(users.role, 'teacher'))).returning();
     return result[0];
   }
@@ -328,11 +375,42 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {
+    // Telefon raqamini tekshirish
+    if (student.phone) {
+      const normalizedPhone = normalizePhone(student.phone);
+      if (normalizedPhone) {
+        const existing = await db.select().from(students).where(
+          and(
+            eq(students.tenantId, student.tenantId),
+            sql`REGEXP_REPLACE(${students.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`
+          )
+        ).limit(1);
+        if (existing.length > 0) {
+          throw new DuplicatePhoneError("student", student.phone);
+        }
+      }
+    }
     const result = await db.insert(students).values(student).returning();
     return result[0];
   }
 
   async updateStudent(id: number, tenantId: number, student: Partial<InsertStudent>): Promise<Student | undefined> {
+    // Telefon raqamini tekshirish (o'zidan boshqa)
+    if (student.phone) {
+      const normalizedPhone = normalizePhone(student.phone);
+      if (normalizedPhone) {
+        const existing = await db.select().from(students).where(
+          and(
+            eq(students.tenantId, tenantId),
+            sql`${students.id} != ${id}`,
+            sql`REGEXP_REPLACE(${students.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`
+          )
+        ).limit(1);
+        if (existing.length > 0) {
+          throw new DuplicatePhoneError("student", student.phone);
+        }
+      }
+    }
     const result = await db.update(students).set({ ...student, updatedAt: new Date() }).where(and(eq(students.id, id), eq(students.tenantId, tenantId))).returning();
     return result[0];
   }
