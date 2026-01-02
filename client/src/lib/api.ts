@@ -13,7 +13,23 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`API Error: ${response.statusText}`);
+    // API dan aniq xato xabarini olish
+    let errorMessage = response.statusText;
+    try {
+      const errorData = await response.json();
+      if (errorData.error) {
+        errorMessage = errorData.error;
+        if (errorData.availableTeachers) {
+          errorMessage += `. Mavjud o'qituvchilar: ${errorData.availableTeachers.join(", ")}`;
+        }
+        if (errorData.matchingTeachers) {
+          errorMessage += `. Mos keluvchi o'qituvchilar: ${errorData.matchingTeachers.join(", ")}`;
+        }
+      }
+    } catch {
+      // JSON parse xatosi bo'lsa, default xabarni ishlatish
+    }
+    throw new Error(errorMessage);
   }
 
   if (response.status === 204) {
