@@ -23,6 +23,7 @@ export default function Attendance() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [gradeTopic, setGradeTopic] = useState("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [pendingGrades, setPendingGrades] = useState<Record<number, number | null>>({});
 
   const { data: groupsData } = useQuery({
     queryKey: ["groups"],
@@ -440,41 +441,85 @@ export default function Attendance() {
                       <div>
                         <Label className="text-xs font-medium text-muted-foreground mb-2 block">
                           Baho (1-5)
-                          {gr && <span className="ml-2 text-primary font-semibold">• Joriy: {gr.grade}</span>}
+                          {gr && <span className="ml-2 text-primary font-semibold">• Saqlangan: {gr.grade}</span>}
+                          {pendingGrades[student.id] !== undefined && pendingGrades[student.id] !== null && (
+                            <span className="ml-2 text-amber-600 font-semibold animate-pulse">• Tanlangan: {pendingGrades[student.id]}</span>
+                          )}
                         </Label>
-                        <div className="grid grid-cols-5 gap-2">
-                          {[1, 2, 3, 4, 5].map((grade) => {
-                            const isSelected = gr?.grade === grade;
-                            const gradeColors = {
-                              1: isSelected 
-                                ? 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/30 border-0' 
-                                : 'hover:bg-red-50 hover:text-red-600 hover:border-red-300 text-red-500',
-                              2: isSelected 
-                                ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 border-0' 
-                                : 'hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 text-orange-500',
-                              3: isSelected 
-                                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/30 border-0' 
-                                : 'hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 text-amber-500',
-                              4: isSelected 
-                                ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30 border-0' 
-                                : 'hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 text-blue-500',
-                              5: isSelected 
-                                ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/30 border-0' 
-                                : 'hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 text-emerald-500',
-                            };
-                            return (
-                              <Button
-                                key={grade}
-                                variant={isSelected ? 'default' : 'outline'}
-                                size="sm"
-                                className={`h-11 text-lg font-bold transition-all ${gradeColors[grade as keyof typeof gradeColors]}`}
-                                onClick={() => setGradeMutation.mutate({ studentId: student.id, grade })}
-                                data-testid={`button-grade-${grade}-${student.id}`}
-                              >
-                                {grade}
-                              </Button>
-                            );
-                          })}
+                        <div className="flex gap-2 items-center">
+                          <div className="grid grid-cols-5 gap-2 flex-1">
+                            {[1, 2, 3, 4, 5].map((grade) => {
+                              const pendingGrade = pendingGrades[student.id];
+                              const isPending = pendingGrade === grade;
+                              const isSaved = gr?.grade === grade && pendingGrade === undefined;
+                              const isSelected = isPending || isSaved;
+                              const gradeColors = {
+                                1: isSelected 
+                                  ? isPending 
+                                    ? 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/30 border-0 ring-2 ring-red-300 ring-offset-2' 
+                                    : 'bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-500/30 border-0'
+                                  : 'hover:bg-red-50 hover:text-red-600 hover:border-red-300 text-red-500',
+                                2: isSelected 
+                                  ? isPending
+                                    ? 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 border-0 ring-2 ring-orange-300 ring-offset-2'
+                                    : 'bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-lg shadow-orange-500/30 border-0'
+                                  : 'hover:bg-orange-50 hover:text-orange-600 hover:border-orange-300 text-orange-500',
+                                3: isSelected 
+                                  ? isPending
+                                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/30 border-0 ring-2 ring-amber-300 ring-offset-2'
+                                    : 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg shadow-amber-500/30 border-0'
+                                  : 'hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 text-amber-500',
+                                4: isSelected 
+                                  ? isPending
+                                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30 border-0 ring-2 ring-blue-300 ring-offset-2'
+                                    : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30 border-0'
+                                  : 'hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 text-blue-500',
+                                5: isSelected 
+                                  ? isPending
+                                    ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/30 border-0 ring-2 ring-emerald-300 ring-offset-2'
+                                    : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg shadow-emerald-500/30 border-0'
+                                  : 'hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-300 text-emerald-500',
+                              };
+                              return (
+                                <Button
+                                  key={grade}
+                                  variant={isSelected ? 'default' : 'outline'}
+                                  size="sm"
+                                  className={`h-11 text-lg font-bold transition-all ${gradeColors[grade as keyof typeof gradeColors]}`}
+                                  onClick={() => {
+                                    setPendingGrades(prev => ({
+                                      ...prev,
+                                      [student.id]: prev[student.id] === grade ? null : grade
+                                    }));
+                                  }}
+                                  data-testid={`button-grade-${grade}-${student.id}`}
+                                >
+                                  {grade}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          {pendingGrades[student.id] !== undefined && pendingGrades[student.id] !== null && (
+                            <Button
+                              size="sm"
+                              className="h-11 px-4 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white shadow-lg"
+                              onClick={() => {
+                                const grade = pendingGrades[student.id];
+                                if (grade) {
+                                  setGradeMutation.mutate({ studentId: student.id, grade });
+                                  setPendingGrades(prev => {
+                                    const newState = { ...prev };
+                                    delete newState[student.id];
+                                    return newState;
+                                  });
+                                }
+                              }}
+                              data-testid={`button-save-grade-${student.id}`}
+                            >
+                              <Check className="w-4 h-4 mr-1" />
+                              Saqlash
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardContent>
