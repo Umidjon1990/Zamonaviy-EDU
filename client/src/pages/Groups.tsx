@@ -25,6 +25,7 @@ const WEEKDAYS = [
 ];
 
 const TEMPLATE_EXAMPLE = `Guruh nomi: Ingliz tili A1
+Fan nomi: Ingliz tili
 Kunlari: seshanba/shanba
 Vaqti: 10:00
 Xona: 3-xona

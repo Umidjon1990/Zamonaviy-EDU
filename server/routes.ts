@@ -456,6 +456,7 @@ export async function registerRoutes(
       const lines = template.split("\n").map(l => l.trim()).filter(l => l);
       
       let groupName = "";
+      let subjectName = "";
       let days: string[] = [];
       let time = "";
       let room = "";
@@ -483,6 +484,8 @@ export async function registerRoutes(
         
         if (lowerLine.startsWith("guruh nomi:") || lowerLine.startsWith("guruh:")) {
           groupName = line.split(":").slice(1).join(":").trim();
+        } else if (lowerLine.startsWith("fan nomi:") || lowerLine.startsWith("fan:") || lowerLine.startsWith("subject:")) {
+          subjectName = line.split(":").slice(1).join(":").trim();
         } else if (lowerLine.startsWith("kunlari:") || lowerLine.startsWith("kunlar:")) {
           const daysStr = line.split(":").slice(1).join(":").trim().toLowerCase();
           // Split by / or , or space
@@ -616,6 +619,22 @@ export async function registerRoutes(
         });
       }
       
+      // Find subject by name if provided
+      let subjectId = 0;
+      if (subjectName) {
+        const subjects = await storage.getSubjects(tenantId);
+        const searchSubject = subjectName.toLowerCase().trim();
+        
+        const subject = subjects.find(s => 
+          s.name.toLowerCase().trim() === searchSubject ||
+          s.name.toLowerCase().includes(searchSubject)
+        );
+        
+        if (subject) {
+          subjectId = subject.id;
+        }
+      }
+      
       // Create group
       const group = await storage.createGroup({
         tenantId,
@@ -625,7 +644,7 @@ export async function registerRoutes(
         time: time || "09:00",
         room: room || "",
         maxStudents: 20,
-        subjectId: 0,
+        subjectId: subjectId,
         level: "Beginner",
       });
       

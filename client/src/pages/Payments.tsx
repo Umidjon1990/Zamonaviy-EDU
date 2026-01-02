@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { usePayments, useCreatePayment, useUpdatePayment, useStudents, useGroups, useTeachers } from "@/lib/api";
+import { usePayments, useCreatePayment, useUpdatePayment, useStudents, useGroups, useTeachers, useSubjects } from "@/lib/api";
 import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet, Pencil } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +20,7 @@ export default function Payments() {
   const { data: students } = useStudents();
   const { data: groups } = useGroups();
   const { data: teachers } = useTeachers();
+  const { data: subjects } = useSubjects();
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
   
@@ -27,6 +28,7 @@ export default function Payments() {
   const groupsList = Array.isArray(groups) ? groups : [];
   const paymentsList = Array.isArray(payments) ? payments : [];
   const teachersList = Array.isArray(teachers) ? teachers : [];
+  const subjectsList = Array.isArray(subjects) ? subjects : [];
   const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -36,6 +38,7 @@ export default function Payments() {
     payment: any;
     student: any;
     groupName?: string;
+    subjectName?: string;
     teacherName?: string;
   } | null>(null);
   const [formData, setFormData] = useState({
@@ -108,11 +111,13 @@ export default function Payments() {
       const student = studentsList.find((s: any) => s.id === formData.studentId);
       const studentGroup = groupsList.find((g: any) => g.id === student?.groupId);
       const teacher = studentGroup?.teacherId ? teachersList.find((t: any) => t.id === studentGroup.teacherId) : null;
+      const subject = studentGroup?.subjectId ? subjectsList.find((s: any) => s.id === studentGroup.subjectId) : null;
       
       setReceiptData({
         payment: newPayment,
         student: student,
         groupName: studentGroup?.name,
+        subjectName: subject?.name,
         teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : undefined,
       });
       
@@ -438,6 +443,7 @@ export default function Payments() {
           payment={receiptData.payment}
           student={receiptData.student}
           groupName={receiptData.groupName}
+          subjectName={receiptData.subjectName}
           teacherName={receiptData.teacherName}
           onClose={() => setReceiptData(null)}
         />

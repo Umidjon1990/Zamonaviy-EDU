@@ -23,6 +23,7 @@ interface PaymentReceiptProps {
     phone: string;
   };
   groupName?: string;
+  subjectName?: string;
   teacherName?: string;
   tenantName?: string;
   onClose: () => void;
@@ -58,7 +59,7 @@ function getPaymentTypeLabel(type: string): string {
 
 const TELEGRAM_CHANNEL = "https://t.me/Zamonaviytalimuzkanali";
 
-export default function PaymentReceipt({ payment, student, groupName, teacherName, tenantName, onClose }: PaymentReceiptProps) {
+export default function PaymentReceipt({ payment, student, groupName, subjectName, teacherName, tenantName, onClose }: PaymentReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -106,6 +107,7 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
             <div class="divider"></div>
             <div class="row"><span class="label">O'quvchi:</span><span class="value">${student.firstName} ${student.lastName}</span></div>
             ${teacherName ? `<div class="row"><span class="label">O'qituvchi:</span><span class="value">${teacherName}</span></div>` : ''}
+            ${subjectName ? `<div class="row"><span class="label">Fan:</span><span class="value">${subjectName}</span></div>` : ''}
             ${groupName ? `<div class="row"><span class="label">Guruh:</span><span class="value">${groupName}</span></div>` : ''}
             <div class="row"><span class="label">Summa:</span><span class="value">${formatAmount(payment.amount)} so'm</span></div>
             <div class="row"><span class="label">Sana:</span><span class="value">${formatDate(payment.createdAt)}</span></div>
@@ -294,6 +296,12 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">O'qituvchi:</span>
                   <span className="font-medium">{teacherName}</span>
+                </div>
+              )}
+              {subjectName && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Fan:</span>
+                  <span className="font-medium">{subjectName}</span>
                 </div>
               )}
               {groupName && (
