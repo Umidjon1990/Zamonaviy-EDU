@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { usePayments, useCreatePayment, useUpdatePayment, useStudents, useGroups, useTeachers, useSubjects } from "@/lib/api";
-import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet, Pencil } from "lucide-react";
+import { usePayments, useCreatePayment, useUpdatePayment, useDeletePayment, useStudents, useGroups, useTeachers, useSubjects } from "@/lib/api";
+import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet, Pencil, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import PaymentReceipt from "@/components/PaymentReceipt";
@@ -23,6 +23,7 @@ export default function Payments() {
   const { data: subjects } = useSubjects();
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
+  const deletePayment = useDeletePayment();
   
   const studentsList = Array.isArray(students) ? students : [];
   const groupsList = Array.isArray(groups) ? groups : [];
@@ -152,6 +153,19 @@ export default function Payments() {
       setEditPayment(null);
     } catch (error) {
       toast({ title: "Xatolik", description: "To'lovni yangilashda xatolik", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (payment: any) => {
+    if (!confirm(`Bu to'lovni o'chirishni xohlaysizmi?\n\nO'quvchi: ${getStudentName(payment.studentId)}\nSumma: ${payment.amount.toLocaleString()} UZS\n\nDiqqat: O'quvchi balansi qaytariladi!`)) {
+      return;
+    }
+    
+    try {
+      await deletePayment.mutateAsync(payment.id);
+      toast({ title: "Muvaffaqiyat", description: "To'lov o'chirildi" });
+    } catch (error) {
+      toast({ title: "Xatolik", description: "To'lovni o'chirishda xatolik", variant: "destructive" });
     }
   };
 
@@ -391,7 +405,7 @@ export default function Payments() {
                 <TableHead>Sana</TableHead>
                 <TableHead>To'lov turi</TableHead>
                 <TableHead>Holat</TableHead>
-                <TableHead className="w-[60px]"></TableHead>
+                <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -415,14 +429,25 @@ export default function Payments() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => handleEditClick(payment)}
-                        data-testid={`button-edit-payment-${payment.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleEditClick(payment)}
+                          data-testid={`button-edit-payment-${payment.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleDelete(payment)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          data-testid={`button-delete-payment-${payment.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

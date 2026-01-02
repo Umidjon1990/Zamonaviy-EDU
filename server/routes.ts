@@ -933,6 +933,33 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/payments/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      
+      const existingPayment = await storage.getPayment(id, tenantId);
+      if (!existingPayment) {
+        return res.status(404).json({ error: "Payment not found" });
+      }
+      
+      // Revert student balance if payment was completed
+      if (existingPayment.status === 'completed') {
+        const student = await storage.getStudent(existingPayment.studentId, tenantId);
+        if (student) {
+          await storage.updateStudent(existingPayment.studentId, tenantId, {
+            balance: student.balance - existingPayment.amount,
+          });
+        }
+      }
+      
+      await storage.deletePayment(id, tenantId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete payment" });
+    }
+  });
+
   // ===== TEACHER SALARY =====
   app.get("/api/teacher/salary", async (req, res) => {
     try {

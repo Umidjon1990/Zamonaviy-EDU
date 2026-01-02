@@ -227,6 +227,18 @@ export function useUpdatePayment() {
   });
 }
 
+export function useDeletePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiCall(`/payments/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
+}
+
 // ===== ATTENDANCE =====
 export function useAttendance(groupId?: number, date?: string) {
   const params = new URLSearchParams();

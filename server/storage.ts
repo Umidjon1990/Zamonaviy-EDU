@@ -128,6 +128,7 @@ export interface IStorage {
   getPayment(id: number, tenantId?: number): Promise<Payment | undefined>;
   createPayment(payment: InsertPayment): Promise<Payment>;
   updatePayment(id: number, tenantId: number, data: Partial<InsertPayment>): Promise<Payment | undefined>;
+  deletePayment(id: number, tenantId: number): Promise<boolean>;
   
   // Grades
   getGrades(tenantId: number, groupId?: number, studentId?: number, date?: Date, month?: number, year?: number): Promise<Grade[]>;
@@ -559,6 +560,11 @@ export class DatabaseStorage implements IStorage {
   async updatePayment(id: number, tenantId: number, data: Partial<InsertPayment>): Promise<Payment | undefined> {
     const result = await db.update(payments).set(data).where(and(eq(payments.id, id), eq(payments.tenantId, tenantId))).returning();
     return result[0];
+  }
+
+  async deletePayment(id: number, tenantId: number): Promise<boolean> {
+    const result = await db.delete(payments).where(and(eq(payments.id, id), eq(payments.tenantId, tenantId))).returning();
+    return result.length > 0;
   }
 
   // Grades
