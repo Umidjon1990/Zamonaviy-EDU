@@ -1,10 +1,36 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import pg from "pg";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startTelegramBot, startScheduledNotifications } from "./telegram-bot";
+
+// Auto-fix database schema on startup
+async function fixDatabaseSchema() {
+  if (!process.env.DATABASE_URL) return;
+  
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  try {
+    await client.connect();
+    
+    // Make subject_id nullable in groups and users tables
+    await client.query(`
+      ALTER TABLE groups ALTER COLUMN subject_id DROP NOT NULL;
+    `).catch(() => {}); // Ignore if already nullable or column doesn't exist
+    
+    await client.query(`
+      ALTER TABLE users ALTER COLUMN subject_id DROP NOT NULL;
+    `).catch(() => {}); // Ignore if already nullable or column doesn't exist
+    
+    console.log("Database schema check completed");
+  } catch (error) {
+    console.log("Database schema check skipped:", (error as Error).message);
+  } finally {
+    await client.end();
+  }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -104,6 +130,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Fix database schema before starting
+  await fixDatabaseSchema();
+  
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
