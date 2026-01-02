@@ -31,13 +31,13 @@ const preloadPages = () => {
 
 const allNavItems = [
   { icon: LayoutDashboard, label: translations.nav.dashboard, href: "/", roles: ["markaz_admin", "manager"] },
+  { icon: Calendar, label: "Davomat", href: "/attendance", roles: ["teacher"] },
   { icon: Users, label: translations.nav.leads, href: "/leads", roles: ["markaz_admin", "manager"] },
   { icon: GraduationCap, label: translations.nav.students, href: "/students", roles: ["markaz_admin", "manager", "teacher"] },
   { icon: UserCheck, label: "O'qituvchilar", href: "/teachers", roles: ["markaz_admin"] },
   { icon: Users, label: translations.nav.groups, href: "/groups", roles: ["markaz_admin", "manager"] },
   { icon: BookOpen, label: "Fanlar", href: "/subjects", roles: ["markaz_admin"] },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "manager", "teacher"] },
-  { icon: Calendar, label: "Davomat", href: "/attendance", roles: ["teacher"] },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin", "manager"] },
   { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin", "manager"] },
   { icon: FileText, label: "Oylik", href: "/teacher-salary", roles: ["teacher"] },

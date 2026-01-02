@@ -9,7 +9,7 @@ import { lazy, Suspense } from "react";
 const roleRouteAccess: Record<string, string[]> = {
   markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/reports", "/settings"],
   manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/reports"],
-  teacher: ["/students", "/schedule", "/attendance", "/teacher-salary"],
+  teacher: ["/attendance", "/students", "/schedule", "/teacher-salary"],
 };
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
