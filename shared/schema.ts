@@ -159,9 +159,9 @@ export const groups = pgTable("groups", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   name: text("name").notNull(),
-  subjectId: integer("subject_id").notNull(),
+  subjectId: integer("subject_id"),
   teacherId: varchar("teacher_id").notNull(),
-  level: text("level").notNull(), // Beginner, Intermediate, Advanced, A1, A2, B1, B2, C1, C2
+  level: text("level").default("Beginner").notNull(), // Beginner, Intermediate, Advanced, A1, A2, B1, B2, C1, C2
   days: text("days").array().notNull(), // ["Du", "Chor", "Juma"]
   time: text("time").notNull(), // "14:00 - 15:30"
   room: text("room"),
