@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { usePayments, useCreatePayment, useStudents, useGroups } from "@/lib/api";
-import { Plus, Download, MessageSquare } from "lucide-react";
+import { usePayments, useCreatePayment, useStudents, useGroups, useTeachers } from "@/lib/api";
+import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import PaymentReceipt from "@/components/PaymentReceipt";
@@ -19,15 +19,18 @@ export default function Payments() {
   const { data: payments, isLoading } = usePayments();
   const { data: students } = useStudents();
   const { data: groups } = useGroups();
+  const { data: teachers } = useTeachers();
   const createPayment = useCreatePayment();
   
   const studentsList = Array.isArray(students) ? students : [];
   const groupsList = Array.isArray(groups) ? groups : [];
   const paymentsList = Array.isArray(payments) ? payments : [];
+  const teachersList = Array.isArray(teachers) ? teachers : [];
   const { toast } = useToast();
 
   const [isOpen, setIsOpen] = useState(false);
   const [sendSms, setSendSms] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [receiptData, setReceiptData] = useState<{
     payment: any;
     student: any;
@@ -40,6 +43,32 @@ export default function Payments() {
     status: "completed",
     notes: "",
   });
+
+  // Filter students based on search query
+  const filteredStudents = useMemo(() => {
+    if (!searchQuery.trim()) return studentsList;
+    const query = searchQuery.toLowerCase().trim();
+    return studentsList.filter((s: any) => {
+      const fullName = `${s.firstName} ${s.lastName}`.toLowerCase();
+      const phone = (s.phone || '').toLowerCase();
+      const parentPhone = (s.parentPhone || '').toLowerCase();
+      return fullName.includes(query) || phone.includes(query) || parentPhone.includes(query);
+    });
+  }, [studentsList, searchQuery]);
+
+  // Get selected student details
+  const selectedStudent = useMemo(() => {
+    if (!formData.studentId) return null;
+    return studentsList.find((s: any) => s.id === formData.studentId);
+  }, [studentsList, formData.studentId]);
+
+  // Get student's group and teacher
+  const getStudentInfo = (student: any) => {
+    if (!student) return { group: null, teacher: null };
+    const group = groupsList.find((g: any) => g.id === student.groupId);
+    const teacher = group ? teachersList.find((t: any) => t.id === group.teacherId) : null;
+    return { group, teacher };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +105,7 @@ export default function Payments() {
       });
       
       setIsOpen(false);
+      setSearchQuery("");
       setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "" });
     } catch (error) {
       toast({ title: "Xatolik", description: "To'lovni qabul qilishda xatolik", variant: "destructive" });
@@ -121,21 +151,110 @@ export default function Payments() {
                 <DialogTitle>To'lov qabul qilish</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Search Input */}
                 <div className="space-y-2">
-                  <Label htmlFor="studentId">O'quvchi</Label>
-                  <Select value={formData.studentId.toString()} onValueChange={(value) => setFormData({ ...formData, studentId: parseInt(value) })}>
-                    <SelectTrigger data-testid="select-student">
-                      <SelectValue placeholder="O'quvchini tanlang" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {studentsList.map((s: any) => (
-                        <SelectItem key={s.id} value={s.id.toString()}>
-                          {s.firstName} {s.lastName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="search">O'quvchini qidirish</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="search"
+                      placeholder="Ism, familiya yoki telefon..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                      data-testid="input-search-student"
+                    />
+                  </div>
                 </div>
+
+                {/* Student List */}
+                <div className="space-y-2">
+                  <Label>O'quvchini tanlang ({filteredStudents.length} ta)</Label>
+                  <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
+                    {filteredStudents.length > 0 ? (
+                      filteredStudents.slice(0, 20).map((s: any) => {
+                        const { group, teacher } = getStudentInfo(s);
+                        const isSelected = formData.studentId === s.id;
+                        return (
+                          <div
+                            key={s.id}
+                            onClick={() => setFormData({ ...formData, studentId: s.id })}
+                            className={`p-3 cursor-pointer transition-colors ${
+                              isSelected 
+                                ? 'bg-primary/10 border-l-4 border-l-primary' 
+                                : 'hover:bg-muted/50'
+                            }`}
+                            data-testid={`student-option-${s.id}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium">{s.firstName} {s.lastName}</div>
+                              <Badge variant={s.balance > 0 ? "default" : s.balance < 0 ? "destructive" : "secondary"} className="text-xs">
+                                {s.balance?.toLocaleString() || 0} UZS
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Phone className="w-3 h-3" />
+                                {s.phone || '-'}
+                              </span>
+                              {group && (
+                                <span className="flex items-center gap-1">
+                                  <GraduationCap className="w-3 h-3" />
+                                  {group.name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-4 text-center text-muted-foreground text-sm">
+                        O'quvchi topilmadi
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Selected Student Info */}
+                {selectedStudent && (
+                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+                    <div className="flex items-center gap-2 font-semibold text-primary">
+                      <User className="w-4 h-4" />
+                      {selectedStudent.firstName} {selectedStudent.lastName}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-3 h-3 text-muted-foreground" />
+                        <span>{selectedStudent.phone || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-3 h-3 text-muted-foreground" />
+                        <span className={selectedStudent.balance < 0 ? 'text-red-500' : selectedStudent.balance > 0 ? 'text-emerald-500' : ''}>
+                          {(selectedStudent.balance || 0).toLocaleString()} UZS
+                        </span>
+                      </div>
+                      {(() => {
+                        const { group, teacher } = getStudentInfo(selectedStudent);
+                        return (
+                          <>
+                            {group && (
+                              <div className="flex items-center gap-2">
+                                <GraduationCap className="w-3 h-3 text-muted-foreground" />
+                                <span>{group.name}</span>
+                              </div>
+                            )}
+                            {teacher && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-3 h-3 text-muted-foreground" />
+                                <span>{teacher.firstName} {teacher.lastName}</span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="amount">Summa (UZS)</Label>
                   <Input
