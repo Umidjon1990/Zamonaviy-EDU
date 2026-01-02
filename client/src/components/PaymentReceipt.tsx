@@ -66,7 +66,7 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`;
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -77,8 +77,8 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
             body { font-family: Arial, sans-serif; padding: 10px; max-width: 300px; margin: 0 auto; }
             .receipt { border: 2px dashed #1a365d; padding: 15px; border-radius: 8px; }
             .header { text-align: center; margin-bottom: 15px; }
-            .logo { width: 80px; height: 80px; margin: 0 auto 10px; }
-            .logo img { width: 100%; height: 100%; object-fit: contain; }
+            .logo { width: 70px; height: 70px; margin: 0 auto 10px; }
+            .logo img { width: 100%; height: 100%; object-fit: contain; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
             .title { margin: 0; font-size: 16px; color: #1a365d; font-weight: bold; }
             .subtitle { margin: 5px 0; color: #666; font-size: 11px; }
             .divider { border-top: 1px dashed #1a365d; margin: 12px 0; }
@@ -89,6 +89,7 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
             .qr-section { text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #1a365d; }
             .qr-section p { font-size: 10px; color: #666; margin: 5px 0; }
             .qr-section a { color: #1a365d; font-size: 11px; }
+            .qr-section img { image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; image-rendering: pixelated; }
             .footer { text-align: center; margin-top: 10px; font-size: 10px; color: #999; }
             .loading { text-align: center; padding: 20px; }
             @media print { body { padding: 0; } .loading { display: none; } }
@@ -331,9 +332,10 @@ export default function PaymentReceipt({ payment, student, groupName, teacherNam
             <div className="text-center pt-2 border-t border-dashed border-[#1a365d]">
               <p className="text-xs text-muted-foreground mb-2">Telegram kanalimiz:</p>
               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`} 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(TELEGRAM_CHANNEL)}`} 
                 alt="QR Code"
                 className="w-20 h-20 mx-auto"
+                style={{ imageRendering: 'crisp-edges' }}
               />
               <a 
                 href={TELEGRAM_CHANNEL} 
