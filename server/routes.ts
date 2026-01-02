@@ -411,12 +411,18 @@ export async function registerRoutes(
       const tenantId = getTenantId(req);
       const existing = await storage.getGroup(id, tenantId);
       if (!existing) {
-        return res.status(404).json({ error: "Group not found" });
+        return res.status(404).json({ error: "Guruh topilmadi" });
       }
-      const group = await storage.updateGroup(id, tenantId, req.body);
+      // Parse subjectId properly
+      const updateData = {
+        ...req.body,
+        subjectId: req.body.subjectId ? parseInt(req.body.subjectId) : null,
+      };
+      const group = await storage.updateGroup(id, tenantId, updateData);
       res.json(group);
     } catch (error) {
-      res.status(400).json({ error: "Failed to update group" });
+      console.error("Group update error:", error);
+      res.status(400).json({ error: "Guruhni yangilashda xatolik: " + (error as Error).message });
     }
   });
 
@@ -1288,7 +1294,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Telefon raqami yo'q" });
       }
 
-      const subject = await storage.getSubject(group.subjectId);
+      const subject = group.subjectId ? await storage.getSubject(group.subjectId) : null;
       const subjectName = subject?.name || "dars";
       const classTime = time || group.time?.split(" - ")[0] || "00:00";
       
