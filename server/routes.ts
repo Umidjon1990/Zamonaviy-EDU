@@ -191,22 +191,23 @@ export async function registerRoutes(
       const tenantId = getTenantId(req);
       const { logo, receiptTitle, telegramChannel } = req.body;
 
-      // Validate logo path - must be a valid signed object storage path with correct tenant ownership
+      // Validate logo URL - must be a valid HTTPS URL or empty
       let validatedLogo = logo;
-      if (logo) {
-        // Logo path must start with /objects/
-        if (!logo.startsWith("/objects/")) {
-          return res.status(400).json({ error: "Invalid logo path" });
+      if (logo && logo.trim() !== "") {
+        const trimmedLogo = logo.trim();
+        // Only allow https URLs for security
+        if (!trimmedLogo.startsWith("https://") && !trimmedLogo.startsWith("http://")) {
+          return res.status(400).json({ error: "Logo URL must start with https:// or http://" });
         }
-        
-        // Verify HMAC signature and tenant ownership
-        const verification = verifyObjectPath(logo, tenantId);
-        if (!verification.valid) {
-          return res.status(403).json({ error: "Access denied - invalid logo signature or tenant mismatch" });
+        // Basic URL validation
+        try {
+          new URL(trimmedLogo);
+          validatedLogo = trimmedLogo;
+        } catch {
+          return res.status(400).json({ error: "Invalid logo URL" });
         }
-        
-        // Store the verified object path (without signature) for serving
-        validatedLogo = verification.objectPath;
+      } else {
+        validatedLogo = null;
       }
 
       // Normalize and validate telegram channel

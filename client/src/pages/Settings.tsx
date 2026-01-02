@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,14 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { translations } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, AlertCircle, CheckCircle2, Image, Upload, Loader2 } from "lucide-react";
+import { MessageSquare, AlertCircle, CheckCircle2, Image } from "lucide-react";
 
 export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
   
   const [centerInfo, setCenterInfo] = useState({
     name: "Zamonaviy-Edu Learning Center",
@@ -74,54 +72,9 @@ export default function Settings() {
     },
   });
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Xatolik", description: "Faqat rasm fayllari yuklash mumkin", variant: "destructive" });
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Xatolik", description: "Rasm 5MB dan kichik bo'lishi kerak", variant: "destructive" });
-      return;
-    }
-
-    setIsUploadingLogo(true);
-    try {
-      const urlRes = await fetch("/api/uploads/request-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type,
-        }),
-      });
-      
-      if (!urlRes.ok) throw new Error("Failed to get upload URL");
-      const { uploadURL, objectPath } = await urlRes.json();
-
-      await fetch(uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-
-      setBranding(prev => ({ ...prev, logo: objectPath }));
-      await brandingMutation.mutateAsync({ logo: objectPath });
-      toast({ title: "Muvaffaqiyat", description: "Logo muvaffaqiyatli yuklandi" });
-    } catch (error) {
-      toast({ title: "Xatolik", description: "Logo yuklashda xatolik yuz berdi", variant: "destructive" });
-    } finally {
-      setIsUploadingLogo(false);
-      if (logoInputRef.current) logoInputRef.current.value = "";
-    }
-  };
-
   const handleSaveBranding = async () => {
     brandingMutation.mutate({
+      logo: branding.logo || undefined,
       receiptTitle: branding.receiptTitle,
       telegramChannel: branding.telegramChannel,
     });
@@ -326,47 +279,30 @@ export default function Settings() {
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-4">
                 <Label>Markaz logosi</Label>
-                <div className="flex items-center gap-4">
-                  <div className="w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted overflow-hidden">
+                <div className="flex items-start gap-4">
+                  <div className="w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted overflow-hidden shrink-0">
                     {branding.logo ? (
                       <img 
                         src={branding.logo} 
                         alt="Logo" 
                         className="w-full h-full object-contain"
                         data-testid="img-logo-preview"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
                       />
                     ) : (
                       <Image className="h-8 w-8 text-muted-foreground" />
                     )}
                   </div>
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      ref={logoInputRef}
-                      onChange={handleLogoUpload}
-                      className="hidden"
-                      data-testid="input-logo-file"
+                  <div className="space-y-2 flex-1">
+                    <Input
+                      value={branding.logo}
+                      onChange={(e) => setBranding({ ...branding, logo: e.target.value })}
+                      placeholder="https://example.com/logo.png"
+                      data-testid="input-logo-url"
                     />
-                    <Button
-                      variant="outline"
-                      onClick={() => logoInputRef.current?.click()}
-                      disabled={isUploadingLogo}
-                      data-testid="button-upload-logo"
-                    >
-                      {isUploadingLogo ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Yuklanmoqda...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Logo yuklash
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-muted-foreground">PNG, JPG. Max 5MB</p>
+                    <p className="text-xs text-muted-foreground">Logo rasmining to'liq URL manzilini kiriting (https://...)</p>
                   </div>
                 </div>
               </div>
