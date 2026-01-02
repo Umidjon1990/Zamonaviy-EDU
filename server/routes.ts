@@ -436,11 +436,11 @@ export async function registerRoutes(
             .filter(d => d) as string[];
         } else if (lowerLine.startsWith("vaqti:") || lowerLine.startsWith("vaqt:")) {
           time = line.split(":").slice(1).join(":").trim();
-        } else if (lowerLine.startsWith("xona:")) {
+        } else if (lowerLine.startsWith("xona:") || lowerLine.startsWith("xonasi:")) {
           room = line.split(":").slice(1).join(":").trim();
-        } else if (/^o[''`]?qituvchi:/i.test(line) || lowerLine.startsWith("ustoz:")) {
+        } else if (/^o[''`'ʻʼ]?qituvchi:/i.test(line) || lowerLine.startsWith("ustoz:") || lowerLine.startsWith("teacher:")) {
           teacherName = line.split(":").slice(1).join(":").trim();
-        } else if (/o.?quvchilar/i.test(line) || lowerLine.startsWith("talabalar:")) {
+        } else if (/o[''`'ʻʼ]?quvchilar/i.test(line) || lowerLine.startsWith("talabalar:") || lowerLine.startsWith("students:")) {
           parsingStudents = true;
         } else if (parsingStudents) {
           // Check if this line looks like a phone number
