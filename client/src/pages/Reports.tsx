@@ -74,7 +74,7 @@ export default function Reports() {
     );
   }
 
-  const debtors = (students || []).filter((s: any) => s.balance < 0).sort((a: any, b: any) => a.balance - b.balance);
+  const debtors = (students || []).filter((s: any) => s.balance <= 0).sort((a: any, b: any) => a.balance - b.balance);
   const totalDebt = debtors.reduce((sum: number, s: any) => sum + Math.abs(s.balance), 0);
 
   const monthlyPayments = (payments || []).filter((p: any) => {
