@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { translations } from "@/lib/i18n";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PWAInstallButton } from "@/components/PWAInstallButton";
 
 const preloadPages = () => {
   import("@/pages/Dashboard");
@@ -144,16 +145,19 @@ export function AppLayout({ children, userRole, userName = "Foydalanuvchi" }: Ap
             <span className="font-display font-bold text-lg">Zamonaviy-Edu</span>
           </div>
           
-          <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="-mr-2">
-                <Menu className="w-6 h-6" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-[280px] sm:w-[300px] border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-              <SidebarContent />
-            </SheetContent>
-          </Sheet>
+          <div className="flex items-center gap-2">
+            <PWAInstallButton />
+            <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="-mr-2">
+                  <Menu className="w-6 h-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-[280px] sm:w-[300px] border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+                <SidebarContent />
+              </SheetContent>
+            </Sheet>
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full animate-in fade-in-50 duration-500">
