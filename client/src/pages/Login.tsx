@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GraduationCap, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -68,11 +68,9 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <GraduationCap className="h-8 w-8 text-primary" />
-            </div>
+            <img src="/logo.png" alt="Zamonaviy Ta'lim" className="h-20 w-20 object-contain" />
           </div>
-          <CardTitle className="text-2xl">Zamonaviy-Edu</CardTitle>
+          <CardTitle className="text-2xl">Zamonaviy Ta'lim</CardTitle>
           <CardDescription>
             O'quv markaz boshqaruv tizimiga kirish
           </CardDescription>
