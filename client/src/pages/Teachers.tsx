@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useSubjects } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Trash2, Percent, Pencil, BookOpen } from "lucide-react";
+import { Plus, Search, Trash2, Percent, Pencil, BookOpen, Download, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -33,6 +34,70 @@ export default function Teachers() {
     subjectId: "",
     salaryPercent: 30,
   });
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importLoading, setImportLoading] = useState(false);
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch("/api/teachers/excel/template", { credentials: "include" });
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "oqituvchilar_shablon.xlsx";
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Shablonni yuklab olishda xatolik", variant: "destructive" });
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const data = evt.target?.result;
+      const workbook = XLSX.read(data, { type: "binary" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      setImportData(jsonData);
+      setIsImportOpen(true);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleImportSubmit = async () => {
+    if (importData.length === 0) return;
+    setImportLoading(true);
+    try {
+      const response = await fetch("/api/teachers/excel/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ data: importData }),
+      });
+      const result = await response.json();
+      
+      if (result.success > 0) {
+        toast({ title: "Muvaffaqiyat", description: `${result.success} ta o'qituvchi qo'shildi. Standart parol: 123456` });
+      }
+      if (result.errors && result.errors.length > 0) {
+        toast({ title: "Ogohlantirish", description: result.errors.slice(0, 3).join(", "), variant: "destructive" });
+      }
+      
+      setIsImportOpen(false);
+      setImportData([]);
+      window.location.reload();
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Import qilishda xatolik", variant: "destructive" });
+    } finally {
+      setImportLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,13 +170,23 @@ export default function Teachers() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">O'qituvchilar</h1>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto" data-testid="button-add-teacher">
-              <Plus className="mr-2 h-4 w-4" /> O'qituvchi qo'shish
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleDownloadTemplate} data-testid="button-download-template">
+            <Download className="mr-2 h-4 w-4" /> Shablon
+          </Button>
+          <label>
+            <Button variant="outline" asChild data-testid="button-upload-excel">
+              <span><Upload className="mr-2 h-4 w-4" /> Excel yuklash</span>
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+            <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileUpload} />
+          </label>
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-teacher">
+                <Plus className="mr-2 h-4 w-4" /> O'qituvchi qo'shish
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Yangi o'qituvchi qo'shish</DialogTitle>
             </DialogHeader>
@@ -210,7 +285,44 @@ export default function Teachers() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excel dan import qilish</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {importData.length} ta o'qituvchi topildi. Import qilishni xohlaysizmi?
+            </p>
+            <p className="text-xs text-amber-600">
+              Diqqat: Barcha o'qituvchilar uchun standart parol: 123456
+            </p>
+            {importData.length > 0 && (
+              <div className="max-h-48 overflow-auto border rounded p-2 text-sm">
+                {importData.slice(0, 5).map((row: any, i: number) => (
+                  <div key={i} className="py-1 border-b last:border-0">
+                    {row["Ism"] || row["ism"]} {row["Familiya"] || row["familiya"]}
+                  </div>
+                ))}
+                {importData.length > 5 && (
+                  <div className="text-muted-foreground pt-1">va yana {importData.length - 5} ta...</div>
+                )}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsImportOpen(false)} className="flex-1">
+                Bekor qilish
+              </Button>
+              <Button onClick={handleImportSubmit} disabled={importLoading} className="flex-1">
+                {importLoading ? "Yuklanmoqda..." : "Import qilish"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="sm:max-w-md">

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
+import * as XLSX from "xlsx";
 import { storage, DuplicatePhoneError } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
 import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt } from "./telegram-bot";
@@ -394,6 +395,158 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete student" });
+    }
+  });
+
+  // ===== STUDENTS EXCEL IMPORT/EXPORT =====
+  app.get("/api/students/excel/template", requireTenantAuth, (req, res) => {
+    try {
+      const templateData = [
+        { "Ism": "Ali", "Familiya": "Valiyev", "Telefon": "901234567", "Ota-ona telefoni": "901234568" },
+        { "Ism": "Gulnora", "Familiya": "Karimova", "Telefon": "901234569", "Ota-ona telefoni": "901234570" },
+      ];
+      
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "O'quvchilar");
+      
+      worksheet["!cols"] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 18 }];
+      
+      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", "attachment; filename=oquvchilar_shablon.xlsx");
+      res.send(buffer);
+    } catch (error) {
+      console.error("Excel template error:", error);
+      res.status(500).json({ error: "Shablon yaratishda xatolik" });
+    }
+  });
+
+  app.post("/api/students/excel/import", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { data } = req.body;
+      
+      if (!data || !Array.isArray(data)) {
+        return res.status(400).json({ error: "Ma'lumotlar topilmadi" });
+      }
+      
+      const results = { success: 0, errors: [] as string[] };
+      
+      for (const row of data) {
+        try {
+          const firstName = row["Ism"] || row["ism"] || row["firstName"];
+          const lastName = row["Familiya"] || row["familiya"] || row["lastName"];
+          const phone = (row["Telefon"] || row["telefon"] || row["phone"] || "").toString().replace(/\D/g, "");
+          const parentPhone = (row["Ota-ona telefoni"] || row["parentPhone"] || "").toString().replace(/\D/g, "");
+          
+          if (!firstName || !lastName) {
+            results.errors.push(`Qator: Ism yoki familiya bo'sh`);
+            continue;
+          }
+          
+          await storage.createStudent({
+            tenantId,
+            firstName,
+            lastName,
+            phone: phone || null,
+            parentPhone: parentPhone || null,
+            status: "active",
+            balance: 0,
+          });
+          results.success++;
+        } catch (err: any) {
+          if (err instanceof DuplicatePhoneError) {
+            results.errors.push(`${row["Ism"]} ${row["Familiya"]}: Telefon raqam allaqachon mavjud`);
+          } else {
+            results.errors.push(`${row["Ism"]} ${row["Familiya"]}: Xatolik`);
+          }
+        }
+      }
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Excel import error:", error);
+      res.status(500).json({ error: "Import qilishda xatolik" });
+    }
+  });
+
+  // ===== TEACHERS EXCEL IMPORT/EXPORT =====
+  app.get("/api/teachers/excel/template", requireTenantAuth, (req, res) => {
+    try {
+      const templateData = [
+        { "Ism": "Anvar", "Familiya": "Toshmatov", "Telefon": "901234567", "Email": "anvar@mail.uz", "Oylik foizi": 30 },
+        { "Ism": "Dilnoza", "Familiya": "Rahimova", "Telefon": "901234568", "Email": "dilnoza@mail.uz", "Oylik foizi": 35 },
+      ];
+      
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "O'qituvchilar");
+      
+      worksheet["!cols"] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }];
+      
+      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", "attachment; filename=oqituvchilar_shablon.xlsx");
+      res.send(buffer);
+    } catch (error) {
+      console.error("Excel template error:", error);
+      res.status(500).json({ error: "Shablon yaratishda xatolik" });
+    }
+  });
+
+  app.post("/api/teachers/excel/import", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { data } = req.body;
+      
+      if (!data || !Array.isArray(data)) {
+        return res.status(400).json({ error: "Ma'lumotlar topilmadi" });
+      }
+      
+      const results = { success: 0, errors: [] as string[] };
+      
+      for (const row of data) {
+        try {
+          const firstName = row["Ism"] || row["ism"] || row["firstName"];
+          const lastName = row["Familiya"] || row["familiya"] || row["lastName"];
+          const phone = (row["Telefon"] || row["telefon"] || row["phone"] || "").toString().replace(/\D/g, "");
+          const email = row["Email"] || row["email"] || "";
+          const salaryPercent = parseInt(row["Oylik foizi"] || row["salaryPercent"] || "30") || 30;
+          
+          if (!firstName || !lastName) {
+            results.errors.push(`Qator: Ism yoki familiya bo'sh`);
+            continue;
+          }
+          
+          const defaultPassword = await bcrypt.hash("123456", 10);
+          
+          await storage.createUser({
+            tenantId,
+            firstName,
+            lastName,
+            phone: phone || null,
+            email: email || null,
+            password: defaultPassword,
+            salaryPercent,
+            role: "teacher",
+          });
+          results.success++;
+        } catch (err: any) {
+          if (err instanceof DuplicatePhoneError) {
+            results.errors.push(`${row["Ism"]} ${row["Familiya"]}: Telefon raqam allaqachon mavjud`);
+          } else {
+            results.errors.push(`${row["Ism"]} ${row["Familiya"]}: Xatolik`);
+          }
+        }
+      }
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Excel import error:", error);
+      res.status(500).json({ error: "Import qilishda xatolik" });
     }
   });
 
