@@ -399,10 +399,10 @@ export async function registerRoutes(
   });
 
   // ===== STUDENTS EXCEL IMPORT/EXPORT =====
-  const studentTemplateColumns = ["Ism", "Familiya", "Telefon", "Ota-ona telefoni"];
+  const studentTemplateColumns = ["Ism", "Familiya", "Telefon", "Ota-ona telefoni", "Guruh nomi", "Fan nomi", "Kunlari", "Vaqti", "Xonasi", "Oqituvchi"];
   const studentTemplateData = [
-    { "Ism": "Ali", "Familiya": "Valiyev", "Telefon": "901234567", "Ota-ona telefoni": "901234568" },
-    { "Ism": "Gulnora", "Familiya": "Karimova", "Telefon": "901234569", "Ota-ona telefoni": "901234570" },
+    { "Ism": "Marjona", "Familiya": "Abdurahimova", "Telefon": "998934980287", "Ota-ona telefoni": "", "Guruh nomi": "Ingliz tili 1-guruh", "Fan nomi": "Ingliz tili", "Kunlari": "Du-Cho-Ju", "Vaqti": "13:30", "Xonasi": "7 xona", "Oqituvchi": "Bositxon" },
+    { "Ism": "Zebiniso", "Familiya": "Sodiqova", "Telefon": "998949137363", "Ota-ona telefoni": "", "Guruh nomi": "Ingliz tili 1-guruh", "Fan nomi": "Ingliz tili", "Kunlari": "Du-Cho-Ju", "Vaqti": "13:30", "Xonasi": "7 xona", "Oqituvchi": "Bositxon" },
   ];
 
   app.get("/api/students/excel/template-info", requireTenantAuth, (req, res) => {
@@ -415,7 +415,7 @@ export async function registerRoutes(
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Oquvchilar");
       
-      worksheet["!cols"] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 18 }];
+      worksheet["!cols"] = [{ wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 15 }];
       
       const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
       
