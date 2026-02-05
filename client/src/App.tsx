@@ -80,7 +80,12 @@ function AdminRoutes() {
   }
 
   return (
-    <AppLayout userRole={user.role} userName={`${user.firstName} ${user.lastName}`}>
+    <AppLayout 
+      userRole={user.role} 
+      userName={`${user.firstName} ${user.lastName}`}
+      tenantName={user.tenantName}
+      tenantLogo={user.tenantLogo}
+    >
       <Suspense fallback={<PageLoader />}>
         <Switch>
           <Route path="/" component={Dashboard} />

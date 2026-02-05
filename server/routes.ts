@@ -125,15 +125,31 @@ export async function registerRoutes(
     });
   });
 
-  app.get("/api/auth/me", (req, res) => {
+  app.get("/api/auth/me", async (req, res) => {
     if (!req.session.userId) {
       return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
     }
-    res.json({
-      userId: req.session.userId,
-      tenantId: req.session.tenantId,
-      role: req.session.role,
-    });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      const tenant = await storage.getTenant(req.session.tenantId!);
+      
+      if (!user || !tenant) {
+        return res.status(401).json({ error: "Foydalanuvchi topilmadi" });
+      }
+      
+      res.json({
+        userId: user.id,
+        tenantId: tenant.id,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        tenantName: tenant.name,
+        tenantLogo: tenant.logo,
+      });
+    } catch (error) {
+      console.error("Auth me error:", error);
+      res.status(500).json({ error: "Tizim xatosi" });
+    }
   });
 
   // Apply requireTenantAuth to all tenant data routes
