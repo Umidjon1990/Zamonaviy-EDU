@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useSubjects } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Trash2, Percent, Pencil, BookOpen, Download, Upload } from "lucide-react";
+import { Plus, Search, Trash2, Percent, Pencil, BookOpen, Download, Upload, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +37,19 @@ export default function Teachers() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
   const [importLoading, setImportLoading] = useState(false);
+  const [isTemplateOpen, setIsTemplateOpen] = useState(false);
+  const [templateInfo, setTemplateInfo] = useState<{ columns: string[], data: any[] } | null>(null);
+
+  const handleShowTemplate = async () => {
+    try {
+      const response = await fetch("/api/teachers/excel/template-info", { credentials: "include" });
+      const data = await response.json();
+      setTemplateInfo(data);
+      setIsTemplateOpen(true);
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Shablon ma'lumotlarini olishda xatolik", variant: "destructive" });
+    }
+  };
 
   const handleDownloadTemplate = async () => {
     try {
@@ -171,8 +184,11 @@ export default function Teachers() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">O'qituvchilar</h1>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={handleShowTemplate} data-testid="button-show-template">
+            <Eye className="mr-2 h-4 w-4" /> Shablon
+          </Button>
           <Button variant="outline" onClick={handleDownloadTemplate} data-testid="button-download-template">
-            <Download className="mr-2 h-4 w-4" /> Shablon
+            <Download className="mr-2 h-4 w-4" /> Yuklab olish
           </Button>
           <label>
             <Button variant="outline" asChild data-testid="button-upload-excel">
@@ -318,6 +334,52 @@ export default function Teachers() {
               </Button>
               <Button onClick={handleImportSubmit} disabled={importLoading} className="flex-1">
                 {importLoading ? "Yuklanmoqda..." : "Import qilish"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isTemplateOpen} onOpenChange={setIsTemplateOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Excel shablon namunasi</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Quyidagi ustunlar bilan Excel fayl tayyorlang:
+            </p>
+            {templateInfo && (
+              <div className="overflow-auto border rounded">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {templateInfo.columns.map((col: string) => (
+                        <TableHead key={col} className="font-bold whitespace-nowrap">{col}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {templateInfo.data.map((row: any, i: number) => (
+                      <TableRow key={i}>
+                        {templateInfo.columns.map((col: string) => (
+                          <TableCell key={col} className="whitespace-nowrap">{row[col]}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            <p className="text-xs text-amber-600">
+              Diqqat: Barcha o'qituvchilar uchun standart parol: 123456
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsTemplateOpen(false)} className="flex-1">
+                Yopish
+              </Button>
+              <Button onClick={handleDownloadTemplate} className="flex-1">
+                <Download className="mr-2 h-4 w-4" /> Yuklab olish
               </Button>
             </div>
           </div>

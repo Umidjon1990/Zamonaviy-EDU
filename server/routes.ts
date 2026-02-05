@@ -399,16 +399,21 @@ export async function registerRoutes(
   });
 
   // ===== STUDENTS EXCEL IMPORT/EXPORT =====
+  const studentTemplateColumns = ["Ism", "Familiya", "Telefon", "Ota-ona telefoni"];
+  const studentTemplateData = [
+    { "Ism": "Ali", "Familiya": "Valiyev", "Telefon": "901234567", "Ota-ona telefoni": "901234568" },
+    { "Ism": "Gulnora", "Familiya": "Karimova", "Telefon": "901234569", "Ota-ona telefoni": "901234570" },
+  ];
+
+  app.get("/api/students/excel/template-info", requireTenantAuth, (req, res) => {
+    res.json({ columns: studentTemplateColumns, data: studentTemplateData });
+  });
+
   app.get("/api/students/excel/template", requireTenantAuth, (req, res) => {
     try {
-      const templateData = [
-        { "Ism": "Ali", "Familiya": "Valiyev", "Telefon": "901234567", "Ota-ona telefoni": "901234568" },
-        { "Ism": "Gulnora", "Familiya": "Karimova", "Telefon": "901234569", "Ota-ona telefoni": "901234570" },
-      ];
-      
-      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const worksheet = XLSX.utils.json_to_sheet(studentTemplateData);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "O'quvchilar");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Oquvchilar");
       
       worksheet["!cols"] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 18 }];
       
@@ -473,16 +478,21 @@ export async function registerRoutes(
   });
 
   // ===== TEACHERS EXCEL IMPORT/EXPORT =====
+  const teacherTemplateColumns = ["Ism", "Familiya", "Telefon", "Email", "Oylik foizi"];
+  const teacherTemplateData = [
+    { "Ism": "Anvar", "Familiya": "Toshmatov", "Telefon": "901234567", "Email": "anvar@mail.uz", "Oylik foizi": 30 },
+    { "Ism": "Dilnoza", "Familiya": "Rahimova", "Telefon": "901234568", "Email": "dilnoza@mail.uz", "Oylik foizi": 35 },
+  ];
+
+  app.get("/api/teachers/excel/template-info", requireTenantAuth, (req, res) => {
+    res.json({ columns: teacherTemplateColumns, data: teacherTemplateData });
+  });
+
   app.get("/api/teachers/excel/template", requireTenantAuth, (req, res) => {
     try {
-      const templateData = [
-        { "Ism": "Anvar", "Familiya": "Toshmatov", "Telefon": "901234567", "Email": "anvar@mail.uz", "Oylik foizi": 30 },
-        { "Ism": "Dilnoza", "Familiya": "Rahimova", "Telefon": "901234568", "Email": "dilnoza@mail.uz", "Oylik foizi": 35 },
-      ];
-      
-      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const worksheet = XLSX.utils.json_to_sheet(teacherTemplateData);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "O'qituvchilar");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Oqituvchilar");
       
       worksheet["!cols"] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 12 }];
       
