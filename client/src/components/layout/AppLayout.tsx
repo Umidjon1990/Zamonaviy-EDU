@@ -14,7 +14,7 @@ import {
   FileText,
   BookOpen
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, convertGoogleDriveUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { translations } from "@/lib/i18n";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -77,7 +77,7 @@ export function AppLayout({ children, userRole, userName = "Foydalanuvchi", tena
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
       <div className="p-6 flex items-center gap-3">
-        <img src={tenantLogo || "/logo.png"} alt="Logo" className="w-10 h-10 object-contain rounded-lg" />
+        <img src={convertGoogleDriveUrl(tenantLogo) || "/logo.png"} alt="Logo" className="w-10 h-10 object-contain rounded-lg" />
         <span className="font-display font-bold text-xl tracking-tight truncate">{tenantName}</span>
       </div>
 
@@ -139,7 +139,7 @@ export function AppLayout({ children, userRole, userName = "Foydalanuvchi", tena
       <div className="flex-1 flex flex-col md:ml-64 min-h-screen transition-all duration-300 ease-in-out">
         <header className="md:hidden sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={tenantLogo || "/logo.png"} alt="Logo" className="w-8 h-8 object-contain rounded-lg" />
+            <img src={convertGoogleDriveUrl(tenantLogo) || "/logo.png"} alt="Logo" className="w-8 h-8 object-contain rounded-lg" />
             <span className="font-display font-bold text-lg truncate max-w-[150px]">{tenantName}</span>
           </div>
           

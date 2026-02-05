@@ -6,6 +6,7 @@ import { Printer, Download, Send, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import logoImg from "@/assets/logo.png";
+import { convertGoogleDriveUrl } from "@/lib/utils";
 
 interface PaymentReceiptProps {
   payment: {
@@ -69,7 +70,7 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
   const { toast } = useToast();
 
   const displayTitle = branding?.receiptTitle || tenantName || "ZAMONAVIY TA'LIM";
-  const displayLogo = branding?.logo || logoImg;
+  const displayLogo = convertGoogleDriveUrl(branding?.logo) || logoImg;
   const telegramChannel = branding?.telegramChannel || DEFAULT_TELEGRAM_CHANNEL;
   const telegramHandle = telegramChannel.includes("t.me/") 
     ? "@" + telegramChannel.split("t.me/")[1]

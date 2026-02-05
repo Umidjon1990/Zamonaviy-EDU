@@ -10,6 +10,7 @@ import { translations } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, AlertCircle, CheckCircle2, Image } from "lucide-react";
+import { convertGoogleDriveUrl } from "@/lib/utils";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -283,7 +284,7 @@ export default function Settings() {
                   <div className="w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted overflow-hidden shrink-0">
                     {branding.logo ? (
                       <img 
-                        src={branding.logo} 
+                        src={convertGoogleDriveUrl(branding.logo) || branding.logo} 
                         alt="Logo" 
                         className="w-full h-full object-contain"
                         data-testid="img-logo-preview"
@@ -299,10 +300,10 @@ export default function Settings() {
                     <Input
                       value={branding.logo}
                       onChange={(e) => setBranding({ ...branding, logo: e.target.value })}
-                      placeholder="https://example.com/logo.png"
+                      placeholder="https://drive.google.com/file/d/..."
                       data-testid="input-logo-url"
                     />
-                    <p className="text-xs text-muted-foreground">Logo rasmining to'liq URL manzilini kiriting (https://...)</p>
+                    <p className="text-xs text-muted-foreground">Google Drive havolasi yoki to'g'ridan-to'g'ri rasm URL kiriting</p>
                   </div>
                 </div>
               </div>
