@@ -4,6 +4,7 @@ import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { lazy, Suspense } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Rollar uchun ruxsat berilgan yo'llar
 const roleRouteAccess: Record<string, string[]> = {
@@ -86,23 +87,25 @@ function AdminRoutes() {
       tenantName={user.tenantName}
       tenantLogo={user.tenantLogo}
     >
-      <Suspense fallback={<PageLoader />}>
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/leads" component={Leads} />
-          <Route path="/students" component={Students} />
-          <Route path="/teachers" component={Teachers} />
-          <Route path="/groups" component={Groups} />
-          <Route path="/subjects" component={Subjects} />
-          <Route path="/schedule" component={Schedule} />
-          <Route path="/attendance" component={Attendance} />
-          <Route path="/payments" component={Payments} />
-          <Route path="/reports" component={Reports} />
-          <Route path="/teacher-salary" component={TeacherSalary} />
-          <Route path="/settings" component={Settings} />
-          <Route component={NotFound} />
-        </Switch>
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/leads" component={Leads} />
+            <Route path="/students" component={Students} />
+            <Route path="/teachers" component={Teachers} />
+            <Route path="/groups" component={Groups} />
+            <Route path="/subjects" component={Subjects} />
+            <Route path="/schedule" component={Schedule} />
+            <Route path="/attendance" component={Attendance} />
+            <Route path="/payments" component={Payments} />
+            <Route path="/reports" component={Reports} />
+            <Route path="/teacher-salary" component={TeacherSalary} />
+            <Route path="/settings" component={Settings} />
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
+      </ErrorBoundary>
     </AppLayout>
   );
 }
@@ -125,7 +128,9 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router />
+      <ErrorBoundary>
+        <Router />
+      </ErrorBoundary>
       <Toaster />
     </QueryClientProvider>
   );
