@@ -659,11 +659,26 @@ export async function registerRoutes(
 
   app.post("/api/groups", async (req, res) => {
     try {
-      const data = insertGroupSchema.parse({ ...req.body, tenantId: getTenantId(req) });
+      const rawData = { ...req.body, tenantId: getTenantId(req) };
+      if (rawData.subjectId === "" || rawData.subjectId === undefined) {
+        rawData.subjectId = null;
+      }
+      if (typeof rawData.subjectId === "string" && rawData.subjectId) {
+        rawData.subjectId = parseInt(rawData.subjectId);
+      }
+      if (typeof rawData.maxStudents === "string") {
+        rawData.maxStudents = parseInt(rawData.maxStudents) || 15;
+      }
+      if (!rawData.level) {
+        rawData.level = "Beginner";
+      }
+      const data = insertGroupSchema.parse(rawData);
       const group = await storage.createGroup(data);
       res.status(201).json(group);
     } catch (error) {
-      res.status(400).json({ error: "Invalid group data" });
+      console.error("Group create error:", error);
+      const msg = error instanceof Error ? error.message : "Guruh yaratishda xatolik";
+      res.status(400).json({ error: msg });
     }
   });
 
