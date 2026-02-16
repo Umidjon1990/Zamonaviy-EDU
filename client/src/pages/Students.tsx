@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useGroups, useTeachers, useAddStudentToGroup } from "@/lib/api";
+import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useGroups, useTeachers, useAddStudentToGroup, useUnassignedStudents } from "@/lib/api";
 import { Plus, Search, Trash2, Pencil, Download, Upload, FileSpreadsheet, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,12 +25,15 @@ export default function Students() {
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
   const addStudentToGroup = useAddStudentToGroup();
+  const { data: unassignedData } = useUnassignedStudents();
+  const unassignedStudents = (unassignedData || []) as any[];
   const { toast } = useToast();
   
   const [isOpen, setIsOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState<"all" | "unassigned">("all");
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -193,17 +196,24 @@ export default function Students() {
     }
   };
 
-  // Filter students by search query (name, phone, parent phone)
+  const unassignedIds = useMemo(() => new Set(unassignedStudents.map((s: any) => s.id)), [unassignedStudents]);
+
   const filteredStudents = useMemo(() => {
-    if (!searchQuery.trim()) return students;
-    const query = searchQuery.toLowerCase().trim();
-    return students.filter((s: any) => {
-      const fullName = `${s.firstName} ${s.lastName}`.toLowerCase();
-      const phone = (s.phone || '').toLowerCase();
-      const parentPhone = (s.parentPhone || '').toLowerCase();
-      return fullName.includes(query) || phone.includes(query) || parentPhone.includes(query);
-    });
-  }, [students, searchQuery]);
+    let result = groupFilter === "unassigned" 
+      ? students.filter((s: any) => unassignedIds.has(s.id))
+      : students;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter((s: any) => {
+        const fullName = `${s.firstName} ${s.lastName}`.toLowerCase();
+        const phone = (s.phone || '').toLowerCase();
+        const parentPhone = (s.parentPhone || '').toLowerCase();
+        return fullName.includes(query) || phone.includes(query) || parentPhone.includes(query);
+      });
+    }
+    return result;
+  }, [students, searchQuery, groupFilter, unassignedIds]);
 
   if (isLoading) {
     return (
@@ -504,8 +514,8 @@ export default function Students() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center gap-2 max-w-sm">
-        <div className="relative w-full">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="relative w-full sm:max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
@@ -515,6 +525,25 @@ export default function Students() {
             onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="input-search-students"
           />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={groupFilter === "all" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setGroupFilter("all")}
+            data-testid="button-filter-all"
+          >
+            Barchasi ({students.length})
+          </Button>
+          <Button
+            variant={groupFilter === "unassigned" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setGroupFilter("unassigned")}
+            className={groupFilter === "unassigned" ? "" : "border-amber-300 text-amber-700 hover:bg-amber-50"}
+            data-testid="button-filter-unassigned"
+          >
+            Guruhsiz ({unassignedStudents.length})
+          </Button>
         </div>
       </div>
 

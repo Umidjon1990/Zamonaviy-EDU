@@ -338,6 +338,23 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/students/unassigned", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const allStudents = await storage.getStudents(tenantId);
+      const unassigned = [];
+      for (const student of allStudents) {
+        const groups = await storage.getStudentGroups(student.id);
+        if (groups.length === 0) {
+          unassigned.push(student);
+        }
+      }
+      res.json(unassigned);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch unassigned students" });
+    }
+  });
+
   app.get("/api/students/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -1148,12 +1165,54 @@ export async function registerRoutes(
 
   app.post("/api/payments", async (req, res) => {
     try {
-      const data = insertPaymentSchema.parse({ ...req.body, tenantId: getTenantId(req) });
+      const tenantId = getTenantId(req);
+      const { newStudent, teacherId, amount, paymentType, status, notes, studentId: existingStudentId } = req.body;
+      
+      let finalStudentId = existingStudentId;
+      let createdStudent = null;
+      
+      if (newStudent && !existingStudentId) {
+        const { firstName, lastName, phone, parentPhone } = newStudent;
+        if (!firstName || !lastName) {
+          return res.status(400).json({ error: "Ism va familiya kiritilishi kerak" });
+        }
+        createdStudent = await storage.createStudent({
+          tenantId,
+          firstName,
+          lastName,
+          phone: phone || "",
+          parentPhone: parentPhone || "",
+          status: "active",
+          balance: 0,
+        });
+        finalStudentId = createdStudent.id;
+      }
+      
+      if (!finalStudentId) {
+        return res.status(400).json({ error: "O'quvchi tanlanishi yoki yangi o'quvchi ma'lumotlari kiritilishi kerak" });
+      }
+      
+      let teacherEarning = 0;
+      if (teacherId && amount) {
+        const teacher = await storage.getTeacher(teacherId, tenantId);
+        if (teacher && teacher.salaryPercent) {
+          teacherEarning = Math.round(amount * teacher.salaryPercent / 100);
+        }
+      }
+      
+      const data = insertPaymentSchema.parse({
+        tenantId,
+        studentId: finalStudentId,
+        teacherId: teacherId || null,
+        amount,
+        teacherEarning,
+        paymentType: paymentType || "cash",
+        status: status || "completed",
+        notes: notes || null,
+      });
       const payment = await storage.createPayment(data);
       
-      // Update student balance
       if (payment.status === 'completed') {
-        const tenantId = getTenantId(req);
         const student = await storage.getStudent(payment.studentId, tenantId);
         if (student) {
           const newBalance = student.balance + payment.amount;
@@ -1161,15 +1220,18 @@ export async function registerRoutes(
             balance: newBalance,
           });
           
-          // Send Telegram notification to student
           notifyStudentPayment(payment.studentId, payment.amount, newBalance)
             .catch(err => console.error("Telegram notification error:", err));
         }
       }
       
-      res.status(201).json(payment);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid payment data" });
+      res.status(201).json({ ...payment, createdStudent });
+    } catch (error: any) {
+      if (error?.message?.includes("telefon raqami")) {
+        return res.status(400).json({ error: error.message });
+      }
+      console.error("Payment creation error:", error);
+      res.status(400).json({ error: "To'lov ma'lumotlarida xatolik" });
     }
   });
 

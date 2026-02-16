@@ -217,7 +217,9 @@ export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   studentId: integer("student_id").notNull(),
+  teacherId: varchar("teacher_id"),
   amount: integer("amount").notNull(),
+  teacherEarning: integer("teacher_earning").default(0),
   paymentType: text("payment_type").notNull(), // cash, card, bank_transfer
   status: text("status").notNull(), // completed, pending, failed
   notes: text("notes"),

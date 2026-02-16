@@ -214,6 +214,13 @@ export function useCreatePayment() {
   });
 }
 
+export function useUnassignedStudents() {
+  return useQuery({
+    queryKey: ["students", "unassigned"],
+    queryFn: () => apiCall("/students/unassigned"),
+  });
+}
+
 export function useUpdatePayment() {
   const queryClient = useQueryClient();
   return useMutation({

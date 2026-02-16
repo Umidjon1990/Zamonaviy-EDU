@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translations } from "@/lib/i18n";
 import { usePayments, useCreatePayment, useUpdatePayment, useDeletePayment, useStudents, useGroups, useTeachers, useSubjects } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Download, MessageSquare, Search, User, Phone, GraduationCap, Wallet, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, User, Phone, Wallet, Pencil, Trash2, MessageSquare, Calendar, Clock, GraduationCap, UserPlus, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import PaymentReceipt from "@/components/PaymentReceipt";
@@ -44,6 +45,7 @@ export default function Payments() {
   const [isOpen, setIsOpen] = useState(false);
   const [sendSms, setSendSms] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [studentMode, setStudentMode] = useState<"existing" | "new">("existing");
   const [receiptData, setReceiptData] = useState<{
     payment: any;
     student: any;
@@ -51,12 +53,21 @@ export default function Payments() {
     subjectName?: string;
     teacherName?: string;
   } | null>(null);
+  
   const [formData, setFormData] = useState({
     studentId: 0,
     amount: 0,
     paymentType: "cash",
     status: "completed",
     notes: "",
+    teacherId: "",
+  });
+  
+  const [newStudentData, setNewStudentData] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    parentPhone: "",
   });
   
   const [editPayment, setEditPayment] = useState<any>(null);
@@ -67,7 +78,10 @@ export default function Payments() {
     notes: "",
   });
 
-  // Filter students based on search query
+  const now = new Date();
+  const currentDate = now.toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric' });
+  const currentTime = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+
   const filteredStudents = useMemo(() => {
     if (!searchQuery.trim()) return studentsList;
     const query = searchQuery.toLowerCase().trim();
@@ -79,26 +93,74 @@ export default function Payments() {
     });
   }, [studentsList, searchQuery]);
 
-  // Get selected student details
   const selectedStudent = useMemo(() => {
     if (!formData.studentId) return null;
     return studentsList.find((s: any) => s.id === formData.studentId);
   }, [studentsList, formData.studentId]);
 
-  // Note: Student group info is fetched via API when needed
+  const selectedTeacher = useMemo(() => {
+    if (!formData.teacherId) return null;
+    return teachersList.find((t: any) => t.id === formData.teacherId);
+  }, [teachersList, formData.teacherId]);
+
+  const teacherEarningPreview = useMemo(() => {
+    if (!selectedTeacher || !formData.amount) return 0;
+    return Math.round(formData.amount * (selectedTeacher.salaryPercent || 0) / 100);
+  }, [selectedTeacher, formData.amount]);
+
+  const resetForm = () => {
+    setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "", teacherId: "" });
+    setNewStudentData({ firstName: "", lastName: "", phone: "", parentPhone: "" });
+    setSearchQuery("");
+    setStudentMode("existing");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (studentMode === "existing" && !formData.studentId) {
+      toast({ title: "Xatolik", description: "O'quvchini tanlang", variant: "destructive" });
+      return;
+    }
+    if (studentMode === "new" && (!newStudentData.firstName || !newStudentData.lastName)) {
+      toast({ title: "Xatolik", description: "Ism va familiya kiritilishi kerak", variant: "destructive" });
+      return;
+    }
+    if (!formData.amount || formData.amount <= 0) {
+      toast({ title: "Xatolik", description: "Summa kiritilishi kerak", variant: "destructive" });
+      return;
+    }
+    if (!formData.teacherId) {
+      toast({ title: "Xatolik", description: "O'qituvchini tanlang", variant: "destructive" });
+      return;
+    }
+
     try {
-      const newPayment = await createPayment.mutateAsync(formData);
+      const payload: any = {
+        amount: formData.amount,
+        paymentType: formData.paymentType,
+        status: formData.status,
+        notes: formData.notes,
+        teacherId: formData.teacherId,
+      };
+
+      if (studentMode === "existing") {
+        payload.studentId = formData.studentId;
+      } else {
+        payload.newStudent = newStudentData;
+      }
+
+      const result = await createPayment.mutateAsync(payload);
       toast({ title: "Muvaffaqiyat", description: "To'lov qabul qilindi" });
       
-      if (sendSms && formData.studentId) {
+      const studentId = result.createdStudent ? result.createdStudent.id : formData.studentId;
+      
+      if (sendSms && studentId) {
         try {
           const smsResponse = await fetch("/api/sms/payment-received", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ studentId: formData.studentId, amount: formData.amount }),
+            body: JSON.stringify({ studentId, amount: formData.amount }),
           });
           const smsResult = await smsResponse.json();
           if (smsResult.success) {
@@ -108,33 +170,32 @@ export default function Payments() {
           }
         } catch (smsError) {
           console.error("SMS error:", smsError);
-          toast({ title: "SMS xatosi", description: "SMS yuborishda xatolik", variant: "destructive" });
         }
       }
       
-      const student = studentsList.find((s: any) => s.id === formData.studentId);
+      const student = result.createdStudent || studentsList.find((s: any) => s.id === formData.studentId);
+      const teacher = teachersList.find((t: any) => t.id === formData.teacherId);
       
-      // Fetch student's groups from API
       let studentGroup: any = null;
-      let teacher: any = null;
       let subject: any = null;
-      try {
-        const groupsResponse = await fetch(`/api/students/${formData.studentId}/groups`);
-        if (groupsResponse.ok) {
-          const studentGroupsData = await groupsResponse.json();
-          if (studentGroupsData.length > 0) {
-            const firstGroupId = studentGroupsData[0].groupId;
-            studentGroup = groupsList.find((g: any) => g.id === firstGroupId);
-            teacher = studentGroup?.teacherId ? teachersList.find((t: any) => t.id === studentGroup.teacherId) : null;
-            subject = studentGroup?.subjectId ? subjectsList.find((s: any) => s.id === studentGroup.subjectId) : null;
+      if (studentId && !result.createdStudent) {
+        try {
+          const groupsResponse = await fetch(`/api/students/${studentId}/groups`);
+          if (groupsResponse.ok) {
+            const studentGroupsData = await groupsResponse.json();
+            if (studentGroupsData.length > 0) {
+              const firstGroupId = studentGroupsData[0].groupId;
+              studentGroup = groupsList.find((g: any) => g.id === firstGroupId);
+              subject = studentGroup?.subjectId ? subjectsList.find((s: any) => s.id === studentGroup.subjectId) : null;
+            }
           }
+        } catch (err) {
+          console.error("Failed to fetch student groups:", err);
         }
-      } catch (err) {
-        console.error("Failed to fetch student groups:", err);
       }
       
       setReceiptData({
-        payment: newPayment,
+        payment: result,
         student: student,
         groupName: studentGroup?.name,
         subjectName: subject?.name,
@@ -142,10 +203,9 @@ export default function Payments() {
       });
       
       setIsOpen(false);
-      setSearchQuery("");
-      setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "" });
-    } catch (error) {
-      toast({ title: "Xatolik", description: "To'lovni qabul qilishda xatolik", variant: "destructive" });
+      resetForm();
+    } catch (error: any) {
+      toast({ title: "Xatolik", description: error?.message || "To'lovni qabul qilishda xatolik", variant: "destructive" });
     }
   };
 
@@ -205,10 +265,15 @@ export default function Payments() {
   const completedPayments = paymentsList.filter((p: any) => p.status === 'completed');
   const totalIncome = completedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
-  // Find student name by ID
   const getStudentName = (studentId: number) => {
     const student = studentsList.find((s: any) => s.id === studentId);
     return student ? `${student.firstName} ${student.lastName}` : `#${studentId}`;
+  };
+
+  const getTeacherName = (teacherId: string | null) => {
+    if (!teacherId) return "-";
+    const teacher = teachersList.find((t: any) => t.id === teacherId);
+    return teacher ? `${teacher.firstName} ${teacher.lastName}` : "-";
   };
 
   return (
@@ -216,109 +281,206 @@ export default function Payments() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">{translations.nav.payments}</h1>
         <div className="flex gap-2 w-full sm:w-auto">
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button className="flex-1 sm:flex-none" data-testid="button-add-payment">
                 <Plus className="mr-2 h-4 w-4" /> To'lov qabul qilish
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>To'lov qabul qilish</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Search Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="search">O'quvchini qidirish</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="search"
-                      placeholder="Ism, familiya yoki telefon..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9"
-                      data-testid="input-search-student"
-                    />
+                <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-medium">{currentDate}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-medium">{currentTime}</span>
                   </div>
                 </div>
 
-                {/* Student List */}
-                <div className="space-y-2">
-                  <Label>O'quvchini tanlang ({filteredStudents.length} ta)</Label>
-                  <div className="max-h-48 overflow-y-auto border rounded-lg divide-y">
-                    {filteredStudents.length > 0 ? (
-                      filteredStudents.slice(0, 20).map((s: any) => {
-                        const isSelected = formData.studentId === s.id;
-                        return (
-                          <div
-                            key={s.id}
-                            onClick={() => setFormData({ ...formData, studentId: s.id })}
-                            className={`p-3 cursor-pointer transition-colors ${
-                              isSelected 
-                                ? 'bg-primary/10 border-l-4 border-l-primary' 
-                                : 'hover:bg-muted/50'
-                            }`}
-                            data-testid={`student-option-${s.id}`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium">{s.firstName} {s.lastName}</div>
-                              <Badge variant={s.balance > 0 ? "default" : s.balance < 0 ? "destructive" : "secondary"} className="text-xs">
-                                {s.balance?.toLocaleString() || 0} UZS
-                              </Badge>
+                <Tabs value={studentMode} onValueChange={(v) => setStudentMode(v as "existing" | "new")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="existing" className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Mavjud o'quvchi
+                    </TabsTrigger>
+                    <TabsTrigger value="new" className="flex items-center gap-2">
+                      <UserPlus className="w-4 h-4" />
+                      Yangi o'quvchi
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="existing" className="space-y-3 mt-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Ism, familiya yoki telefon..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                        data-testid="input-search-student"
+                      />
+                    </div>
+                    <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
+                      {filteredStudents.length > 0 ? (
+                        filteredStudents.slice(0, 20).map((s: any) => {
+                          const isSelected = formData.studentId === s.id;
+                          return (
+                            <div
+                              key={s.id}
+                              onClick={() => setFormData({ ...formData, studentId: s.id })}
+                              className={`p-3 cursor-pointer transition-colors ${
+                                isSelected 
+                                  ? 'bg-primary/10 border-l-4 border-l-primary' 
+                                  : 'hover:bg-muted/50'
+                              }`}
+                              data-testid={`student-option-${s.id}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="font-medium text-sm">{s.firstName} {s.lastName}</div>
+                                <Badge variant={s.balance > 0 ? "default" : s.balance < 0 ? "destructive" : "secondary"} className="text-xs">
+                                  {s.balance?.toLocaleString() || 0} UZS
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  {s.phone || '-'}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Phone className="w-3 h-3" />
-                                {s.phone || '-'}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
-                        O'quvchi topilmadi
+                          );
+                        })
+                      ) : (
+                        <div className="p-4 text-center text-muted-foreground text-sm">
+                          O'quvchi topilmadi
+                        </div>
+                      )}
+                    </div>
+                    {selectedStudent && (
+                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <div className="flex items-center gap-2 font-semibold text-primary text-sm">
+                          <User className="w-4 h-4" />
+                          {selectedStudent.firstName} {selectedStudent.lastName}
+                        </div>
+                        <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3" /> {selectedStudent.phone || '-'}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Wallet className="w-3 h-3" />
+                            <span className={selectedStudent.balance < 0 ? 'text-red-500' : selectedStudent.balance > 0 ? 'text-emerald-500' : ''}>
+                              {(selectedStudent.balance || 0).toLocaleString()} UZS
+                            </span>
+                          </span>
+                        </div>
                       </div>
                     )}
-                  </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="new" className="space-y-3 mt-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="newFirstName" className="text-xs">Ismi *</Label>
+                        <Input
+                          id="newFirstName"
+                          value={newStudentData.firstName}
+                          onChange={(e) => setNewStudentData({ ...newStudentData, firstName: e.target.value })}
+                          placeholder="Ali"
+                          data-testid="input-new-firstName"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="newLastName" className="text-xs">Familiyasi *</Label>
+                        <Input
+                          id="newLastName"
+                          value={newStudentData.lastName}
+                          onChange={(e) => setNewStudentData({ ...newStudentData, lastName: e.target.value })}
+                          placeholder="Valiyev"
+                          data-testid="input-new-lastName"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="newPhone" className="text-xs">Telefoni</Label>
+                        <Input
+                          id="newPhone"
+                          value={newStudentData.phone}
+                          onChange={(e) => setNewStudentData({ ...newStudentData, phone: e.target.value })}
+                          placeholder="+998901234567"
+                          data-testid="input-new-phone"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="newParentPhone" className="text-xs">Ota-ona tel.</Label>
+                        <Input
+                          id="newParentPhone"
+                          value={newStudentData.parentPhone}
+                          onChange={(e) => setNewStudentData({ ...newStudentData, parentPhone: e.target.value })}
+                          placeholder="+998901234567"
+                          data-testid="input-new-parentPhone"
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">O'qituvchi *</Label>
+                  <Select value={formData.teacherId} onValueChange={(value) => setFormData({ ...formData, teacherId: value })}>
+                    <SelectTrigger data-testid="select-teacher">
+                      <SelectValue placeholder="O'qituvchini tanlang..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teachersList.map((t: any) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          <div className="flex items-center gap-2">
+                            <GraduationCap className="w-4 h-4" />
+                            {t.firstName} {t.lastName}
+                            {t.salaryPercent > 0 && (
+                              <span className="text-xs text-muted-foreground">({t.salaryPercent}%)</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                {/* Selected Student Info */}
-                {selectedStudent && (
-                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
-                    <div className="flex items-center gap-2 font-semibold text-primary">
-                      <User className="w-4 h-4" />
-                      {selectedStudent.firstName} {selectedStudent.lastName}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-3 h-3 text-muted-foreground" />
-                        <span>{selectedStudent.phone || '-'}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Wallet className="w-3 h-3 text-muted-foreground" />
-                        <span className={selectedStudent.balance < 0 ? 'text-red-500' : selectedStudent.balance > 0 ? 'text-emerald-500' : ''}>
-                          {(selectedStudent.balance || 0).toLocaleString()} UZS
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Summa (UZS)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="amount" className="text-xs font-medium">Summa (UZS) *</Label>
                   <Input
                     id="amount"
                     type="number"
-                    value={formData.amount}
+                    value={formData.amount || ""}
                     onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) || 0 })}
                     placeholder="500000"
                     required
                     data-testid="input-amount"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="paymentType">To'lov turi</Label>
+
+                {selectedTeacher && formData.amount > 0 && selectedTeacher.salaryPercent > 0 && (
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-amber-700">O'qituvchi ulushi ({selectedTeacher.salaryPercent}%):</span>
+                      <span className="font-bold text-amber-800">{teacherEarningPreview.toLocaleString()} UZS</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-amber-700">Markaz ulushi:</span>
+                      <span className="font-bold text-amber-800">{(formData.amount - teacherEarningPreview).toLocaleString()} UZS</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">To'lov turi</Label>
                   <Select value={formData.paymentType} onValueChange={(value) => setFormData({ ...formData, paymentType: value })}>
                     <SelectTrigger data-testid="select-paymentType">
                       <SelectValue />
@@ -330,8 +492,9 @@ export default function Payments() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Izoh</Label>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="notes" className="text-xs font-medium">Izoh</Label>
                   <Input
                     id="notes"
                     value={formData.notes}
@@ -340,7 +503,8 @@ export default function Payments() {
                     data-testid="input-notes"
                   />
                 </div>
-                <div className="flex items-center space-x-2 py-2">
+
+                <div className="flex items-center space-x-2 py-1">
                   <Checkbox 
                     id="sendSms" 
                     checked={sendSms} 
@@ -352,6 +516,7 @@ export default function Payments() {
                     SMS xabarnoma yuborish
                   </label>
                 </div>
+
                 <Button type="submit" className="w-full" disabled={createPayment.isPending} data-testid="button-submit">
                   {createPayment.isPending ? "Saqlanmoqda..." : "Qabul qilish"}
                 </Button>
@@ -394,6 +559,7 @@ export default function Payments() {
             <TableHeader>
               <TableRow>
                 <TableHead>O'quvchi</TableHead>
+                <TableHead>O'qituvchi</TableHead>
                 <TableHead>Summa</TableHead>
                 <TableHead>Sana</TableHead>
                 <TableHead>To'lov turi</TableHead>
@@ -408,7 +574,15 @@ export default function Payments() {
                     <TableCell className="font-medium" data-testid={`text-student-${payment.id}`}>
                       {getStudentName(payment.studentId)}
                     </TableCell>
-                    <TableCell data-testid={`text-amount-${payment.id}`}>{payment.amount.toLocaleString()} UZS</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {getTeacherName(payment.teacherId)}
+                    </TableCell>
+                    <TableCell data-testid={`text-amount-${payment.id}`}>
+                      <div>{payment.amount.toLocaleString()} UZS</div>
+                      {payment.teacherEarning > 0 && (
+                        <div className="text-xs text-amber-600">Ustoz: {payment.teacherEarning.toLocaleString()}</div>
+                      )}
+                    </TableCell>
                     <TableCell>{new Date(payment.createdAt).toLocaleDateString('uz-UZ')}</TableCell>
                     <TableCell>{payment.paymentType === 'cash' ? 'Naqd' : payment.paymentType === 'card' ? 'Karta' : 'Bank'}</TableCell>
                     <TableCell>
@@ -446,7 +620,7 @@ export default function Payments() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Hozircha to'lovlar yo'q.
                   </TableCell>
                 </TableRow>
@@ -472,7 +646,6 @@ export default function Payments() {
         />
       )}
 
-      {/* Edit Payment Dialog */}
       <Dialog open={!!editPayment} onOpenChange={(open) => !open && setEditPayment(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
