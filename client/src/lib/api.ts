@@ -319,6 +319,41 @@ export function useAddStudentToGroup() {
   });
 }
 
+// ===== EXPENSES =====
+export function useExpenses(month?: number, year?: number) {
+  const params = new URLSearchParams();
+  if (month) params.append("month", month.toString());
+  if (year) params.append("year", year.toString());
+  return useQuery({
+    queryKey: ["expenses", month, year],
+    queryFn: () => apiCall(`/expenses${params.toString() ? `?${params.toString()}` : ""}`),
+  });
+}
+
+export function useCreateExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiCall("/expenses", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+  });
+}
+
+export function useUpdateExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: any) => apiCall(`/expenses/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+  });
+}
+
+export function useDeleteExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiCall(`/expenses/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+  });
+}
+
 // ===== STATISTICS =====
 export function useStats() {
   return useQuery({

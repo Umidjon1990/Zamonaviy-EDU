@@ -252,3 +252,22 @@ export const insertGradeSchema = createInsertSchema(grades).omit({
 });
 export type InsertGrade = z.infer<typeof insertGradeSchema>;
 export type Grade = typeof grades.$inferSelect;
+
+// Expenses (Xarajatlar)
+export const expenses = pgTable("expenses", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  title: text("title").notNull(),
+  amount: integer("amount").notNull(),
+  category: text("category").notNull(), // rent, salary, supplies, utilities, marketing, other
+  notes: text("notes"),
+  date: timestamp("date").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertExpenseSchema = createInsertSchema(expenses).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertExpense = z.infer<typeof insertExpenseSchema>;
+export type Expense = typeof expenses.$inferSelect;

@@ -12,7 +12,8 @@ import {
   X,
   UserCheck,
   FileText,
-  BookOpen
+  BookOpen,
+  Receipt
 } from "lucide-react";
 import { cn, convertGoogleDriveUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const preloadPages = () => {
   import("@/pages/Groups");
   import("@/pages/Leads");
   import("@/pages/Reports");
+  import("@/pages/Expenses");
 };
 
 const allNavItems = [
@@ -40,6 +42,7 @@ const allNavItems = [
   { icon: BookOpen, label: "Fanlar", href: "/subjects", roles: ["markaz_admin"] },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "manager", "teacher"] },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin", "manager"] },
+  { icon: Receipt, label: "Xarajatlar", href: "/expenses", roles: ["markaz_admin", "manager"] },
   { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin", "manager"] },
   { icon: FileText, label: "Oylik", href: "/teacher-salary", roles: ["teacher"] },
   { icon: Settings, label: translations.nav.settings, href: "/settings", roles: ["markaz_admin"] },

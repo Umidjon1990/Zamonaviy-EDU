@@ -23,6 +23,8 @@ import {
   type InsertPayment,
   type Grade,
   type InsertGrade,
+  type Expense,
+  type InsertExpense,
   type SubscriptionPlan,
   type InsertSubscriptionPlan,
   type TenantSubscription,
@@ -37,6 +39,7 @@ import {
   attendance,
   payments,
   grades,
+  expenses,
   subscriptionPlans,
   tenantSubscriptions,
 } from "@shared/schema";
@@ -151,6 +154,12 @@ export interface IStorage {
   updateGrade(id: number, tenantId: number, grade: Partial<InsertGrade>): Promise<Grade | undefined>;
   deleteGrade(id: number, tenantId: number): Promise<boolean>;
   
+  // Expenses
+  getExpenses(tenantId: number, month?: number, year?: number): Promise<Expense[]>;
+  createExpense(expense: InsertExpense): Promise<Expense>;
+  updateExpense(id: number, tenantId: number, data: Partial<InsertExpense>): Promise<Expense | undefined>;
+  deleteExpense(id: number, tenantId: number): Promise<boolean>;
+
   // Statistics
   getStats(tenantId: number): Promise<{
     totalStudents: number;
@@ -519,16 +528,13 @@ export class DatabaseStorage implements IStorage {
     const endDate = new Date(year, month, 0);
     endDate.setHours(23, 59, 59, 999);
     
-    const teacherStudents = await this.getStudentsByTeacher(teacherId, tenantId);
-    const studentIds = teacherStudents.map(s => s.id);
-    if (studentIds.length === 0) {
-      return { totalPayments: 0, salaryPercent, salary: 0 };
-    }
-    
-    const result = await db.select({ total: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
+      totalEarning: sql<number>`COALESCE(SUM(${payments.teacherEarning}), 0)`,
+    })
       .from(payments)
       .where(and(
-        inArray(payments.studentId, studentIds),
+        eq(payments.teacherId, teacherId),
         eq(payments.tenantId, tenantId),
         eq(payments.status, 'completed'),
         sql`${payments.createdAt} >= ${startDate}`,
@@ -536,7 +542,7 @@ export class DatabaseStorage implements IStorage {
       ));
     
     const totalPayments = Number(result[0]?.total || 0);
-    const salary = Math.round(totalPayments * salaryPercent / 100);
+    const salary = Number(result[0]?.totalEarning || 0) || Math.round(totalPayments * salaryPercent / 100);
     
     return { totalPayments, salaryPercent, salary };
   }
@@ -754,6 +760,33 @@ export class DatabaseStorage implements IStorage {
   async getUserByTelegramChatId(chatId: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.telegramChatId, chatId)).limit(1);
     return result[0];
+  }
+
+  async getExpenses(tenantId: number, month?: number, year?: number): Promise<Expense[]> {
+    const conditions = [eq(expenses.tenantId, tenantId)];
+    if (month && year) {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(sql`${expenses.date} >= ${startDate}`);
+      conditions.push(sql`${expenses.date} <= ${endDate}`);
+    }
+    return await db.select().from(expenses).where(and(...conditions)).orderBy(desc(expenses.date));
+  }
+
+  async createExpense(expense: InsertExpense): Promise<Expense> {
+    const result = await db.insert(expenses).values(expense).returning();
+    return result[0];
+  }
+
+  async updateExpense(id: number, tenantId: number, data: Partial<InsertExpense>): Promise<Expense | undefined> {
+    const result = await db.update(expenses).set(data).where(and(eq(expenses.id, id), eq(expenses.tenantId, tenantId))).returning();
+    return result[0];
+  }
+
+  async deleteExpense(id: number, tenantId: number): Promise<boolean> {
+    const result = await db.delete(expenses).where(and(eq(expenses.id, id), eq(expenses.tenantId, tenantId))).returning();
+    return result.length > 0;
   }
 }
 

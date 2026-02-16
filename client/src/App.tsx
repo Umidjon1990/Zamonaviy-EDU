@@ -8,8 +8,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Rollar uchun ruxsat berilgan yo'llar
 const roleRouteAccess: Record<string, string[]> = {
-  markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/reports", "/settings"],
-  manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/reports"],
+  markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/expenses", "/reports", "/settings"],
+  manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/expenses", "/reports"],
   teacher: ["/attendance", "/students", "/schedule", "/teacher-salary"],
 };
 
@@ -23,6 +23,7 @@ const Schedule = lazy(() => import("@/pages/Schedule"));
 const Attendance = lazy(() => import("@/pages/Attendance"));
 const Payments = lazy(() => import("@/pages/Payments"));
 const Reports = lazy(() => import("@/pages/Reports"));
+const Expenses = lazy(() => import("@/pages/Expenses"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const TeacherSalary = lazy(() => import("@/pages/TeacherSalary"));
 const Login = lazy(() => import("@/pages/Login"));
@@ -99,6 +100,7 @@ function AdminRoutes() {
             <Route path="/schedule" component={Schedule} />
             <Route path="/attendance" component={Attendance} />
             <Route path="/payments" component={Payments} />
+            <Route path="/expenses" component={Expenses} />
             <Route path="/reports" component={Reports} />
             <Route path="/teacher-salary" component={TeacherSalary} />
             <Route path="/settings" component={Settings} />

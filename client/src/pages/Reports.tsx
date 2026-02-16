@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { useStudents, usePayments, useGroups, useTeachers } from "@/lib/api";
+import { useStudents, usePayments, useGroups, useTeachers, useExpenses } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -48,6 +48,8 @@ export default function Reports() {
   const [selectedGroup, setSelectedGroup] = useState("all");
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
 
+  const { data: expensesData } = useExpenses(parseInt(selectedMonth), parseInt(selectedYear));
+
   const { data: attendanceData } = useQuery({
     queryKey: ["attendance-report", selectedMonth, selectedYear, selectedGroup],
     queryFn: async () => {
@@ -84,6 +86,9 @@ export default function Reports() {
            p.status === "completed";
   });
   const monthlyIncome = monthlyPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+  const monthlyExpenses = (expensesData || []).reduce((sum: number, e: any) => sum + e.amount, 0);
+  const netProfit = monthlyIncome - monthlyExpenses;
 
   const activeStudents = (students || []).filter((s: any) => s.status === "active").length;
   const totalStudents = (students || []).length;
@@ -201,24 +206,19 @@ export default function Reports() {
     ? (groups || []).filter((g: any) => g.teacherId === selectedTeacher.id)
     : [];
   
-  const teacherStudentIds = new Set<number>();
-  teacherGroups.forEach((g: any) => {
-    (students || []).forEach((s: any) => {
-      if (s.groupIds?.includes(g.id)) {
-        teacherStudentIds.add(s.id);
-      }
-    });
-  });
+  const teacherPayments = selectedTeacher 
+    ? monthlyPayments.filter((p: any) => p.teacherId === selectedTeacher.id)
+    : [];
+  const teacherIncome = teacherPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+  const teacherTotalEarning = teacherPayments.reduce((sum: number, p: any) => sum + (p.teacherEarning || 0), 0);
   
-  const teacherStudents = (students || []).filter((s: any) => teacherStudentIds.has(s.id));
+  const salaryPercentage = selectedTeacher?.salaryPercent || 0;
+  const teacherSalary = teacherTotalEarning || Math.round(teacherIncome * (salaryPercentage / 100));
+  
+  const teacherPaymentStudentIds = new Set(teacherPayments.map((p: any) => p.studentId));
+  const teacherStudents = (students || []).filter((s: any) => teacherPaymentStudentIds.has(s.id));
   const paidStudents = teacherStudents.filter((s: any) => s.balance >= 0);
   const debtorStudents = teacherStudents.filter((s: any) => s.balance < 0);
-  
-  const teacherPayments = monthlyPayments.filter((p: any) => teacherStudentIds.has(p.studentId));
-  const teacherIncome = teacherPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-  
-  const salaryPercentage = selectedTeacher?.salaryPercentage || 40;
-  const teacherSalary = Math.round(teacherIncome * (salaryPercentage / 100));
 
   const generateSalaryPDF = () => {
     if (!selectedTeacher) return;
@@ -366,7 +366,7 @@ _Zamonaviy-Edu_
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <Card className="card-modern hover-lift">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -378,6 +378,34 @@ _Zamonaviy-Edu_
               {monthlyIncome.toLocaleString()} UZS
             </div>
             <p className="text-xs text-muted-foreground">{monthlyPayments.length} ta to'lov</p>
+          </CardContent>
+        </Card>
+
+        <Card className="card-modern hover-lift">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-red-500" /> Xarajatlar
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600" data-testid="text-monthly-expenses">
+              {monthlyExpenses.toLocaleString()} UZS
+            </div>
+            <p className="text-xs text-muted-foreground">{(expensesData || []).length} ta xarajat</p>
+          </CardContent>
+        </Card>
+
+        <Card className="card-modern hover-lift">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-blue-500" /> Sof foyda
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${netProfit >= 0 ? "text-emerald-600" : "text-red-600"}`} data-testid="text-net-profit">
+              {netProfit.toLocaleString()} UZS
+            </div>
+            <p className="text-xs text-muted-foreground">Tushum - Xarajat</p>
           </CardContent>
         </Card>
 

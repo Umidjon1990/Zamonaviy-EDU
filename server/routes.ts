@@ -15,6 +15,7 @@ import {
   insertAttendanceSchema,
   insertPaymentSchema,
   insertGradeSchema,
+  insertExpenseSchema,
   insertTenantSchema,
   insertSubscriptionPlanSchema,
   insertTenantSubscriptionSchema,
@@ -1313,6 +1314,55 @@ export async function registerRoutes(
       res.json(salary);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch teacher salary" });
+    }
+  });
+
+  // ===== EXPENSES =====
+  app.get("/api/expenses", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      const expenses = await storage.getExpenses(tenantId, month, year);
+      res.json(expenses);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch expenses" });
+    }
+  });
+
+  app.post("/api/expenses", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const data = insertExpenseSchema.parse({ ...req.body, tenantId });
+      const expense = await storage.createExpense(data);
+      res.status(201).json(expense);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid expense data" });
+    }
+  });
+
+  app.put("/api/expenses/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      const { title, amount, category, notes, date } = req.body;
+      const updated = await storage.updateExpense(id, tenantId, { title, amount, category, notes, date });
+      if (!updated) return res.status(404).json({ error: "Expense not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update expense" });
+    }
+  });
+
+  app.delete("/api/expenses/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const tenantId = getTenantId(req);
+      const deleted = await storage.deleteExpense(id, tenantId);
+      if (!deleted) return res.status(404).json({ error: "Expense not found" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete expense" });
     }
   });
 
