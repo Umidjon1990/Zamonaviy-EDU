@@ -1333,11 +1333,16 @@ export async function registerRoutes(
   app.post("/api/expenses", async (req, res) => {
     try {
       const tenantId = getTenantId(req);
-      const data = insertExpenseSchema.parse({ ...req.body, tenantId });
+      const body = { ...req.body, tenantId };
+      if (body.date && typeof body.date === "string") {
+        body.date = new Date(body.date);
+      }
+      const data = insertExpenseSchema.parse(body);
       const expense = await storage.createExpense(data);
       res.status(201).json(expense);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid expense data" });
+    } catch (error: any) {
+      console.error("Expense creation error:", error?.message || error);
+      res.status(400).json({ error: error?.message || "Invalid expense data" });
     }
   });
 
@@ -1346,7 +1351,8 @@ export async function registerRoutes(
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
       const { title, amount, category, notes, date } = req.body;
-      const updated = await storage.updateExpense(id, tenantId, { title, amount, category, notes, date });
+      const parsedDate = date && typeof date === "string" ? new Date(date) : date;
+      const updated = await storage.updateExpense(id, tenantId, { title, amount, category, notes, date: parsedDate });
       if (!updated) return res.status(404).json({ error: "Expense not found" });
       res.json(updated);
     } catch (error) {
