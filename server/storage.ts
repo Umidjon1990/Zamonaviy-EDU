@@ -91,7 +91,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   deleteUser(id: string, tenantId: number): Promise<boolean>;
   getTeachers(tenantId: number): Promise<User[]>;
-  getTeacher(id: string, tenantId?: number): Promise<User | undefined>;
+  getTeacher(id: string, tenantId: number): Promise<User | undefined>;
   updateTeacher(id: string, tenantId: number, teacher: Partial<InsertUser>): Promise<User | undefined>;
   getAdmins(tenantId: number): Promise<User[]>;
   
@@ -104,23 +104,23 @@ export interface IStorage {
   
   // Students
   getStudents(tenantId: number): Promise<Student[]>;
-  getStudent(id: number, tenantId?: number): Promise<Student | undefined>;
+  getStudent(id: number, tenantId: number): Promise<Student | undefined>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: number, tenantId: number, student: Partial<InsertStudent>): Promise<Student | undefined>;
   deleteStudent(id: number, tenantId: number): Promise<boolean>;
   
   // Subjects
   getSubjects(tenantId: number): Promise<Subject[]>;
-  getSubject(id: number): Promise<Subject | undefined>;
+  getSubject(id: number, tenantId: number): Promise<Subject | undefined>;
   createSubject(subject: InsertSubject): Promise<Subject>;
   updateSubject(id: number, tenantId: number, data: Partial<InsertSubject>): Promise<Subject | undefined>;
   deleteSubject(id: number, tenantId: number): Promise<boolean>;
   
   // Groups
   getGroups(tenantId: number): Promise<Group[]>;
-  getGroup(id: number, tenantId?: number): Promise<Group | undefined>;
+  getGroup(id: number, tenantId: number): Promise<Group | undefined>;
   getGroupsByTeacher(teacherId: string, tenantId: number): Promise<Group[]>;
-  getStudentsByGroup(groupId: number): Promise<Student[]>;
+  getStudentsByGroup(groupId: number, tenantId: number): Promise<Student[]>;
   getStudentsByTeacher(teacherId: string, tenantId: number): Promise<Student[]>;
   getPaymentsByTeacher(teacherId: string, tenantId: number): Promise<Payment[]>;
   getAttendanceByTeacher(teacherId: string, tenantId: number, groupId?: number, month?: number, year?: number): Promise<Attendance[]>;
@@ -130,26 +130,26 @@ export interface IStorage {
   deleteGroup(id: number, tenantId: number): Promise<boolean>;
   
   // Student Groups
-  getStudentGroups(studentId: number): Promise<StudentGroup[]>;
+  getStudentGroups(studentId: number, tenantId: number): Promise<StudentGroup[]>;
   addStudentToGroup(studentGroup: InsertStudentGroup): Promise<StudentGroup>;
   removeStudentFromGroup(studentId: number, groupId: number): Promise<boolean>;
   
   // Attendance
   getAttendance(tenantId: number, groupId?: number, date?: Date, month?: number, year?: number): Promise<Attendance[]>;
-  getAttendanceById(id: number, tenantId?: number): Promise<Attendance | undefined>;
+  getAttendanceById(id: number, tenantId: number): Promise<Attendance | undefined>;
   createAttendance(attendance: InsertAttendance): Promise<Attendance>;
   updateAttendance(id: number, tenantId: number, attendance: Partial<InsertAttendance>): Promise<Attendance | undefined>;
   
   // Payments
   getPayments(tenantId: number, studentId?: number): Promise<Payment[]>;
-  getPayment(id: number, tenantId?: number): Promise<Payment | undefined>;
+  getPayment(id: number, tenantId: number): Promise<Payment | undefined>;
   createPayment(payment: InsertPayment): Promise<Payment>;
   updatePayment(id: number, tenantId: number, data: Partial<InsertPayment>): Promise<Payment | undefined>;
   deletePayment(id: number, tenantId: number): Promise<boolean>;
   
   // Grades
   getGrades(tenantId: number, groupId?: number, studentId?: number, date?: Date, month?: number, year?: number): Promise<Grade[]>;
-  getGradeById(id: number, tenantId?: number): Promise<Grade | undefined>;
+  getGradeById(id: number, tenantId: number): Promise<Grade | undefined>;
   createGrade(grade: InsertGrade): Promise<Grade>;
   updateGrade(id: number, tenantId: number, grade: Partial<InsertGrade>): Promise<Grade | undefined>;
   deleteGrade(id: number, tenantId: number): Promise<boolean>;
@@ -313,10 +313,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'teacher')));
   }
 
-  async getTeacher(id: string, tenantId?: number): Promise<User | undefined> {
-    const conditions = [eq(users.id, id), eq(users.role, 'teacher')];
-    if (tenantId) conditions.push(eq(users.tenantId, tenantId));
-    const result = await db.select().from(users).where(and(...conditions)).limit(1);
+  async getTeacher(id: string, tenantId: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(and(eq(users.id, id), eq(users.role, 'teacher'), eq(users.tenantId, tenantId))).limit(1);
     return result[0];
   }
 
@@ -376,10 +374,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(students).where(eq(students.tenantId, tenantId)).orderBy(desc(students.createdAt));
   }
 
-  async getStudent(id: number, tenantId?: number): Promise<Student | undefined> {
-    const conditions = [eq(students.id, id)];
-    if (tenantId) conditions.push(eq(students.tenantId, tenantId));
-    const result = await db.select().from(students).where(and(...conditions)).limit(1);
+  async getStudent(id: number, tenantId: number): Promise<Student | undefined> {
+    const result = await db.select().from(students).where(and(eq(students.id, id), eq(students.tenantId, tenantId))).limit(1);
     return result[0];
   }
 
@@ -434,8 +430,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(subjects).where(eq(subjects.tenantId, tenantId));
   }
 
-  async getSubject(id: number): Promise<Subject | undefined> {
-    const result = await db.select().from(subjects).where(eq(subjects.id, id)).limit(1);
+  async getSubject(id: number, tenantId: number): Promise<Subject | undefined> {
+    const result = await db.select().from(subjects).where(and(eq(subjects.id, id), eq(subjects.tenantId, tenantId))).limit(1);
     return result[0];
   }
 
@@ -459,10 +455,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(groups).where(eq(groups.tenantId, tenantId)).orderBy(desc(groups.createdAt));
   }
 
-  async getGroup(id: number, tenantId?: number): Promise<Group | undefined> {
-    const conditions = [eq(groups.id, id)];
-    if (tenantId) conditions.push(eq(groups.tenantId, tenantId));
-    const result = await db.select().from(groups).where(and(...conditions)).limit(1);
+  async getGroup(id: number, tenantId: number): Promise<Group | undefined> {
+    const result = await db.select().from(groups).where(and(eq(groups.id, id), eq(groups.tenantId, tenantId))).limit(1);
     return result[0];
   }
 
@@ -470,12 +464,12 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(groups).where(and(eq(groups.teacherId, teacherId), eq(groups.tenantId, tenantId))).orderBy(desc(groups.createdAt));
   }
 
-  async getStudentsByGroup(groupId: number): Promise<Student[]> {
+  async getStudentsByGroup(groupId: number, tenantId: number): Promise<Student[]> {
     const result = await db
       .select({ student: students })
       .from(studentGroups)
       .innerJoin(students, eq(studentGroups.studentId, students.id))
-      .where(eq(studentGroups.groupId, groupId));
+      .where(and(eq(studentGroups.groupId, groupId), eq(students.tenantId, tenantId)));
     return result.map(r => r.student);
   }
 
@@ -563,7 +557,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Student Groups
-  async getStudentGroups(studentId: number): Promise<StudentGroup[]> {
+  async getStudentGroups(studentId: number, tenantId: number): Promise<StudentGroup[]> {
+    const student = await this.getStudent(studentId, tenantId);
+    if (!student) return [];
     return await db.select().from(studentGroups).where(eq(studentGroups.studentId, studentId));
   }
 
@@ -601,10 +597,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(attendance).where(and(...conditions)).orderBy(desc(attendance.date));
   }
 
-  async getAttendanceById(id: number, tenantId?: number): Promise<Attendance | undefined> {
-    const conditions = [eq(attendance.id, id)];
-    if (tenantId) conditions.push(eq(attendance.tenantId, tenantId));
-    const result = await db.select().from(attendance).where(and(...conditions)).limit(1);
+  async getAttendanceById(id: number, tenantId: number): Promise<Attendance | undefined> {
+    const result = await db.select().from(attendance).where(and(eq(attendance.id, id), eq(attendance.tenantId, tenantId))).limit(1);
     return result[0];
   }
 
@@ -629,10 +623,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(payments).where(and(...conditions)).orderBy(desc(payments.createdAt));
   }
 
-  async getPayment(id: number, tenantId?: number): Promise<Payment | undefined> {
-    const conditions = [eq(payments.id, id)];
-    if (tenantId) conditions.push(eq(payments.tenantId, tenantId));
-    const result = await db.select().from(payments).where(and(...conditions)).limit(1);
+  async getPayment(id: number, tenantId: number): Promise<Payment | undefined> {
+    const result = await db.select().from(payments).where(and(eq(payments.id, id), eq(payments.tenantId, tenantId))).limit(1);
     return result[0];
   }
 
@@ -683,10 +675,8 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(grades).where(and(...conditions)).orderBy(desc(grades.date));
   }
 
-  async getGradeById(id: number, tenantId?: number): Promise<Grade | undefined> {
-    const conditions = [eq(grades.id, id)];
-    if (tenantId) conditions.push(eq(grades.tenantId, tenantId));
-    const result = await db.select().from(grades).where(and(...conditions)).limit(1);
+  async getGradeById(id: number, tenantId: number): Promise<Grade | undefined> {
+    const result = await db.select().from(grades).where(and(eq(grades.id, id), eq(grades.tenantId, tenantId))).limit(1);
     return result[0];
   }
 

@@ -128,15 +128,20 @@ export async function registerRoutes(
   });
 
   app.get("/api/auth/me", async (req, res) => {
-    if (!req.session.userId) {
+    if (!req.session.userId || !req.session.tenantId) {
       return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
     }
     try {
       const user = await storage.getUser(req.session.userId);
-      const tenant = await storage.getTenant(req.session.tenantId!);
+      const tenant = await storage.getTenant(req.session.tenantId);
       
       if (!user || !tenant) {
         return res.status(401).json({ error: "Foydalanuvchi topilmadi" });
+      }
+      
+      if (user.tenantId !== tenant.id) {
+        req.session.destroy(() => {});
+        return res.status(401).json({ error: "Session xatosi. Qayta kiring." });
       }
       
       res.json({
@@ -345,7 +350,7 @@ export async function registerRoutes(
       const allStudents = await storage.getStudents(tenantId);
       const unassigned = [];
       for (const student of allStudents) {
-        const groups = await storage.getStudentGroups(student.id);
+        const groups = await storage.getStudentGroups(student.id, tenantId);
         if (groups.length === 0) {
           unassigned.push(student);
         }
@@ -974,7 +979,7 @@ export async function registerRoutes(
           }
           
           // Add student to group if not already in it
-          const studentGroups = await storage.getStudentGroups(student.id);
+          const studentGroups = await storage.getStudentGroups(student.id, tenantId);
           const alreadyInGroup = studentGroups.some(sg => sg.groupId === group.id);
           
           if (!alreadyInGroup) {
@@ -1012,7 +1017,7 @@ export async function registerRoutes(
       if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
-      const groups = await storage.getStudentGroups(studentId);
+      const groups = await storage.getStudentGroups(studentId, tenantId);
       res.json(groups);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch student groups" });
@@ -1099,7 +1104,7 @@ export async function registerRoutes(
       
       // Send Telegram notification to student
       if (data.studentId && data.groupId && data.status && data.date) {
-        const group = await storage.getGroup(data.groupId);
+        const group = await storage.getGroup(data.groupId, tenantId);
         if (group) {
           notifyStudentAttendance(
             data.studentId, 
@@ -1539,7 +1544,7 @@ export async function registerRoutes(
       if (isTeacher(req) && group.teacherId !== getUserId(req)) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const students = await storage.getStudentsByGroup(groupId);
+      const students = await storage.getStudentsByGroup(groupId, tenantId);
       res.json(students);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch students" });
@@ -1743,7 +1748,7 @@ export async function registerRoutes(
       // If groupId provided, use it; otherwise find student's first group
       let group = groupId ? await storage.getGroup(groupId, tenantId) : null;
       if (!group) {
-        const studentGroupsList = await storage.getStudentGroups(studentId);
+        const studentGroupsList = await storage.getStudentGroups(studentId, tenantId);
         if (studentGroupsList.length > 0) {
           group = await storage.getGroup(studentGroupsList[0].groupId, tenantId);
         }
@@ -1778,7 +1783,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Telefon raqami yo'q" });
       }
 
-      const subject = group.subjectId ? await storage.getSubject(group.subjectId) : null;
+      const subject = group.subjectId ? await storage.getSubject(group.subjectId, tenantId) : null;
       const subjectName = subject?.name || "dars";
       const classTime = time || group.time?.split(" - ")[0] || "00:00";
       
