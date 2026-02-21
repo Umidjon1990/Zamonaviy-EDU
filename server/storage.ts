@@ -105,6 +105,7 @@ export interface IStorage {
   // Students
   getStudents(tenantId: number): Promise<Student[]>;
   getStudent(id: number, tenantId: number): Promise<Student | undefined>;
+  getStudentsWithGroups(studentList: Student[], tenantId: number): Promise<any[]>;
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: number, tenantId: number, student: Partial<InsertStudent>): Promise<Student | undefined>;
   deleteStudent(id: number, tenantId: number): Promise<boolean>;
@@ -377,6 +378,45 @@ export class DatabaseStorage implements IStorage {
   async getStudent(id: number, tenantId: number): Promise<Student | undefined> {
     const result = await db.select().from(students).where(and(eq(students.id, id), eq(students.tenantId, tenantId))).limit(1);
     return result[0];
+  }
+
+  async getStudentsWithGroups(studentList: Student[], tenantId: number): Promise<any[]> {
+    if (studentList.length === 0) return [];
+    
+    const studentIds = studentList.map(s => s.id);
+    
+    const sgRows = await db
+      .select({
+        studentId: studentGroups.studentId,
+        groupName: groups.name,
+        subjectName: subjects.name,
+        teacherFirstName: users.firstName,
+        teacherLastName: users.lastName,
+      })
+      .from(studentGroups)
+      .innerJoin(groups, and(eq(studentGroups.groupId, groups.id), eq(groups.tenantId, tenantId)))
+      .leftJoin(subjects, eq(groups.subjectId, subjects.id))
+      .leftJoin(users, eq(groups.teacherId, users.id))
+      .where(inArray(studentGroups.studentId, studentIds));
+
+    const groupMap = new Map<number, { groups: string[]; subjects: string[]; teachers: string[] }>();
+    for (const row of sgRows) {
+      if (!groupMap.has(row.studentId)) {
+        groupMap.set(row.studentId, { groups: [], subjects: [], teachers: [] });
+      }
+      const entry = groupMap.get(row.studentId)!;
+      if (row.groupName) entry.groups.push(row.groupName);
+      entry.subjects.push(row.subjectName || '');
+      const teacherName = [row.teacherFirstName, row.teacherLastName].filter(Boolean).join(' ');
+      if (teacherName && !entry.teachers.includes(teacherName)) entry.teachers.push(teacherName);
+    }
+
+    return studentList.map(student => ({
+      ...student,
+      groupNames: groupMap.get(student.id)?.groups || [],
+      subjectNames: groupMap.get(student.id)?.subjects || [],
+      teacherNames: groupMap.get(student.id)?.teachers || [],
+    }));
   }
 
   async createStudent(student: InsertStudent): Promise<Student> {

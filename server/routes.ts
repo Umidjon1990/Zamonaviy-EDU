@@ -7,6 +7,7 @@ import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalan
 import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt } from "./telegram-bot";
 import { verifyObjectPath } from "./replit_integrations/object_storage/routes";
 import {
+  type Student,
   insertLeadSchema,
   insertStudentSchema,
   insertSubjectSchema,
@@ -332,13 +333,17 @@ export async function registerRoutes(
   // ===== STUDENTS =====
   app.get("/api/students", async (req, res) => {
     try {
-      // O'qituvchi faqat o'z o'quvchilarini ko'radi
+      const tenantId = getTenantId(req);
+      let studentList: Student[];
+      
       if (isTeacher(req)) {
-        const students = await storage.getStudentsByTeacher(getUserId(req), getTenantId(req));
-        return res.json(students);
+        studentList = await storage.getStudentsByTeacher(getUserId(req), tenantId);
+      } else {
+        studentList = await storage.getStudents(tenantId);
       }
-      const students = await storage.getStudents(getTenantId(req));
-      res.json(students);
+
+      const enriched = await storage.getStudentsWithGroups(studentList, tenantId);
+      res.json(enriched);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch students" });
     }

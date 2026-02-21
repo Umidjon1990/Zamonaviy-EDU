@@ -209,7 +209,9 @@ export default function Students() {
         const fullName = `${s.firstName} ${s.lastName}`.toLowerCase();
         const phone = (s.phone || '').toLowerCase();
         const parentPhone = (s.parentPhone || '').toLowerCase();
-        return fullName.includes(query) || phone.includes(query) || parentPhone.includes(query);
+        const groupNames = (s.groupNames || []).join(' ').toLowerCase();
+        const teacherNames = (s.teacherNames || []).join(' ').toLowerCase();
+        return fullName.includes(query) || phone.includes(query) || parentPhone.includes(query) || groupNames.includes(query) || teacherNames.includes(query);
       });
     }
     return result;
@@ -555,6 +557,8 @@ export default function Students() {
                 <TableHead>F.I.SH</TableHead>
                 <TableHead>Telefon</TableHead>
                 <TableHead>Ota-ona</TableHead>
+                <TableHead>Yo'nalish</TableHead>
+                <TableHead>O'qituvchi</TableHead>
                 <TableHead>Balans</TableHead>
                 <TableHead>Holat</TableHead>
                 <TableHead className="text-right">Amallar</TableHead>
@@ -569,6 +573,33 @@ export default function Students() {
                     </TableCell>
                     <TableCell data-testid={`text-phone-${student.id}`}>{student.phone}</TableCell>
                     <TableCell>{student.parentPhone}</TableCell>
+                    <TableCell>
+                      {student.groupNames?.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {student.groupNames.map((g: string, i: number) => (
+                            <div key={i} className="flex flex-wrap gap-1">
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                {g}
+                              </Badge>
+                              {student.subjectNames?.[i] && (
+                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                  {student.subjectNames[i]}
+                                </Badge>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Guruhsiz</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {student.teacherNames?.length > 0 ? (
+                        <span className="text-sm">{student.teacherNames.join(", ")}</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <span className={student.balance < 0 ? "text-destructive font-medium" : "text-emerald-600 font-medium"} data-testid={`text-balance-${student.id}`}>
                         {student.balance.toLocaleString()} UZS
@@ -602,7 +633,7 @@ export default function Students() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Hozircha o'quvchilar yo'q. Yangi o'quvchi qo'shing.
                   </TableCell>
                 </TableRow>
