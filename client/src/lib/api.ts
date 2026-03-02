@@ -109,6 +109,17 @@ export function useDeleteStudent() {
   });
 }
 
+export function useBulkDeleteStudents() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (studentIds: number[]) => apiCall("/students/bulk-delete", { method: "POST", body: JSON.stringify({ studentIds }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+    },
+  });
+}
+
 // ===== SUBJECTS =====
 export function useSubjects() {
   return useQuery({

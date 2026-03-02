@@ -77,6 +77,7 @@ export const users = pgTable("users", {
   tenantId: integer("tenant_id").notNull(),
   email: text("email"),
   password: text("password").notNull(),
+  plainPassword: text("plain_password"),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   role: text("role").notNull(), // super_admin, markaz_admin, teacher, manager, student, parent

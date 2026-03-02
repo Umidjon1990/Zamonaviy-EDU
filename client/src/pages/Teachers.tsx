@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useSubjects } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, Percent, Pencil, BookOpen, Download, Upload, Eye, Shield } from "lucide-react";
+import { Plus, Search, Trash2, Percent, Pencil, BookOpen, Download, Upload, Eye, EyeOff, Shield, Key } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -51,6 +51,7 @@ export default function Teachers() {
     salaryPercent: 30,
     permissions: [] as string[],
   });
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
   const [importLoading, setImportLoading] = useState(false);
@@ -488,6 +489,11 @@ export default function Teachers() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-password">Yangi parol (bo'sh qoldirsa o'zgarmaydi)</Label>
+              {editingTeacher?.plainPassword && (
+                <p className="text-xs text-muted-foreground" data-testid="text-current-password">
+                  Joriy parol: <span className="font-mono font-medium text-foreground">{editingTeacher.plainPassword}</span>
+                </p>
+              )}
               <Input
                 id="edit-password"
                 type="password"
@@ -600,6 +606,7 @@ export default function Teachers() {
                 <TableHead>F.I.SH</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Telefon</TableHead>
+                <TableHead>Parol</TableHead>
                 <TableHead>Oylik foiz</TableHead>
                 <TableHead className="text-right">Amallar</TableHead>
               </TableRow>
@@ -613,6 +620,32 @@ export default function Teachers() {
                     </TableCell>
                     <TableCell data-testid={`text-email-${teacher.id}`}>{teacher.email}</TableCell>
                     <TableCell>{teacher.phone}</TableCell>
+                    <TableCell data-testid={`text-password-${teacher.id}`}>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-sm">
+                          {visiblePasswords.has(teacher.id) ? (teacher.plainPassword || "—") : "••••••"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setVisiblePasswords(prev => {
+                              const next = new Set(prev);
+                              if (next.has(teacher.id)) {
+                                next.delete(teacher.id);
+                              } else {
+                                next.add(teacher.id);
+                              }
+                              return next;
+                            });
+                          }}
+                          data-testid={`button-toggle-password-${teacher.id}`}
+                        >
+                          {visiblePasswords.has(teacher.id) ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <span className="inline-flex items-center px-2 py-1 rounded-md bg-primary/10 text-primary font-medium text-sm">
                         {teacher.salaryPercent || 0}%
@@ -630,7 +663,7 @@ export default function Teachers() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Hozircha o'qituvchilar yo'q. Yangi o'qituvchi qo'shing.
                   </TableCell>
                 </TableRow>

@@ -155,3 +155,24 @@ Preferred communication style: Simple, everyday language.
 - Backend: `hasTeacherPermission()` and `requireTeacherPermission()` middleware enforce permissions
 - Frontend: Teachers page has permissions section with checkboxes in create/edit dialogs
 - Permissions returned in both login and `/api/auth/me` responses
+
+### Teacher Password Visibility (March 2026)
+- Users table has `plainPassword` text column storing readable password alongside bcrypt hash
+- Admin can see teacher passwords in Teachers page (eye icon toggle per row)
+- Admin can change teacher password in edit dialog; both hash and plainPassword updated
+- Excel import also saves plainPassword ("123456" default)
+
+### Payment Filters (March 2026)
+- Payments page has client-side filters: date range (fromDate/toDate) and name search
+- Search matches student first/last name and teacher first/last name (case-insensitive)
+- Shows filtered count vs total when filters active
+- Clear filters button resets all
+
+### Bulk Student Delete (March 2026)
+- Students page has checkbox selection (individual + select all)
+- Selection bar shows count with "O'chirish" and "Bekor qilish" buttons
+- `POST /api/students/bulk-delete` endpoint accepts `{ studentIds: number[] }`
+- Deletes from student_groups and students tables; payments are PRESERVED
+- Tenant-scoped: first validates student IDs belong to tenant before deleting
+- Confirmation dialog warns that payments will be preserved
+- Permissions returned in both login and `/api/auth/me` responses

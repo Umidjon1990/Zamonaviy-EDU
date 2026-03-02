@@ -449,6 +449,22 @@ export async function registerRoutes(
     }
   });
 
+  // ===== STUDENTS BULK DELETE =====
+  app.post("/api/students/bulk-delete", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { studentIds } = req.body;
+      if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+        return res.status(400).json({ error: "studentIds massivi kerak" });
+      }
+      const deleted = await storage.bulkDeleteStudents(studentIds.map(Number), tenantId);
+      res.json({ deleted });
+    } catch (error) {
+      console.error("Bulk delete error:", error);
+      res.status(500).json({ error: "O'chirishda xatolik" });
+    }
+  });
+
   // ===== STUDENTS EXCEL IMPORT/EXPORT =====
   const studentTemplateColumns = ["Ism", "Familiya", "Telefon", "Ota-ona telefoni", "Guruh nomi", "Fan nomi", "Kunlari", "Vaqti", "Xonasi", "Oqituvchi"];
   const studentTemplateData = [
@@ -591,6 +607,7 @@ export async function registerRoutes(
             phone: phone || null,
             email: email || null,
             password: defaultPassword,
+            plainPassword: "123456",
             salaryPercent,
             role: "teacher",
           });
@@ -1593,13 +1610,15 @@ export async function registerRoutes(
   app.post("/api/teachers", async (req, res) => {
     try {
       const { firstName, lastName, email, password, phone, salaryPercent } = req.body;
-      const hashedPassword = await bcrypt.hash(password || "password123", 10);
+      const rawPassword = password || "password123";
+      const hashedPassword = await bcrypt.hash(rawPassword, 10);
       const teacher = await storage.createUser({
         tenantId: getTenantId(req),
         firstName,
         lastName,
         email: email || null,
         password: hashedPassword,
+        plainPassword: rawPassword,
         phone,
         salaryPercent: salaryPercent || 0,
         role: "teacher",
@@ -1634,6 +1653,7 @@ export async function registerRoutes(
       
       if (password && password.trim() !== "") {
         updateData.password = await bcrypt.hash(password, 10);
+        updateData.plainPassword = password;
       }
       
       const updated = await storage.updateTeacher(teacherId, tenantId, updateData);

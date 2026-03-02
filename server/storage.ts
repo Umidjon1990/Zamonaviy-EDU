@@ -109,6 +109,7 @@ export interface IStorage {
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: number, tenantId: number, student: Partial<InsertStudent>): Promise<Student | undefined>;
   deleteStudent(id: number, tenantId: number): Promise<boolean>;
+  bulkDeleteStudents(studentIds: number[], tenantId: number): Promise<number>;
   
   // Subjects
   getSubjects(tenantId: number): Promise<Subject[]>;
@@ -464,6 +465,16 @@ export class DatabaseStorage implements IStorage {
   async deleteStudent(id: number, tenantId: number): Promise<boolean> {
     const result = await db.delete(students).where(and(eq(students.id, id), eq(students.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  async bulkDeleteStudents(studentIds: number[], tenantId: number): Promise<number> {
+    if (studentIds.length === 0) return 0;
+    const tenantStudents = await db.select({ id: students.id }).from(students).where(and(inArray(students.id, studentIds), eq(students.tenantId, tenantId)));
+    const validIds = tenantStudents.map(s => s.id);
+    if (validIds.length === 0) return 0;
+    await db.delete(studentGroups).where(inArray(studentGroups.studentId, validIds));
+    const result = await db.delete(students).where(inArray(students.id, validIds));
+    return result.rowCount || 0;
   }
 
   // Subjects

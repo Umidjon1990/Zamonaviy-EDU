@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
-import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useGroups, useTeachers, useAddStudentToGroup, useUnassignedStudents } from "@/lib/api";
+import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useBulkDeleteStudents, useGroups, useTeachers, useAddStudentToGroup, useUnassignedStudents } from "@/lib/api";
 import { Plus, Search, Trash2, Pencil, Download, Upload, FileSpreadsheet, Eye } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +26,7 @@ export default function Students() {
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
+  const bulkDeleteStudents = useBulkDeleteStudents();
   const addStudentToGroup = useAddStudentToGroup();
   const { data: unassignedData } = useUnassignedStudents();
   const unassignedStudents = (unassignedData || []) as any[];
@@ -49,6 +52,8 @@ export default function Students() {
   const [importLoading, setImportLoading] = useState(false);
   const [isTemplateOpen, setIsTemplateOpen] = useState(false);
   const [templateInfo, setTemplateInfo] = useState<{ columns: string[], data: any[] } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const handleShowTemplate = async () => {
     try {
@@ -193,6 +198,34 @@ export default function Students() {
       } catch (error) {
         toast({ title: "Xatolik", description: "O'chirishda xatolik", variant: "destructive" });
       }
+    }
+  };
+
+  const toggleSelectStudent = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredStudents.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredStudents.map((s: any) => s.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      await bulkDeleteStudents.mutateAsync(Array.from(selectedIds));
+      toast({ title: "Muvaffaqiyat", description: `${selectedIds.size} ta o'quvchi o'chirildi` });
+      setSelectedIds(new Set());
+      setIsBulkDeleteOpen(false);
+    } catch (error) {
+      toast({ title: "Xatolik", description: "O'chirishda xatolik yuz berdi", variant: "destructive" });
     }
   };
 
@@ -549,11 +582,62 @@ export default function Students() {
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <span className="text-sm font-medium" data-testid="text-selected-count">{selectedIds.size} ta o'quvchi tanlandi</span>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setIsBulkDeleteOpen(true)}
+            data-testid="button-bulk-delete"
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> O'chirish
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedIds(new Set())}
+            data-testid="button-clear-selection"
+          >
+            Bekor qilish
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O'quvchilarni o'chirish</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedIds.size} ta o'quvchini o'chirmoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi. To'lov tarixi saqlanib qoladi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-bulk-delete-cancel">Bekor qilish</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={bulkDeleteStudents.isPending}
+              data-testid="button-bulk-delete-confirm"
+            >
+              {bulkDeleteStudents.isPending ? "O'chirilmoqda..." : `${selectedIds.size} ta o'chirish`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Card className="shadow-sm">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={filteredStudents.length > 0 && selectedIds.size === filteredStudents.length}
+                    onCheckedChange={toggleSelectAll}
+                    data-testid="checkbox-select-all"
+                  />
+                </TableHead>
                 <TableHead>F.I.SH</TableHead>
                 <TableHead>Telefon</TableHead>
                 <TableHead>Ota-ona</TableHead>
@@ -568,6 +652,13 @@ export default function Students() {
               {filteredStudents.length > 0 ? (
                 filteredStudents.map((student: any) => (
                   <TableRow key={student.id} data-testid={`row-student-${student.id}`}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(student.id)}
+                        onCheckedChange={() => toggleSelectStudent(student.id)}
+                        data-testid={`checkbox-student-${student.id}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium" data-testid={`text-name-${student.id}`}>
                       {student.firstName} {student.lastName}
                     </TableCell>
@@ -633,7 +724,7 @@ export default function Students() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Hozircha o'quvchilar yo'q. Yangi o'quvchi qo'shing.
                   </TableCell>
                 </TableRow>

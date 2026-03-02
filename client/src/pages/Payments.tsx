@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translations } from "@/lib/i18n";
 import { usePayments, useCreatePayment, useUpdatePayment, useDeletePayment, useStudents, useGroups, useTeachers, useSubjects } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, User, Phone, Wallet, Pencil, Trash2, MessageSquare, Calendar, Clock, GraduationCap, UserPlus, Users } from "lucide-react";
+import { Plus, Search, User, Phone, Wallet, Pencil, Trash2, MessageSquare, Calendar, Clock, GraduationCap, UserPlus, Users, X, Filter } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import PaymentReceipt from "@/components/PaymentReceipt";
@@ -45,6 +45,9 @@ export default function Payments() {
   const [isOpen, setIsOpen] = useState(false);
   const [sendSms, setSendSms] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterFromDate, setFilterFromDate] = useState("");
+  const [filterToDate, setFilterToDate] = useState("");
   const [studentMode, setStudentMode] = useState<"existing" | "new">("existing");
   const [receiptData, setReceiptData] = useState<{
     payment: any;
@@ -107,6 +110,35 @@ export default function Payments() {
     if (!selectedTeacher || !formData.amount) return 0;
     return Math.round(formData.amount * (selectedTeacher.salaryPercent || 0) / 100);
   }, [selectedTeacher, formData.amount]);
+
+  const filteredPayments = useMemo(() => {
+    let result = paymentsList;
+
+    if (filterSearch.trim()) {
+      const query = filterSearch.toLowerCase().trim();
+      result = result.filter((p: any) => {
+        const student = studentsList.find((s: any) => s.id === p.studentId);
+        const studentName = student ? `${student.firstName} ${student.lastName}`.toLowerCase() : '';
+        const teacher = teachersList.find((t: any) => t.id === p.teacherId);
+        const teacherName = teacher ? `${teacher.firstName} ${teacher.lastName}`.toLowerCase() : '';
+        return studentName.includes(query) || teacherName.includes(query);
+      });
+    }
+
+    if (filterFromDate) {
+      const from = new Date(filterFromDate);
+      from.setHours(0, 0, 0, 0);
+      result = result.filter((p: any) => new Date(p.createdAt) >= from);
+    }
+
+    if (filterToDate) {
+      const to = new Date(filterToDate);
+      to.setHours(23, 59, 59, 999);
+      result = result.filter((p: any) => new Date(p.createdAt) <= to);
+    }
+
+    return result;
+  }, [paymentsList, filterSearch, filterFromDate, filterToDate, studentsList, teachersList]);
 
   const resetForm = () => {
     setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "", teacherId: "" });
@@ -554,6 +586,65 @@ export default function Payments() {
       </div>
 
       <Card className="shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
+            <div className="flex-1 w-full sm:w-auto">
+              <Label className="text-xs font-medium mb-1.5 block">
+                <Search className="w-3 h-3 inline mr-1" />
+                Ism/familiya bo'yicha qidirish
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="O'quvchi yoki o'qituvchi ismi..."
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-filter-search"
+                />
+              </div>
+            </div>
+            <div className="w-full sm:w-auto">
+              <Label className="text-xs font-medium mb-1.5 block">Dan</Label>
+              <Input
+                type="date"
+                value={filterFromDate}
+                onChange={(e) => setFilterFromDate(e.target.value)}
+                data-testid="input-filter-from-date"
+              />
+            </div>
+            <div className="w-full sm:w-auto">
+              <Label className="text-xs font-medium mb-1.5 block">Gacha</Label>
+              <Input
+                type="date"
+                value={filterToDate}
+                onChange={(e) => setFilterToDate(e.target.value)}
+                data-testid="input-filter-to-date"
+              />
+            </div>
+            {(filterSearch || filterFromDate || filterToDate) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setFilterSearch(""); setFilterFromDate(""); setFilterToDate(""); }}
+                className="whitespace-nowrap"
+                data-testid="button-clear-filters"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Tozalash
+              </Button>
+            )}
+          </div>
+          {(filterSearch || filterFromDate || filterToDate) && (
+            <div className="mt-3 text-sm text-muted-foreground flex items-center gap-1">
+              <Filter className="w-4 h-4" />
+              {filteredPayments.length} ta to'lov topildi (jami {paymentsList.length} tadan)
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -568,8 +659,8 @@ export default function Payments() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paymentsList.length > 0 ? (
-                paymentsList.map((payment: any) => (
+              {filteredPayments.length > 0 ? (
+                filteredPayments.map((payment: any) => (
                   <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
                     <TableCell className="font-medium" data-testid={`text-student-${payment.id}`}>
                       {getStudentName(payment.studentId)}
