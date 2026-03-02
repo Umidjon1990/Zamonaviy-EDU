@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
 const AVAILABLE_PERMISSIONS = [
+  { key: "create_group", label: "Guruh yaratish" },
   { key: "accept_payment", label: "To'lov qabul qilish" },
   { key: "move_student", label: "O'quvchini guruhdan guruhga ko'chirish" },
   { key: "edit_group", label: "Guruhlarni tahrir qila olish" },
@@ -22,7 +23,6 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 const DEFAULT_CAPABILITIES = [
-  "Guruh yaratish",
   "Dars vaqtlarini belgilash",
   "Davomat olish",
   "Baho qo'yish",

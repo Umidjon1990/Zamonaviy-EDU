@@ -725,7 +725,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/groups", async (req, res) => {
+  app.post("/api/groups", requireTenantAuth, requireTeacherPermission('create_group'), async (req, res) => {
     try {
       const rawData = { ...req.body, tenantId: getTenantId(req) };
       if (rawData.subjectId === "" || rawData.subjectId === undefined) {
