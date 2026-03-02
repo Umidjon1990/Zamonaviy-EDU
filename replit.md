@@ -135,3 +135,23 @@ Preferred communication style: Simple, everyday language.
 - Global `@media print` CSS in `index.css` hides all page content except elements with `.print-receipt` class
 - Both PaymentReceipt component and Reports salary receipt use `.print-receipt` class for clean printing
 - Elements with `.no-print` class are hidden during printing
+
+### Expense-Teacher Linking (March 2026)
+- Expenses table now has `teacherId` column to link salary expenses to specific teachers
+- When category is "salary" (Oylik maosh), teacher selector appears in expense form
+- Teacher salary calculation deducts advance expenses: `finalSalary = calculatedSalary - totalAdvance`
+- Advance amounts shown in salary receipt (UI cards, PDF, print, Telegram)
+- `getExpensesByTeacher()` storage method filters expenses by teacherId + category='salary' + date range
+
+### Teacher Permissions System (March 2026)
+- Users table has `permissions` text array column for teacher-specific permissions
+- Default teacher capabilities (always available): guruh yaratish, dars vaqtlarini belgilash, davomat olish, baho qo'yish
+- Optional permissions (admin can grant/revoke):
+  - `accept_payment`: To'lov qabul qilish
+  - `move_student`: O'quvchini guruhdan guruhga ko'chirish
+  - `edit_group`: Guruhlarni tahrir qila olish
+  - `remove_student`: O'quvchini guruhdan chiqarish
+  - `add_student`: O'quvchi qo'shish
+- Backend: `hasTeacherPermission()` and `requireTeacherPermission()` middleware enforce permissions
+- Frontend: Teachers page has permissions section with checkboxes in create/edit dialogs
+- Permissions returned in both login and `/api/auth/me` responses

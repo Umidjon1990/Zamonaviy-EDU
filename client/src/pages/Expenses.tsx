@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense } from "@/lib/api";
+import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense, useTeachers } from "@/lib/api";
 import { Plus, Pencil, Trash2, Wallet, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -52,10 +52,17 @@ export default function Expenses() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const { data: expenses, isLoading } = useExpenses(selectedMonth, selectedYear);
+  const { data: teachers } = useTeachers();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
   const { toast } = useToast();
+
+  const teachersList = Array.isArray(teachers) ? teachers : [];
+  const getTeacherName = (teacherId: string) => {
+    const teacher = teachersList.find((t: any) => t.id === teacherId);
+    return teacher ? `${teacher.firstName} ${teacher.lastName}` : "";
+  };
 
   const [isOpen, setIsOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<any>(null);
@@ -64,6 +71,7 @@ export default function Expenses() {
     title: "",
     amount: 0,
     category: "other",
+    teacherId: "" as string,
     notes: "",
     date: new Date().toISOString().split("T")[0],
   });
@@ -81,7 +89,7 @@ export default function Expenses() {
   }, {});
 
   const resetForm = () => {
-    setFormData({ title: "", amount: 0, category: "other", notes: "", date: new Date().toISOString().split("T")[0] });
+    setFormData({ title: "", amount: 0, category: "other", teacherId: "", notes: "", date: new Date().toISOString().split("T")[0] });
     setEditExpense(null);
   };
 
@@ -90,12 +98,20 @@ export default function Expenses() {
       toast({ title: "Xatolik", description: "Nomi va summani kiriting", variant: "destructive" });
       return;
     }
+    if (formData.category === "salary" && !formData.teacherId) {
+      toast({ title: "Xatolik", description: "Oylik maosh uchun o'qituvchini tanlang", variant: "destructive" });
+      return;
+    }
+    const submitData = {
+      ...formData,
+      teacherId: formData.category === "salary" ? formData.teacherId : null,
+    };
     try {
       if (editExpense) {
-        await updateExpense.mutateAsync({ id: editExpense.id, ...formData });
+        await updateExpense.mutateAsync({ id: editExpense.id, ...submitData });
         toast({ title: "Muvaffaqiyat", description: "Xarajat yangilandi" });
       } else {
-        await createExpense.mutateAsync(formData);
+        await createExpense.mutateAsync(submitData);
         toast({ title: "Muvaffaqiyat", description: "Xarajat qo'shildi" });
       }
       setIsOpen(false);
@@ -111,6 +127,7 @@ export default function Expenses() {
       title: expense.title,
       amount: expense.amount,
       category: expense.category,
+      teacherId: expense.teacherId || "",
       notes: expense.notes || "",
       date: new Date(expense.date).toISOString().split("T")[0],
     });
@@ -195,6 +212,21 @@ export default function Expenses() {
                     </SelectContent>
                   </Select>
                 </div>
+                {formData.category === "salary" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="teacherId">O'qituvchi</Label>
+                    <Select value={formData.teacherId} onValueChange={(v) => setFormData({ ...formData, teacherId: v })}>
+                      <SelectTrigger data-testid="select-expense-teacher">
+                        <SelectValue placeholder="O'qituvchini tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teachersList.map((t: any) => (
+                          <SelectItem key={t.id} value={t.id}>{t.firstName} {t.lastName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid gap-2">
                   <Label htmlFor="date">Sana</Label>
                   <Input id="date" data-testid="input-expense-date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
@@ -260,6 +292,7 @@ export default function Expenses() {
                     <TableHead>Sana</TableHead>
                     <TableHead>Nomi</TableHead>
                     <TableHead>Kategoriya</TableHead>
+                    <TableHead>O'qituvchi</TableHead>
                     <TableHead className="text-right">Summa</TableHead>
                     <TableHead>Izoh</TableHead>
                     <TableHead className="text-right">Amallar</TableHead>
@@ -274,6 +307,9 @@ export default function Expenses() {
                         <Badge className={categoryColors[expense.category] || categoryColors.other} variant="secondary">
                           {getCategoryLabel(expense.category)}
                         </Badge>
+                      </TableCell>
+                      <TableCell data-testid={`text-expense-teacher-${expense.id}`}>
+                        {expense.category === "salary" && expense.teacherId ? getTeacherName(expense.teacherId) : "-"}
                       </TableCell>
                       <TableCell className="text-right font-medium text-red-600">{expense.amount.toLocaleString()} so'm</TableCell>
                       <TableCell className="max-w-[200px] truncate">{expense.notes || "-"}</TableCell>

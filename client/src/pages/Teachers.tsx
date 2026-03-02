@@ -7,10 +7,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { useTeachers, useCreateTeacher, useUpdateTeacher, useDeleteTeacher, useSubjects } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Trash2, Percent, Pencil, BookOpen, Download, Upload, Eye } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Search, Trash2, Percent, Pencil, BookOpen, Download, Upload, Eye, Shield } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+
+const AVAILABLE_PERMISSIONS = [
+  { key: "accept_payment", label: "To'lov qabul qilish" },
+  { key: "move_student", label: "O'quvchini guruhdan guruhga ko'chirish" },
+  { key: "edit_group", label: "Guruhlarni tahrir qila olish" },
+  { key: "remove_student", label: "O'quvchini guruhdan chiqarish" },
+  { key: "add_student", label: "O'quvchi qo'shish" },
+];
+
+const DEFAULT_CAPABILITIES = [
+  "Guruh yaratish",
+  "Dars vaqtlarini belgilash",
+  "Davomat olish",
+  "Baho qo'yish",
+];
 
 export default function Teachers() {
   const { data: teachersData, isLoading } = useTeachers();
@@ -33,6 +49,7 @@ export default function Teachers() {
     phone: "",
     subjectId: "",
     salaryPercent: 30,
+    permissions: [] as string[],
   });
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
@@ -112,6 +129,15 @@ export default function Teachers() {
     }
   };
 
+  const togglePermission = (perm: string) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(perm)
+        ? prev.permissions.filter(p => p !== perm)
+        : [...prev.permissions, perm],
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -122,7 +148,7 @@ export default function Teachers() {
       await createTeacher.mutateAsync(submitData);
       toast({ title: "Muvaffaqiyat", description: "Yangi o'qituvchi qo'shildi" });
       setIsOpen(false);
-      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", subjectId: "", salaryPercent: 30 });
+      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", subjectId: "", salaryPercent: 30, permissions: [] });
     } catch (error) {
       toast({ title: "Xatolik", description: "O'qituvchi qo'shishda xatolik yuz berdi", variant: "destructive" });
     }
@@ -138,6 +164,7 @@ export default function Teachers() {
       phone: teacher.phone || "",
       subjectId: teacher.subjectId?.toString() || "",
       salaryPercent: teacher.salaryPercent || 30,
+      permissions: teacher.permissions || [],
     });
     setIsEditOpen(true);
   };
@@ -153,7 +180,7 @@ export default function Teachers() {
       toast({ title: "Muvaffaqiyat", description: "O'qituvchi ma'lumotlari yangilandi" });
       setIsEditOpen(false);
       setEditingTeacher(null);
-      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", subjectId: "", salaryPercent: 30 });
+      setFormData({ firstName: "", lastName: "", email: "", password: "", phone: "", subjectId: "", salaryPercent: 30, permissions: [] });
     } catch (error) {
       toast({ title: "Xatolik", description: "Yangilashda xatolik yuz berdi", variant: "destructive" });
     }
@@ -202,7 +229,7 @@ export default function Teachers() {
                 <Plus className="mr-2 h-4 w-4" /> O'qituvchi qo'shish
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Yangi o'qituvchi qo'shish</DialogTitle>
             </DialogHeader>
@@ -294,6 +321,40 @@ export default function Teachers() {
                   <Percent className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 </div>
                 <p className="text-xs text-muted-foreground">O'quvchi to'lov qilganda o'qituvchiga tushadigan foiz</p>
+              </div>
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Huquqlar
+                </Label>
+                <div className="rounded-md border p-3 space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Doimiy funksiyalar:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {DEFAULT_CAPABILITIES.map((cap) => (
+                        <span key={cap} className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
+                          {cap}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="border-t pt-2 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Qo'shimcha huquqlar:</p>
+                    {AVAILABLE_PERMISSIONS.map((perm) => (
+                      <div key={perm.key} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`perm-${perm.key}`}
+                          checked={formData.permissions.includes(perm.key)}
+                          onCheckedChange={() => togglePermission(perm.key)}
+                          data-testid={`checkbox-perm-${perm.key}`}
+                        />
+                        <label htmlFor={`perm-${perm.key}`} className="text-sm cursor-pointer">
+                          {perm.label}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
               <Button type="submit" className="w-full" disabled={createTeacher.isPending} data-testid="button-submit">
                 {createTeacher.isPending ? "Saqlanmoqda..." : "Saqlash"}
@@ -387,7 +448,7 @@ export default function Teachers() {
       </Dialog>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>O'qituvchini tahrirlash</DialogTitle>
           </DialogHeader>
@@ -476,6 +537,40 @@ export default function Teachers() {
                   data-testid="input-edit-salaryPercent"
                 />
                 <Percent className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Huquqlar
+              </Label>
+              <div className="rounded-md border p-3 space-y-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Doimiy funksiyalar:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {DEFAULT_CAPABILITIES.map((cap) => (
+                      <span key={cap} className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs">
+                        {cap}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t pt-2 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Qo'shimcha huquqlar:</p>
+                  {AVAILABLE_PERMISSIONS.map((perm) => (
+                    <div key={perm.key} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`edit-perm-${perm.key}`}
+                        checked={formData.permissions.includes(perm.key)}
+                        onCheckedChange={() => togglePermission(perm.key)}
+                        data-testid={`checkbox-edit-perm-${perm.key}`}
+                      />
+                      <label htmlFor={`edit-perm-${perm.key}`} className="text-sm cursor-pointer">
+                        {perm.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <Button type="submit" className="w-full" disabled={updateTeacher.isPending} data-testid="button-edit-submit">

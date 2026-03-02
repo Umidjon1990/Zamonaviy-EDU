@@ -62,6 +62,27 @@ export async function registerRoutes(
     return req.session.role === "teacher";
   };
 
+  const hasTeacherPermission = async (req: any, permission: string): Promise<boolean> => {
+    if (!isTeacher(req)) return true;
+    try {
+      const user = await storage.getUser(getUserId(req));
+      if (!user) return false;
+      const perms = user.permissions || [];
+      return perms.includes(permission);
+    } catch {
+      return false;
+    }
+  };
+
+  const requireTeacherPermission = (permission: string) => async (req: any, res: any, next: any) => {
+    if (!isTeacher(req)) return next();
+    const allowed = await hasTeacherPermission(req, permission);
+    if (!allowed) {
+      return res.status(403).json({ error: "Bu amal uchun ruxsat yo'q" });
+    }
+    next();
+  };
+
   // Login for tenant admins/staff
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -106,6 +127,7 @@ export async function registerRoutes(
           lastName: user.lastName,
           role: user.role,
           phone: user.phone,
+          permissions: user.permissions || [],
         },
         tenant: {
           id: tenant.id,
@@ -153,6 +175,7 @@ export async function registerRoutes(
         lastName: user.lastName,
         tenantName: tenant.name,
         tenantLogo: tenant.logo,
+        permissions: user.permissions || [],
       });
     } catch (error) {
       console.error("Auth me error:", error);
@@ -712,6 +735,12 @@ export async function registerRoutes(
 
   app.patch("/api/groups/:id", async (req, res) => {
     try {
+      if (isTeacher(req)) {
+        const allowed = await hasTeacherPermission(req, 'edit_group');
+        if (!allowed) {
+          return res.status(403).json({ error: "Guruhni tahrirlash uchun ruxsat yo'q" });
+        }
+      }
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
       const existing = await storage.getGroup(id, tenantId);
@@ -1051,6 +1080,12 @@ export async function registerRoutes(
 
   app.delete("/api/students/:studentId/groups/:groupId", async (req, res) => {
     try {
+      if (isTeacher(req)) {
+        const allowed = await hasTeacherPermission(req, 'remove_student');
+        if (!allowed) {
+          return res.status(403).json({ error: "O'quvchini guruhdan chiqarish uchun ruxsat yo'q" });
+        }
+      }
       const studentId = parseInt(req.params.studentId);
       const groupId = parseInt(req.params.groupId);
       const tenantId = getTenantId(req);
@@ -1176,6 +1211,12 @@ export async function registerRoutes(
 
   app.post("/api/payments", async (req, res) => {
     try {
+      if (isTeacher(req)) {
+        const allowed = await hasTeacherPermission(req, 'accept_payment');
+        if (!allowed) {
+          return res.status(403).json({ error: "To'lov qabul qilish uchun ruxsat yo'q" });
+        }
+      }
       const tenantId = getTenantId(req);
       const { newStudent, teacherId, amount, paymentType, status, notes, studentId: existingStudentId } = req.body;
       
@@ -1359,7 +1400,11 @@ export async function registerRoutes(
 
       const totalPayments = teacherPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
       const totalEarning = teacherPayments.reduce((sum: number, p: any) => sum + (p.teacherEarning || 0), 0);
-      const salary = totalEarning || Math.round(totalPayments * salaryPercent / 100);
+      const calculatedSalary = totalEarning || Math.round(totalPayments * salaryPercent / 100);
+
+      const advanceExpenses = await storage.getExpensesByTeacher(teacherId, tenantId, startDate, endDate);
+      const totalAdvance = advanceExpenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+      const salary = calculatedSalary - totalAdvance;
 
       let studentsData: any[] = [];
       if (includeStudents) {
@@ -1390,7 +1435,10 @@ export async function registerRoutes(
           salaryPercent,
         },
         totalPayments,
+        calculatedSalary,
+        totalAdvance,
         salary,
+        advanceExpenses,
         paymentCount: teacherPayments.length,
         students: studentsData,
         period: {
@@ -1438,9 +1486,9 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const { title, amount, category, notes, date } = req.body;
+      const { title, amount, category, teacherId, notes, date } = req.body;
       const parsedDate = date && typeof date === "string" ? new Date(date) : date;
-      const updated = await storage.updateExpense(id, tenantId, { title, amount, category, notes, date: parsedDate });
+      const updated = await storage.updateExpense(id, tenantId, { title, amount, category, teacherId: teacherId || null, notes, date: parsedDate });
       if (!updated) return res.status(404).json({ error: "Expense not found" });
       res.json(updated);
     } catch (error) {
@@ -1574,7 +1622,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Teacher not found" });
       }
       
-      const { firstName, lastName, email, password, phone, salaryPercent } = req.body;
+      const { firstName, lastName, email, password, phone, salaryPercent, permissions } = req.body;
       const updateData: any = {};
       
       if (firstName !== undefined) updateData.firstName = firstName;
@@ -1582,6 +1630,7 @@ export async function registerRoutes(
       if (email !== undefined) updateData.email = email;
       if (phone !== undefined) updateData.phone = phone;
       if (salaryPercent !== undefined) updateData.salaryPercent = salaryPercent;
+      if (permissions !== undefined) updateData.permissions = permissions;
       
       if (password && password.trim() !== "") {
         updateData.password = await bcrypt.hash(password, 10);
@@ -1652,7 +1701,7 @@ export async function registerRoutes(
   });
 
   // Teacher creates a student - xavfsiz
-  app.post("/api/teacher/students", requireTenantAuth, async (req, res) => {
+  app.post("/api/teacher/students", requireTenantAuth, requireTeacherPermission('add_student'), async (req, res) => {
     try {
       if (!isTeacher(req)) {
         return res.status(403).json({ error: "Faqat o'qituvchilar uchun" });
@@ -1692,7 +1741,7 @@ export async function registerRoutes(
   });
 
   // Teacher updates a student (no delete allowed) - xavfsiz
-  app.patch("/api/teacher/students/:id", requireTenantAuth, async (req, res) => {
+  app.patch("/api/teacher/students/:id", requireTenantAuth, requireTeacherPermission('edit_group'), async (req, res) => {
     try {
       if (!isTeacher(req)) {
         return res.status(403).json({ error: "Faqat o'qituvchilar uchun" });
@@ -1716,7 +1765,7 @@ export async function registerRoutes(
   });
 
   // Teacher moves student between groups
-  app.post("/api/teacher/move-student", async (req, res) => {
+  app.post("/api/teacher/move-student", requireTenantAuth, requireTeacherPermission('move_student'), async (req, res) => {
     try {
       const { studentId, fromGroupId, toGroupId } = req.body;
       const tenantId = getTenantId(req);

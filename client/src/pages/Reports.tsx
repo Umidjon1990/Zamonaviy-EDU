@@ -218,6 +218,9 @@ export default function Reports() {
   const salaryStudents = salaryData?.students || [];
   const paidStudentsList = salaryStudents.filter((s: any) => s.balance >= 0);
   const debtorStudentsList = salaryStudents.filter((s: any) => s.balance < 0);
+  const totalAdvance = salaryData?.totalAdvance || 0;
+  const calculatedSalary = salaryData?.calculatedSalary || 0;
+  const advanceExpenses = salaryData?.advanceExpenses || [];
 
   const getPeriodLabel = () => {
     const from = months.find(m => m.value === salaryFromMonth)?.label || "";
@@ -275,13 +278,21 @@ export default function Reports() {
       ["Qarzdorlar:", `${debtorStudentsList.length} ta`],
       ["Umumiy tushum:", `${teacherIncome.toLocaleString()} UZS`],
       ["Oylik foizi:", `${salaryPercent}%`],
+      ["Hisoblangan oylik:", `${calculatedSalary.toLocaleString()} UZS`],
     ];
+
+    if (totalAdvance > 0) {
+      financeInfo.push(["Avans:", `-${totalAdvance.toLocaleString()} UZS`]);
+    }
     
     financeInfo.forEach(([label, value]) => {
       doc.setTextColor(120, 120, 120);
       doc.text(label, 14, y);
       doc.setTextColor(40, 40, 40);
-      doc.text(value, 55, y);
+      if (label === "Avans:") {
+        doc.setTextColor(234, 88, 12);
+      }
+      doc.text(value, 65, y);
       y += 8;
     });
     
@@ -292,9 +303,15 @@ export default function Reports() {
     doc.roundedRect(14, y + 8, 182, 25, 3, 3, 'F');
     doc.setFontSize(12);
     doc.setTextColor(22, 163, 74);
-    doc.text("Oyligi:", 24, y + 24);
+    doc.text("Yakuniy oylik:", 24, y + 24);
     doc.setFontSize(18);
-    doc.text(`${teacherSalary.toLocaleString()} UZS`, 55, y + 24);
+    doc.text(`${teacherSalary.toLocaleString()} UZS`, 75, y + 24);
+    
+    if (totalAdvance > 0) {
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`(${calculatedSalary.toLocaleString()} - ${totalAdvance.toLocaleString()} avans)`, 75, y + 31);
+    }
     
     if (withStudents && salaryStudents.length > 0) {
       y += 45;
@@ -344,6 +361,9 @@ export default function Reports() {
   const shareToTelegram = () => {
     if (!salaryData) return;
     const periodLabel = getPeriodLabel();
+    const advanceText = totalAdvance > 0 
+      ? `\n- Avans: -${totalAdvance.toLocaleString()} UZS` 
+      : "";
     const message = `
 OYLIK CHEKI
 ${periodLabel}
@@ -360,7 +380,8 @@ Ma'lumotlar:
 Moliya:
 - Umumiy tushum: ${teacherIncome.toLocaleString()} UZS
 - Oylik foizi: ${salaryPercent}%
-- Oyligi: ${teacherSalary.toLocaleString()} UZS
+- Hisoblangan oylik: ${calculatedSalary.toLocaleString()} UZS${advanceText}
+- Yakuniy oylik: ${teacherSalary.toLocaleString()} UZS
 
 Zamonaviy-Edu
     `.trim();
@@ -620,23 +641,37 @@ Zamonaviy-Edu
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-3 gap-4">
+                  <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Card className="card-modern border-l-4 border-l-blue-500">
                       <CardContent className="p-4">
                         <p className="text-sm text-muted-foreground mb-1">Umumiy tushum</p>
-                        <p className="text-2xl font-bold text-blue-600">{teacherIncome.toLocaleString()} UZS</p>
+                        <p className="text-2xl font-bold text-blue-600" data-testid="text-teacher-income">{teacherIncome.toLocaleString()} UZS</p>
                       </CardContent>
                     </Card>
                     <Card className="card-modern border-l-4 border-l-purple-500">
                       <CardContent className="p-4">
-                        <p className="text-sm text-muted-foreground mb-1">Oylik foizi</p>
-                        <p className="text-2xl font-bold text-purple-600">{salaryPercent}%</p>
+                        <p className="text-sm text-muted-foreground mb-1">Hisoblangan oylik ({salaryPercent}%)</p>
+                        <p className="text-2xl font-bold text-purple-600" data-testid="text-calculated-salary">{calculatedSalary.toLocaleString()} UZS</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="card-modern border-l-4 border-l-orange-500">
+                      <CardContent className="p-4">
+                        <p className="text-sm text-muted-foreground mb-1">Avans</p>
+                        <p className="text-2xl font-bold text-orange-600" data-testid="text-total-advance">
+                          {totalAdvance > 0 ? `-${totalAdvance.toLocaleString()}` : "0"} UZS
+                        </p>
+                        {advanceExpenses.length > 0 && (
+                          <p className="text-xs text-muted-foreground">{advanceExpenses.length} ta avans</p>
+                        )}
                       </CardContent>
                     </Card>
                     <Card className="card-modern border-l-4 border-l-emerald-500 shadow-glow-success">
                       <CardContent className="p-4">
-                        <p className="text-sm text-muted-foreground mb-1">Oylik summasi</p>
-                        <p className="text-2xl font-bold text-emerald-600">{teacherSalary.toLocaleString()} UZS</p>
+                        <p className="text-sm text-muted-foreground mb-1">Yakuniy oylik</p>
+                        <p className="text-2xl font-bold text-emerald-600" data-testid="text-final-salary">{teacherSalary.toLocaleString()} UZS</p>
+                        {totalAdvance > 0 && (
+                          <p className="text-xs text-muted-foreground">{calculatedSalary.toLocaleString()} - {totalAdvance.toLocaleString()}</p>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
@@ -857,13 +892,28 @@ Zamonaviy-Edu
                     <td style={{ padding: "6px 0", color: "#888" }}>Oylik foizi:</td>
                     <td style={{ padding: "6px 0", fontWeight: "bold" }}>{salaryPercent}%</td>
                   </tr>
+                  <tr>
+                    <td style={{ padding: "6px 0", color: "#888" }}>Hisoblangan oylik:</td>
+                    <td style={{ padding: "6px 0", fontWeight: "bold" }}>{calculatedSalary.toLocaleString()} UZS</td>
+                  </tr>
+                  {totalAdvance > 0 && (
+                    <tr>
+                      <td style={{ padding: "6px 0", color: "#ea580c" }}>Avans:</td>
+                      <td style={{ padding: "6px 0", fontWeight: "bold", color: "#ea580c" }}>-{totalAdvance.toLocaleString()} UZS</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
 
             <div style={{ background: "#f0fdf4", border: "2px solid #22c55e", borderRadius: "8px", padding: "15px", textAlign: "center", marginBottom: "20px" }}>
-              <p style={{ color: "#888", margin: "0 0 5px", fontSize: "14px" }}>Oyligi</p>
+              <p style={{ color: "#888", margin: "0 0 5px", fontSize: "14px" }}>Yakuniy oylik</p>
               <p style={{ fontSize: "28px", fontWeight: "bold", color: "#16a34a", margin: 0 }}>{teacherSalary.toLocaleString()} UZS</p>
+              {totalAdvance > 0 && (
+                <p style={{ color: "#888", margin: "5px 0 0", fontSize: "12px" }}>
+                  {calculatedSalary.toLocaleString()} - {totalAdvance.toLocaleString()} avans
+                </p>
+              )}
             </div>
 
             {salaryStudents.length > 0 && (

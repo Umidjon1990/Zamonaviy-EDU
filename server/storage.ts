@@ -157,6 +157,7 @@ export interface IStorage {
   
   // Expenses
   getExpenses(tenantId: number, month?: number, year?: number): Promise<Expense[]>;
+  getExpensesByTeacher(teacherId: string, tenantId: number, startDate: Date, endDate: Date): Promise<Expense[]>;
   createExpense(expense: InsertExpense): Promise<Expense>;
   updateExpense(id: number, tenantId: number, data: Partial<InsertExpense>): Promise<Expense | undefined>;
   deleteExpense(id: number, tenantId: number): Promise<boolean>;
@@ -802,6 +803,18 @@ export class DatabaseStorage implements IStorage {
       conditions.push(sql`${expenses.date} <= ${endDate}`);
     }
     return await db.select().from(expenses).where(and(...conditions)).orderBy(desc(expenses.date));
+  }
+
+  async getExpensesByTeacher(teacherId: string, tenantId: number, startDate: Date, endDate: Date): Promise<Expense[]> {
+    return await db.select().from(expenses).where(
+      and(
+        eq(expenses.tenantId, tenantId),
+        eq(expenses.teacherId, teacherId),
+        eq(expenses.category, 'salary'),
+        sql`${expenses.date} >= ${startDate}`,
+        sql`${expenses.date} <= ${endDate}`
+      )
+    ).orderBy(desc(expenses.date));
   }
 
   async createExpense(expense: InsertExpense): Promise<Expense> {

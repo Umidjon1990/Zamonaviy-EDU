@@ -83,6 +83,7 @@ export const users = pgTable("users", {
   phone: text("phone"),
   subjectId: integer("subject_id"), // O'qituvchi o'qitadigan fan
   salaryPercent: integer("salary_percent").default(0), // O'qituvchi oylik foizi (masalan 30%)
+  permissions: text("permissions").array(), // O'qituvchi huquqlari: accept_payment, move_student, edit_group, remove_student, add_student
   telegramChatId: text("telegram_chat_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -260,6 +261,7 @@ export const expenses = pgTable("expenses", {
   title: text("title").notNull(),
   amount: integer("amount").notNull(),
   category: text("category").notNull(), // rent, salary, supplies, utilities, marketing, other
+  teacherId: varchar("teacher_id"),
   notes: text("notes"),
   date: timestamp("date").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
