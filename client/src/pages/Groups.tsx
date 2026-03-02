@@ -26,11 +26,8 @@ const WEEKDAYS = [
 ];
 
 const TEMPLATE_EXAMPLE = `Guruh nomi: Ingliz tili A1
-Fan nomi: Ingliz tili
-Kunlari: seshanba/shanba
 Vaqti: 10:00
 Xona: 3-xona
-O'qituvchi: O'qituvchi ismi
 O'quvchilar:
 Familiyasi Ismi
 +998901234567
@@ -67,6 +64,13 @@ export default function Groups() {
   const [isTemplateOpen, setIsTemplateOpen] = useState(false);
   const [templateText, setTemplateText] = useState("");
   const [importResult, setImportResult] = useState<any>(null);
+  const [templateDays, setTemplateDays] = useState<string[]>([]);
+  const [templateTeacherId, setTemplateTeacherId] = useState("");
+  const [templateSubjectId, setTemplateSubjectId] = useState("");
+
+  const toggleTemplateDay = (day: string) => {
+    setTemplateDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
+  };
   
   const [formData, setFormData] = useState({
     name: "",
@@ -189,9 +193,21 @@ export default function Groups() {
       toast({ title: "Xatolik", description: "Shablon matnini kiriting", variant: "destructive" });
       return;
     }
+    if (templateDays.length === 0) {
+      toast({ title: "Xatolik", description: "Kunlarni tanlang", variant: "destructive" });
+      return;
+    }
+    
+    const effectiveTeacherId = isTeacher ? (currentUser?.userId || "") : templateTeacherId;
+    const effectiveSubjectId = isTeacher ? "" : templateSubjectId;
+    
+    const enrichedTemplate = templateText + 
+      "\nKunlari: " + templateDays.join("/") +
+      (effectiveTeacherId ? "\n__teacherId__: " + effectiveTeacherId : "") +
+      (effectiveSubjectId ? "\n__subjectId__: " + effectiveSubjectId : "");
     
     try {
-      const result = await importTemplate.mutateAsync(templateText);
+      const result = await importTemplate.mutateAsync(enrichedTemplate);
       setImportResult(result);
       toast({ 
         title: "Muvaffaqiyat", 
@@ -244,6 +260,12 @@ export default function Groups() {
             if (!open) {
               setTemplateText("");
               setImportResult(null);
+              setTemplateDays([]);
+              setTemplateTeacherId("");
+              setTemplateSubjectId("");
+            }
+            if (open && isTeacher) {
+              setTemplateTeacherId(currentUser?.userId || "");
             }
           }}>
             <DialogTrigger asChild>
@@ -272,6 +294,55 @@ export default function Groups() {
 {TEMPLATE_EXAMPLE}
                     </pre>
                   </div>
+
+                  {!isTeacher && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>O'qituvchi</Label>
+                      <Select value={templateTeacherId} onValueChange={setTemplateTeacherId}>
+                        <SelectTrigger data-testid="select-template-teacher">
+                          <SelectValue placeholder="O'qituvchini tanlang" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teachers.map((t: any) => (
+                            <SelectItem key={t.id} value={t.id}>{t.firstName} {t.lastName}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Fan</Label>
+                      <Select value={templateSubjectId} onValueChange={setTemplateSubjectId}>
+                        <SelectTrigger data-testid="select-template-subject">
+                          <SelectValue placeholder="Fanni tanlang" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subjects.map((s: any) => (
+                            <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>Kunlarni tanlang</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAYS.map((day) => (
+                        <Toggle
+                          key={day.value}
+                          variant="outline"
+                          pressed={templateDays.includes(day.value)}
+                          onPressedChange={() => toggleTemplateDay(day.value)}
+                          className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                          data-testid={`toggle-template-day-${day.value}`}
+                        >
+                          {day.label}
+                        </Toggle>
+                      ))}
+                    </div>
+                  </div>
                   
                   <div className="space-y-2">
                     <Label>Shablon matni</Label>
@@ -287,8 +358,6 @@ export default function Groups() {
                   <div className="text-xs text-muted-foreground">
                     <p className="font-medium mb-1">Eslatma:</p>
                     <ul className="list-disc pl-4 space-y-1">
-                      <li>O'qituvchi ismi tizimda mavjud bo'lishi kerak</li>
-                      <li>Kunlar: du/se/chor/pay/juma/sha/yak yoki to'liq nomi</li>
                       <li>O'quvchi telefon raqami bo'sh joy bilan bo'lishi mumkin</li>
                       <li>Mavjud o'quvchilar avtomatik guruhga qo'shiladi</li>
                     </ul>

@@ -794,7 +794,7 @@ export async function registerRoutes(
 
   // ===== TEMPLATE IMPORT =====
   // Parse and import group with students from template format
-  app.post("/api/groups/import-template", async (req, res) => {
+  app.post("/api/groups/import-template", requireTenantAuth, requireTeacherPermission('create_group'), async (req, res) => {
     try {
       const tenantId = getTenantId(req);
       const { template } = req.body;
@@ -827,13 +827,19 @@ export async function registerRoutes(
       
       let parsingStudents = false;
       let pendingStudentName = "";
+      let directTeacherId = "";
+      let directSubjectId = "";
       
       for (const line of lines) {
         const lowerLine = line.toLowerCase();
         // Barcha apostrof turlarini standartlash
         const normalizedLine = lowerLine.replace(/[''`'ʻʼ'ʹʽ‛´]/g, "'");
         
-        if (lowerLine.startsWith("guruh nomi:") || lowerLine.startsWith("guruh:")) {
+        if (lowerLine.startsWith("__teacherid__:")) {
+          directTeacherId = line.split(":").slice(1).join(":").trim();
+        } else if (lowerLine.startsWith("__subjectid__:")) {
+          directSubjectId = line.split(":").slice(1).join(":").trim();
+        } else if (lowerLine.startsWith("guruh nomi:") || lowerLine.startsWith("guruh:")) {
           groupName = line.split(":").slice(1).join(":").trim();
         } else if (lowerLine.startsWith("fan nomi:") || lowerLine.startsWith("fan:") || lowerLine.startsWith("subject:")) {
           subjectName = line.split(":").slice(1).join(":").trim();
@@ -917,70 +923,65 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Guruh nomi topilmadi" });
       }
       
-      // Find teacher by name - aniq moslik
       const teachers = await storage.getTeachers(tenantId);
-      const searchName = teacherName.toLowerCase().trim();
+      let teacher: any = null;
       
-      // Agar o'qituvchi nomi bo'sh bo'lsa, xato qaytarish
-      if (!searchName) {
-        return res.status(400).json({ 
-          error: "O'qituvchi nomi kiritilmagan. Iltimos shablonga O'qituvchi: qatorini qo'shing",
-          availableTeachers: teachers.map(t => `${t.firstName} ${t.lastName}`)
+      if (directTeacherId) {
+        teacher = teachers.find(t => t.id === directTeacherId);
+        if (!teacher) {
+          return res.status(400).json({ error: "O'qituvchi topilmadi" });
+        }
+      } else if (teacherName) {
+        const searchName = teacherName.toLowerCase().trim();
+        teacher = teachers.find(t => {
+          const fullName = `${t.firstName} ${t.lastName}`.toLowerCase().trim();
+          const fullNameReversed = `${t.lastName} ${t.firstName}`.toLowerCase().trim();
+          return fullName === searchName || fullNameReversed === searchName;
         });
-      }
-      
-      // 1. Avval to'liq ism-familiya bo'yicha aniq qidirish
-      let teacher = teachers.find(t => {
-        const fullName = `${t.firstName} ${t.lastName}`.toLowerCase().trim();
-        const fullNameReversed = `${t.lastName} ${t.firstName}`.toLowerCase().trim();
-        return fullName === searchName || fullNameReversed === searchName;
-      });
-      
-      // 2. Agar topilmasa, faqat ism bo'yicha aniq qidirish
-      if (!teacher) {
-        teacher = teachers.find(t => 
-          t.firstName.toLowerCase().trim() === searchName ||
-          t.lastName.toLowerCase().trim() === searchName
-        );
-      }
-      
-      // 3. Agar hali ham topilmasa, qisman moslik (lekin faqat bitta natija bo'lsa)
-      if (!teacher) {
-        const partialMatches = teachers.filter(t => {
-          const fullName = `${t.firstName} ${t.lastName}`.toLowerCase();
-          return fullName.includes(searchName) || 
-                 t.firstName.toLowerCase().includes(searchName) ||
-                 t.lastName.toLowerCase().includes(searchName);
-        });
-        
-        if (partialMatches.length === 1) {
-          teacher = partialMatches[0];
-        } else if (partialMatches.length > 1) {
+        if (!teacher) {
+          teacher = teachers.find(t => 
+            t.firstName.toLowerCase().trim() === searchName ||
+            t.lastName.toLowerCase().trim() === searchName
+          );
+        }
+        if (!teacher) {
+          const partialMatches = teachers.filter(t => {
+            const fullName = `${t.firstName} ${t.lastName}`.toLowerCase();
+            return fullName.includes(searchName) || 
+                   t.firstName.toLowerCase().includes(searchName) ||
+                   t.lastName.toLowerCase().includes(searchName);
+          });
+          if (partialMatches.length === 1) {
+            teacher = partialMatches[0];
+          } else if (partialMatches.length > 1) {
+            return res.status(400).json({ 
+              error: `"${teacherName}" - bir nechta o'qituvchi topildi`,
+              matchingTeachers: partialMatches.map((t: any) => `${t.firstName} ${t.lastName}`)
+            });
+          }
+        }
+        if (!teacher) {
           return res.status(400).json({ 
-            error: `"${teacherName}" - bir nechta o'qituvchi topildi. Iltimos to'liq ism-familiyani kiriting`,
-            matchingTeachers: partialMatches.map(t => `${t.firstName} ${t.lastName}`)
+            error: `O'qituvchi "${teacherName}" topilmadi`,
+            availableTeachers: teachers.map((t: any) => `${t.firstName} ${t.lastName}`)
           });
         }
+      } else {
+        return res.status(400).json({ error: "O'qituvchi tanlanmagan" });
       }
       
-      if (!teacher) {
-        return res.status(400).json({ 
-          error: `O'qituvchi "${teacherName}" topilmadi`,
-          availableTeachers: teachers.map(t => `${t.firstName} ${t.lastName}`)
-        });
-      }
-      
-      // Find subject by name if provided
       let subjectId = 0;
-      if (subjectName) {
+      if (directSubjectId) {
+        subjectId = parseInt(directSubjectId) || 0;
+      } else if (teacher.subjectId) {
+        subjectId = teacher.subjectId;
+      } else if (subjectName) {
         const subjects = await storage.getSubjects(tenantId);
         const searchSubject = subjectName.toLowerCase().trim();
-        
-        const subject = subjects.find(s => 
+        const subject = subjects.find((s: any) => 
           s.name.toLowerCase().trim() === searchSubject ||
           s.name.toLowerCase().includes(searchSubject)
         );
-        
         if (subject) {
           subjectId = subject.id;
         }
