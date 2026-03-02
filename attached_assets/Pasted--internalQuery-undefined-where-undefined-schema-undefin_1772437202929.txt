@@ -1,0 +1,104 @@
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3716',
+  routine: 'errorMissingColumn'
+}
+7:38:50 AM [express] POST /api/auth/login 500 in 21ms :: {"error":"Tizim xatosi"}
+7:39:02 AM [express] GET /api/auth/me 500 in 17ms :: {"error":"Tizim xatosi"}
+  internalPosition: undefined,
+Auth me error: error: column "permissions" does not exist
+    at /app/dist/index.cjs:70:13356
+  internalQuery: undefined,
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  where: undefined,
+    at async /app/dist/index.cjs:212:31615
+  schema: undefined,
+    at async ty.getUser (/app/dist/index.cjs:212:105881)
+  table: undefined,
+    at async /app/dist/index.cjs:408:4445 {
+  column: undefined,
+  length: 112,
+  dataType: undefined,
+  constraint: undefined,
+  severity: 'ERROR',
+  file: 'parse_relation.c',
+  code: '42703',
+  line: '3716',
+  detail: undefined,
+  routine: 'errorMissingColumn'
+  hint: undefined,
+}
+  position: '124',
+    at async /app/dist/index.cjs:212:31615
+  hint: undefined,
+  where: undefined,
+    at async ty.getTeachers (/app/dist/index.cjs:212:106782)
+  schema: undefined,
+  position: '124',
+    at async Bre (/app/dist/index.cjs:408:1379)
+  table: undefined,
+  internalPosition: undefined,
+    at async Timeout._onTimeout (/app/dist/index.cjs:408:161) {
+  column: undefined,
+  internalQuery: undefined,
+  length: 112,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  line: '3716',
+  routine: 'errorMissingColumn'
+  dataType: undefined,
+}
+  constraint: undefined,
+  file: 'parse_relation.c',
+Error in checkClassReminders: error: column "permissions" does not exist
+    at /app/dist/index.cjs:70:13356
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  position: '124',
+  constraint: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  file: 'parse_relation.c',
+  where: undefined,
+  line: '3716',
+  routine: 'errorMissingColumn'
+  severity: 'ERROR',
+}
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+    at async ty.getUser (/app/dist/index.cjs:212:105881)
+Auth me error: error: column "permissions" does not exist
+    at /app/dist/index.cjs:70:13356
+    at async /app/dist/index.cjs:408:4445 {
+  schema: undefined,
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+  length: 112,
+    at async /app/dist/index.cjs:212:31615
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+7:39:13 AM [express] GET /api/auth/me 500 in 18ms :: {"error":"Tizim xatosi"}
+  constraint: undefined,
+  detail: undefined,
+  file: 'parse_relation.c',
+  hint: undefined,
+  line: '3716',
+  position: '124',
+  routine: 'errorMissingColumn'
+  internalPosition: undefined,
+}
+  internalQuery: undefined,
+  where: undefined,
+7:39:23 AM [express] POST /api/auth/login 500 in 33ms :: {"error":"Tizim xatosi"}
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+Login error: error: column "permissions" does not exist
