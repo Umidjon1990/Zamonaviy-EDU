@@ -108,7 +108,30 @@ Preferred communication style: Simple, everyday language.
 - **Zod**: Schema validation
 - **@hookform/resolvers**: Zod resolver for React Hook Form
 
+### PDF Generation
+- **jsPDF**: PDF document generation for salary receipts, debtor lists, payment reports
+- **jspdf-autotable**: Table plugin for jsPDF
+
 ### Development Tools
 - **Drizzle Kit**: Database migration tooling
 - **tsx**: TypeScript execution for Node.js
 - **esbuild**: Production bundling for server code
+
+## Recent Features (March 2026)
+
+### Teacher Salary System Improvements
+- **Month range selector**: Salary can be calculated across a range of months (from/to) in Reports > Oylik tab
+- **API endpoint**: `GET /api/teacher-salary/:teacherId?fromMonth=&toMonth=&year=&includeStudents=true` for detailed salary data with student breakdown
+- **PDF export with students**: Two PDF options - basic salary receipt and full receipt with student payment details table
+- **Print receipt**: Uses CSS `@media print` to print only the salary receipt (not the entire page), with clean formatted layout including teacher info, financial summary, and student list
+- **Telegram sharing**: Share salary summary via Telegram
+
+### Dashboard Month Filter
+- Dashboard now has month/year selector (defaults to current month) in the header area
+- All financial stats (monthly income, charts, financial summary) update based on selected month
+- `GET /api/stats` endpoint now accepts optional `?month=&year=` query params
+
+### Print System
+- Global `@media print` CSS in `index.css` hides all page content except elements with `.print-receipt` class
+- Both PaymentReceipt component and Reports salary receipt use `.print-receipt` class for clean printing
+- Elements with `.no-print` class are hidden during printing

@@ -1327,6 +1327,84 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/teacher-salary/:teacherId", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const teacherId = req.params.teacherId;
+      const fromMonth = Math.max(1, Math.min(12, parseInt(req.query.fromMonth as string) || (new Date().getMonth() + 1)));
+      const toMonth = Math.max(fromMonth, Math.min(12, parseInt(req.query.toMonth as string) || fromMonth));
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const includeStudents = req.query.includeStudents === 'true';
+
+      if (isNaN(fromMonth) || isNaN(toMonth) || isNaN(year)) {
+        return res.status(400).json({ error: "Noto'g'ri oy yoki yil" });
+      }
+
+      const teacher = await storage.getTeacher(teacherId, tenantId);
+      if (!teacher) {
+        return res.status(404).json({ error: "O'qituvchi topilmadi" });
+      }
+
+      const salaryPercent = teacher.salaryPercent || 0;
+      const startDate = new Date(year, fromMonth - 1, 1);
+      const endDate = new Date(year, toMonth, 0);
+      endDate.setHours(23, 59, 59, 999);
+
+      const allPayments = await storage.getPayments(tenantId);
+      const teacherPayments = allPayments.filter((p: any) => {
+        if (p.teacherId !== teacherId || p.status !== 'completed') return false;
+        const pDate = new Date(p.createdAt);
+        return pDate >= startDate && pDate <= endDate;
+      });
+
+      const totalPayments = teacherPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      const totalEarning = teacherPayments.reduce((sum: number, p: any) => sum + (p.teacherEarning || 0), 0);
+      const salary = totalEarning || Math.round(totalPayments * salaryPercent / 100);
+
+      let studentsData: any[] = [];
+      if (includeStudents) {
+        const studentIds = [...new Set(teacherPayments.map((p: any) => p.studentId))];
+        const allStudents = await storage.getStudents(tenantId);
+        studentsData = studentIds.map(sid => {
+          const student = allStudents.find(s => s.id === sid);
+          const studentPayments = teacherPayments.filter((p: any) => p.studentId === sid);
+          const totalPaid = studentPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+          return {
+            id: sid,
+            firstName: student?.firstName || '',
+            lastName: student?.lastName || '',
+            phone: student?.phone || '',
+            balance: student?.balance || 0,
+            totalPaid,
+            paymentCount: studentPayments.length,
+          };
+        });
+      }
+
+      res.json({
+        teacher: {
+          id: teacher.id,
+          firstName: teacher.firstName,
+          lastName: teacher.lastName,
+          phone: teacher.phone,
+          salaryPercent,
+        },
+        totalPayments,
+        salary,
+        paymentCount: teacherPayments.length,
+        students: studentsData,
+        period: {
+          fromMonth,
+          toMonth,
+          year,
+        },
+      });
+    } catch (error) {
+      console.error("Teacher salary error:", error);
+      res.status(500).json({ error: "Oylik hisoblashda xatolik" });
+    }
+  });
+
   // ===== EXPENSES =====
   app.get("/api/expenses", async (req, res) => {
     try {
@@ -1678,7 +1756,21 @@ export async function registerRoutes(
   // ===== STATISTICS =====
   app.get("/api/stats", async (req, res) => {
     try {
-      const stats = await storage.getStats(getTenantId(req));
+      const tenantId = getTenantId(req);
+      const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      
+      const stats = await storage.getStats(tenantId);
+      
+      if (month && year) {
+        const allPayments = await storage.getPayments(tenantId);
+        const monthlyPayments = allPayments.filter((p: any) => {
+          const d = new Date(p.createdAt);
+          return d.getMonth() + 1 === month && d.getFullYear() === year && p.status === 'completed';
+        });
+        stats.monthlyIncome = monthlyPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+      }
+      
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch statistics" });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -47,6 +47,10 @@ export default function Reports() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedGroup, setSelectedGroup] = useState("all");
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
+  const [salaryFromMonth, setSalaryFromMonth] = useState(currentMonth);
+  const [salaryToMonth, setSalaryToMonth] = useState(currentMonth);
+  const [salaryYear, setSalaryYear] = useState(currentYear);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const { data: expensesData } = useExpenses(parseInt(selectedMonth), parseInt(selectedYear));
 
@@ -56,12 +60,24 @@ export default function Reports() {
       const url = selectedGroup === "all" 
         ? `/api/attendance?month=${selectedMonth}&year=${selectedYear}`
         : `/api/attendance?groupId=${selectedGroup}&month=${selectedMonth}&year=${selectedYear}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error("Davomat ma'lumotlarini olishda xatolik");
-      }
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Davomat ma'lumotlarini olishda xatolik");
       return res.json();
     },
+  });
+
+  const { data: salaryData } = useQuery({
+    queryKey: ["teacher-salary-detail", selectedTeacherId, salaryFromMonth, salaryToMonth, salaryYear],
+    queryFn: async () => {
+      if (!selectedTeacherId) return null;
+      const res = await fetch(
+        `/api/teacher-salary/${selectedTeacherId}?fromMonth=${salaryFromMonth}&toMonth=${salaryToMonth}&year=${salaryYear}&includeStudents=true`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error("Oylik ma'lumotlarini olishda xatolik");
+      return res.json();
+    },
+    enabled: !!selectedTeacherId,
   });
 
   if (studentsLoading || paymentsLoading) {
@@ -103,11 +119,9 @@ export default function Reports() {
 
   const exportToCSV = (data: any[], filename: string) => {
     if (!data.length) return;
-    
     const headers = Object.keys(data[0]).join(",");
     const rows = data.map(row => Object.values(row).join(",")).join("\n");
     const csv = headers + "\n" + rows;
-    
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -142,13 +156,11 @@ export default function Reports() {
 
   const exportDebtorsPDF = () => {
     const doc = new jsPDF();
-    
     doc.setFontSize(16);
     doc.text("Qarzdorlar ro'yxati", 14, 20);
     doc.setFontSize(10);
     doc.text(`Sana: ${new Date().toLocaleDateString("uz-UZ")}`, 14, 28);
     doc.text(`Jami qarz: ${totalDebt.toLocaleString()} UZS`, 14, 34);
-    
     const tableData = debtors.map((s: any, idx: number) => [
       idx + 1,
       `${s.firstName} ${s.lastName}`,
@@ -156,7 +168,6 @@ export default function Reports() {
       s.parentPhone || "-",
       `${Math.abs(s.balance).toLocaleString()} UZS`
     ]);
-    
     autoTable(doc, {
       head: [["#", "O'quvchi", "Telefon", "Ota-ona", "Qarz"]],
       body: tableData,
@@ -164,20 +175,17 @@ export default function Reports() {
       styles: { fontSize: 9 },
       headStyles: { fillColor: [220, 53, 69] },
     });
-    
     doc.save(`qarzdorlar_${selectedMonth}_${selectedYear}.pdf`);
   };
 
   const exportPaymentsPDF = () => {
     const doc = new jsPDF();
     const monthName = months.find(m => m.value === selectedMonth)?.label || "";
-    
     doc.setFontSize(16);
     doc.text(`To'lovlar hisoboti - ${monthName} ${selectedYear}`, 14, 20);
     doc.setFontSize(10);
     doc.text(`Jami tushum: ${monthlyIncome.toLocaleString()} UZS`, 14, 28);
     doc.text(`To'lovlar soni: ${monthlyPayments.length} ta`, 14, 34);
-    
     const tableData = monthlyPayments.map((p: any, idx: number) => {
       const student = (students || []).find((s: any) => s.id === p.studentId);
       return [
@@ -188,7 +196,6 @@ export default function Reports() {
         `${p.amount.toLocaleString()} UZS`
       ];
     });
-    
     autoTable(doc, {
       head: [["#", "Sana", "O'quvchi", "Turi", "Summa"]],
       body: tableData,
@@ -196,58 +203,53 @@ export default function Reports() {
       styles: { fontSize: 9 },
       headStyles: { fillColor: [16, 185, 129] },
     });
-    
     doc.save(`tolovlar_${monthName}_${selectedYear}.pdf`);
   };
 
   const selectedTeacher = (teachers || []).find((t: any) => t.id.toString() === selectedTeacherId);
-  
   const teacherGroups = selectedTeacher 
     ? (groups || []).filter((g: any) => g.teacherId === selectedTeacher.id)
     : [];
-  
-  const teacherPayments = selectedTeacher 
-    ? monthlyPayments.filter((p: any) => p.teacherId === selectedTeacher.id)
-    : [];
-  const teacherIncome = teacherPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-  const teacherTotalEarning = teacherPayments.reduce((sum: number, p: any) => sum + (p.teacherEarning || 0), 0);
-  
-  const salaryPercentage = selectedTeacher?.salaryPercent || 0;
-  const teacherSalary = teacherTotalEarning || Math.round(teacherIncome * (salaryPercentage / 100));
-  
-  const teacherPaymentStudentIds = new Set(teacherPayments.map((p: any) => p.studentId));
-  const teacherStudents = (students || []).filter((s: any) => teacherPaymentStudentIds.has(s.id));
-  const paidStudents = teacherStudents.filter((s: any) => s.balance >= 0);
-  const debtorStudents = teacherStudents.filter((s: any) => s.balance < 0);
 
-  const generateSalaryPDF = () => {
-    if (!selectedTeacher) return;
+  const salaryTeacher = salaryData?.teacher;
+  const teacherSalary = salaryData?.salary || 0;
+  const teacherIncome = salaryData?.totalPayments || 0;
+  const salaryPercent = salaryData?.teacher?.salaryPercent || 0;
+  const salaryStudents = salaryData?.students || [];
+  const paidStudentsList = salaryStudents.filter((s: any) => s.balance >= 0);
+  const debtorStudentsList = salaryStudents.filter((s: any) => s.balance < 0);
+
+  const getPeriodLabel = () => {
+    const from = months.find(m => m.value === salaryFromMonth)?.label || "";
+    const to = months.find(m => m.value === salaryToMonth)?.label || "";
+    if (salaryFromMonth === salaryToMonth) return `${from} ${salaryYear}`;
+    return `${from} - ${to} ${salaryYear}`;
+  };
+
+  const generateSalaryPDF = (withStudents = false) => {
+    if (!salaryData) return;
     
     const doc = new jsPDF();
-    const monthName = months.find(m => m.value === selectedMonth)?.label || "";
+    const periodLabel = getPeriodLabel();
     
     doc.setFillColor(102, 126, 234);
     doc.rect(0, 0, 210, 50, 'F');
-    
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
     doc.text("OYLIK CHEKI", 105, 25, { align: "center" });
     doc.setFontSize(12);
-    doc.text(`${monthName} ${selectedYear}`, 105, 35, { align: "center" });
+    doc.text(periodLabel, 105, 35, { align: "center" });
     
     doc.setTextColor(0, 0, 0);
-    
     doc.setFontSize(14);
     doc.text("O'qituvchi ma'lumotlari", 14, 65);
-    
     doc.setFontSize(11);
-    doc.setTextColor(80, 80, 80);
     
     const info = [
-      ["O'qituvchi ismi:", `${selectedTeacher.firstName} ${selectedTeacher.lastName}`],
-      ["Telefon:", selectedTeacher.phone || "-"],
-      ["Nechta guruhi bor:", `${teacherGroups.length} ta`],
-      ["O'quvchilar soni:", `${teacherStudents.length} ta`],
+      ["O'qituvchi:", `${salaryTeacher.firstName} ${salaryTeacher.lastName}`],
+      ["Telefon:", salaryTeacher.phone || "-"],
+      ["Guruhlar:", `${teacherGroups.length} ta`],
+      ["O'quvchilar:", `${salaryStudents.length} ta`],
     ];
     
     let y = 75;
@@ -255,93 +257,124 @@ export default function Reports() {
       doc.setTextColor(120, 120, 120);
       doc.text(label, 14, y);
       doc.setTextColor(40, 40, 40);
-      doc.text(value, 60, y);
+      doc.text(value, 55, y);
       y += 8;
     });
     
     doc.setDrawColor(200, 200, 200);
-    doc.line(14, y + 5, 196, y + 5);
+    doc.line(14, y + 3, 196, y + 3);
     
     doc.setFontSize(14);
     doc.setTextColor(0, 0, 0);
-    doc.text("Moliyaviy ma'lumotlar", 14, y + 18);
+    doc.text("Moliyaviy ma'lumotlar", 14, y + 15);
     
-    y += 28;
+    y += 25;
     doc.setFontSize(11);
-    
     const financeInfo = [
-      ["Nechtasi to'lov qildi:", `${paidStudents.length} ta`, "#22c55e"],
-      ["Nechtasi qarzdor:", `${debtorStudents.length} ta`, "#ef4444"],
-      ["Umumiy tushum:", `${teacherIncome.toLocaleString()} UZS`, "#3b82f6"],
-      ["Oylik foizi:", `${salaryPercentage}%`, "#8b5cf6"],
+      ["To'lov qilganlar:", `${paidStudentsList.length} ta`],
+      ["Qarzdorlar:", `${debtorStudentsList.length} ta`],
+      ["Umumiy tushum:", `${teacherIncome.toLocaleString()} UZS`],
+      ["Oylik foizi:", `${salaryPercent}%`],
     ];
     
-    financeInfo.forEach(([label, value, color]) => {
+    financeInfo.forEach(([label, value]) => {
       doc.setTextColor(120, 120, 120);
       doc.text(label, 14, y);
       doc.setTextColor(40, 40, 40);
-      doc.text(value, 80, y);
+      doc.text(value, 55, y);
       y += 8;
     });
     
     doc.setDrawColor(200, 200, 200);
-    doc.line(14, y + 5, 196, y + 5);
+    doc.line(14, y + 3, 196, y + 3);
     
     doc.setFillColor(240, 253, 244);
-    doc.roundedRect(14, y + 12, 182, 30, 3, 3, 'F');
-    
+    doc.roundedRect(14, y + 8, 182, 25, 3, 3, 'F');
     doc.setFontSize(12);
     doc.setTextColor(22, 163, 74);
-    doc.text("Oyligi:", 24, y + 30);
+    doc.text("Oyligi:", 24, y + 24);
     doc.setFontSize(18);
-    doc.text(`${teacherSalary.toLocaleString()} UZS`, 80, y + 30);
+    doc.text(`${teacherSalary.toLocaleString()} UZS`, 55, y + 24);
     
-    doc.setFontSize(9);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Chek yaratilgan sana: ${new Date().toLocaleDateString("uz-UZ")}`, 14, 280);
-    doc.text("Zamonaviy-Edu", 196, 280, { align: "right" });
+    if (withStudents && salaryStudents.length > 0) {
+      y += 45;
+      
+      if (y > 240) {
+        doc.addPage();
+        y = 20;
+      }
+      
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text("O'quvchilar ro'yxati", 14, y);
+      
+      const studentTableData = salaryStudents.map((s: any, idx: number) => [
+        idx + 1,
+        `${s.firstName} ${s.lastName}`,
+        s.phone || "-",
+        `${s.totalPaid.toLocaleString()} UZS`,
+        s.paymentCount,
+        s.balance >= 0 ? "To'langan" : `${Math.abs(s.balance).toLocaleString()} qarz`,
+      ]);
+      
+      autoTable(doc, {
+        head: [["#", "O'quvchi", "Telefon", "To'lagan", "Nechta", "Holati"]],
+        body: studentTableData,
+        startY: y + 5,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [102, 126, 234] },
+      });
+    }
     
-    doc.save(`oylik_${selectedTeacher.firstName}_${selectedTeacher.lastName}_${monthName}_${selectedYear}.pdf`);
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Sana: ${new Date().toLocaleDateString("uz-UZ")}`, 14, 285);
+      doc.text("Zamonaviy-Edu", 196, 285, { align: "right" });
+    }
     
-    toast({
-      title: "PDF yuklandi",
-      description: "Oylik cheki muvaffaqiyatli yuklandi",
-    });
+    const suffix = withStudents ? "_oquvchilar" : "";
+    doc.save(`oylik_${salaryTeacher.firstName}_${salaryTeacher.lastName}_${salaryFromMonth}-${salaryToMonth}_${salaryYear}${suffix}.pdf`);
+    
+    toast({ title: "PDF yuklandi", description: "Oylik cheki muvaffaqiyatli yuklandi" });
   };
 
   const shareToTelegram = () => {
-    if (!selectedTeacher) return;
-    
-    const monthName = months.find(m => m.value === selectedMonth)?.label || "";
-    
+    if (!salaryData) return;
+    const periodLabel = getPeriodLabel();
     const message = `
-📋 *OYLIK CHEKI*
-📅 ${monthName} ${selectedYear}
+OYLIK CHEKI
+${periodLabel}
 
-👤 *O'qituvchi ismi:* ${selectedTeacher.firstName} ${selectedTeacher.lastName}
-📱 Telefon: ${selectedTeacher.phone || "-"}
+O'qituvchi: ${salaryTeacher.firstName} ${salaryTeacher.lastName}
+Telefon: ${salaryTeacher.phone || "-"}
 
-📊 *Ma'lumotlar:*
-• Nechta guruhi bor: ${teacherGroups.length} ta
-• O'quvchilar soni: ${teacherStudents.length} ta
-• ✅ Nechtasi to'lov qildi: ${paidStudents.length} ta
-• ❌ Nechtasi qarzdor: ${debtorStudents.length} ta
+Ma'lumotlar:
+- Guruhlar: ${teacherGroups.length} ta
+- O'quvchilar: ${salaryStudents.length} ta
+- To'lov qilganlar: ${paidStudentsList.length} ta
+- Qarzdorlar: ${debtorStudentsList.length} ta
 
-💰 *Moliya:*
-• Umumiy tushum: ${teacherIncome.toLocaleString()} UZS
-• Oylik foizi: ${salaryPercentage}%
-• 💵 *Oyligi: ${teacherSalary.toLocaleString()} UZS*
+Moliya:
+- Umumiy tushum: ${teacherIncome.toLocaleString()} UZS
+- Oylik foizi: ${salaryPercent}%
+- Oyligi: ${teacherSalary.toLocaleString()} UZS
 
-_Zamonaviy-Edu_
+Zamonaviy-Edu
     `.trim();
-    
     const encodedMessage = encodeURIComponent(message);
     window.open(`https://t.me/share/url?text=${encodedMessage}`, "_blank");
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
         <h1 className="text-3xl font-bold tracking-tight text-gradient">Moliya</h1>
         <div className="flex gap-2">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -361,12 +394,14 @@ _Zamonaviy-Edu_
             <SelectContent>
               <SelectItem value="2024">2024</SelectItem>
               <SelectItem value="2025">2025</SelectItem>
+              <SelectItem value="2026">2026</SelectItem>
+              <SelectItem value="2027">2027</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6 no-print">
         <Card className="card-modern hover-lift">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -456,7 +491,7 @@ _Zamonaviy-Edu_
         </Card>
       </div>
 
-      <Tabs defaultValue="salary" className="space-y-4">
+      <Tabs defaultValue="salary" className="space-y-4 no-print">
         <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
           <TabsTrigger value="salary" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <Banknote className="w-4 h-4" /> Oylik
@@ -477,60 +512,108 @@ _Zamonaviy-Edu_
                 O'qituvchi oyligini hisoblash
               </CardTitle>
               <CardDescription>
-                O'qituvchini tanlang va oylik chekini yarating
+                O'qituvchini va oylarni tanlang, oylik chekini yarating
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>O'qituvchini tanlang</Label>
-                <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
-                  <SelectTrigger className="w-full max-w-md" data-testid="select-teacher-salary">
-                    <SelectValue placeholder="O'qituvchini tanlang..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(teachers || []).map((t: any) => (
-                      <SelectItem key={t.id} value={t.id.toString()}>
-                        {t.firstName} {t.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>O'qituvchini tanlang</Label>
+                  <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
+                    <SelectTrigger data-testid="select-teacher-salary">
+                      <SelectValue placeholder="O'qituvchini tanlang..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(teachers || []).map((t: any) => (
+                        <SelectItem key={t.id} value={t.id.toString()}>
+                          {t.firstName} {t.lastName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Boshlanish oyi</Label>
+                  <Select value={salaryFromMonth} onValueChange={(v) => {
+                    setSalaryFromMonth(v);
+                    if (parseInt(v) > parseInt(salaryToMonth)) setSalaryToMonth(v);
+                  }}>
+                    <SelectTrigger data-testid="select-salary-from-month">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tugash oyi</Label>
+                  <Select value={salaryToMonth} onValueChange={setSalaryToMonth}>
+                    <SelectTrigger data-testid="select-salary-to-month">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.filter(m => parseInt(m.value) >= parseInt(salaryFromMonth)).map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Yil</Label>
+                  <Select value={salaryYear} onValueChange={setSalaryYear}>
+                    <SelectTrigger data-testid="select-salary-year">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2024">2024</SelectItem>
+                      <SelectItem value="2025">2025</SelectItem>
+                      <SelectItem value="2026">2026</SelectItem>
+                      <SelectItem value="2027">2027</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              {selectedTeacher && (
+              {salaryData && selectedTeacher && (
                 <div className="space-y-6">
                   <div className="relative overflow-hidden rounded-2xl gradient-hero p-6 text-white">
                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-2xl" />
                     <div className="relative z-10">
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-2xl font-bold">
-                          {selectedTeacher.firstName?.[0]}{selectedTeacher.lastName?.[0]}
+                      <div className="flex items-center gap-4 mb-2">
+                        <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-xl font-bold">
+                          {salaryTeacher?.firstName?.[0]}{salaryTeacher?.lastName?.[0]}
                         </div>
                         <div>
-                          <h3 className="text-xl font-bold">{selectedTeacher.firstName} {selectedTeacher.lastName}</h3>
-                          <p className="text-white/70">{selectedTeacher.phone}</p>
+                          <h3 className="text-xl font-bold">{salaryTeacher?.firstName} {salaryTeacher?.lastName}</h3>
+                          <p className="text-white/70 text-sm">{salaryTeacher?.phone} | {getPeriodLabel()}</p>
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 text-center">
-                          <GraduationCap className="w-6 h-6 mx-auto mb-2" />
-                          <p className="text-2xl font-bold">{teacherGroups.length}</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 text-center">
+                          <GraduationCap className="w-5 h-5 mx-auto mb-1" />
+                          <p className="text-xl font-bold">{teacherGroups.length}</p>
                           <p className="text-xs text-white/70">Guruhlar</p>
                         </div>
-                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 text-center">
-                          <Users className="w-6 h-6 mx-auto mb-2" />
-                          <p className="text-2xl font-bold">{teacherStudents.length}</p>
+                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 text-center">
+                          <Users className="w-5 h-5 mx-auto mb-1" />
+                          <p className="text-xl font-bold">{salaryStudents.length}</p>
                           <p className="text-xs text-white/70">O'quvchilar</p>
                         </div>
-                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 text-center">
-                          <CheckCircle2 className="w-6 h-6 mx-auto mb-2" />
-                          <p className="text-2xl font-bold">{paidStudents.length}</p>
-                          <p className="text-xs text-white/70">To'lov qilgan</p>
+                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 text-center">
+                          <CheckCircle2 className="w-5 h-5 mx-auto mb-1" />
+                          <p className="text-xl font-bold">{paidStudentsList.length}</p>
+                          <p className="text-xs text-white/70">To'lagan</p>
                         </div>
-                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 text-center">
-                          <XCircle className="w-6 h-6 mx-auto mb-2" />
-                          <p className="text-2xl font-bold">{debtorStudents.length}</p>
+                        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3 text-center">
+                          <XCircle className="w-5 h-5 mx-auto mb-1" />
+                          <p className="text-xl font-bold">{debtorStudentsList.length}</p>
                           <p className="text-xs text-white/70">Qarzdor</p>
                         </div>
                       </div>
@@ -547,7 +630,7 @@ _Zamonaviy-Edu_
                     <Card className="card-modern border-l-4 border-l-purple-500">
                       <CardContent className="p-4">
                         <p className="text-sm text-muted-foreground mb-1">Oylik foizi</p>
-                        <p className="text-2xl font-bold text-purple-600">{salaryPercentage}%</p>
+                        <p className="text-2xl font-bold text-purple-600">{salaryPercent}%</p>
                       </CardContent>
                     </Card>
                     <Card className="card-modern border-l-4 border-l-emerald-500 shadow-glow-success">
@@ -558,14 +641,55 @@ _Zamonaviy-Edu_
                     </Card>
                   </div>
 
+                  {salaryStudents.length > 0 && (
+                    <Card className="card-modern">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Users className="w-4 h-4" /> O'quvchilar ro'yxati ({salaryStudents.length} ta)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>#</TableHead>
+                              <TableHead>O'quvchi</TableHead>
+                              <TableHead>Telefon</TableHead>
+                              <TableHead className="text-right">To'lagan</TableHead>
+                              <TableHead className="text-right">Balans</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {salaryStudents.map((s: any, idx: number) => (
+                              <TableRow key={s.id} data-testid={`row-salary-student-${s.id}`}>
+                                <TableCell>{idx + 1}</TableCell>
+                                <TableCell className="font-medium">{s.firstName} {s.lastName}</TableCell>
+                                <TableCell>{s.phone || "-"}</TableCell>
+                                <TableCell className="text-right">{s.totalPaid.toLocaleString()} UZS</TableCell>
+                                <TableCell className="text-right">
+                                  <Badge variant={s.balance >= 0 ? "secondary" : "destructive"} className="font-mono">
+                                    {s.balance >= 0 ? "+" : ""}{s.balance.toLocaleString()}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  )}
+
                   <div className="flex flex-wrap gap-3">
-                    <Button onClick={generateSalaryPDF} className="gradient-primary hover-lift" data-testid="button-download-salary-pdf">
+                    <Button onClick={() => generateSalaryPDF(false)} className="gradient-primary hover-lift" data-testid="button-download-salary-pdf">
                       <FileDown className="w-4 h-4 mr-2" /> PDF yuklash
+                    </Button>
+                    <Button onClick={() => generateSalaryPDF(true)} variant="outline" className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300" data-testid="button-download-salary-pdf-students">
+                      <FileDown className="w-4 h-4 mr-2" /> PDF + O'quvchilar
                     </Button>
                     <Button onClick={shareToTelegram} variant="outline" className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300" data-testid="button-share-telegram">
                       <Send className="w-4 h-4 mr-2" /> Telegram'ga ulashish
                     </Button>
-                    <Button onClick={() => window.print()} variant="outline" data-testid="button-print-salary">
+                    <Button onClick={handlePrint} variant="outline" data-testid="button-print-salary">
                       <Printer className="w-4 h-4 mr-2" /> Chop etish
                     </Button>
                   </div>
@@ -619,7 +743,7 @@ _Zamonaviy-Edu_
                   ) : (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                        Qarzdorlar yo'q 🎉
+                        Qarzdorlar yo'q
                       </TableCell>
                     </TableRow>
                   )}
@@ -682,8 +806,101 @@ _Zamonaviy-Edu_
             </CardContent>
           </Card>
         </TabsContent>
-
       </Tabs>
+
+      {salaryData && selectedTeacher && (
+        <div ref={printRef} className="print-receipt" style={{ display: "none" }}>
+          <div style={{ maxWidth: "700px", margin: "0 auto", fontFamily: "Arial, sans-serif" }}>
+            <div style={{ textAlign: "center", borderBottom: "2px solid #667eea", paddingBottom: "15px", marginBottom: "20px" }}>
+              <h1 style={{ fontSize: "24px", color: "#667eea", margin: "0 0 5px" }}>OYLIK CHEKI</h1>
+              <p style={{ fontSize: "14px", color: "#666", margin: 0 }}>{getPeriodLabel()}</p>
+            </div>
+
+            <table style={{ width: "100%", marginBottom: "20px", borderCollapse: "collapse" }}>
+              <tbody>
+                <tr>
+                  <td style={{ padding: "6px 0", color: "#888", width: "40%" }}>O'qituvchi:</td>
+                  <td style={{ padding: "6px 0", fontWeight: "bold" }}>{salaryTeacher?.firstName} {salaryTeacher?.lastName}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "6px 0", color: "#888" }}>Telefon:</td>
+                  <td style={{ padding: "6px 0" }}>{salaryTeacher?.phone || "-"}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "6px 0", color: "#888" }}>Guruhlar:</td>
+                  <td style={{ padding: "6px 0" }}>{teacherGroups.length} ta</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "6px 0", color: "#888" }}>O'quvchilar:</td>
+                  <td style={{ padding: "6px 0" }}>{salaryStudents.length} ta</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style={{ borderTop: "1px solid #eee", paddingTop: "15px", marginBottom: "20px" }}>
+              <h3 style={{ fontSize: "16px", marginBottom: "10px" }}>Moliyaviy ma'lumotlar</h3>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "6px 0", color: "#888", width: "40%" }}>To'lov qilganlar:</td>
+                    <td style={{ padding: "6px 0", color: "#22c55e", fontWeight: "bold" }}>{paidStudentsList.length} ta</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "6px 0", color: "#888" }}>Qarzdorlar:</td>
+                    <td style={{ padding: "6px 0", color: "#ef4444", fontWeight: "bold" }}>{debtorStudentsList.length} ta</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "6px 0", color: "#888" }}>Umumiy tushum:</td>
+                    <td style={{ padding: "6px 0", fontWeight: "bold" }}>{teacherIncome.toLocaleString()} UZS</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "6px 0", color: "#888" }}>Oylik foizi:</td>
+                    <td style={{ padding: "6px 0", fontWeight: "bold" }}>{salaryPercent}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ background: "#f0fdf4", border: "2px solid #22c55e", borderRadius: "8px", padding: "15px", textAlign: "center", marginBottom: "20px" }}>
+              <p style={{ color: "#888", margin: "0 0 5px", fontSize: "14px" }}>Oyligi</p>
+              <p style={{ fontSize: "28px", fontWeight: "bold", color: "#16a34a", margin: 0 }}>{teacherSalary.toLocaleString()} UZS</p>
+            </div>
+
+            {salaryStudents.length > 0 && (
+              <div style={{ marginBottom: "20px" }}>
+                <h3 style={{ fontSize: "16px", marginBottom: "10px" }}>O'quvchilar ({salaryStudents.length} ta)</h3>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #667eea" }}>
+                      <th style={{ padding: "8px 4px", textAlign: "left" }}>#</th>
+                      <th style={{ padding: "8px 4px", textAlign: "left" }}>O'quvchi</th>
+                      <th style={{ padding: "8px 4px", textAlign: "right" }}>To'lagan</th>
+                      <th style={{ padding: "8px 4px", textAlign: "right" }}>Holati</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salaryStudents.map((s: any, idx: number) => (
+                      <tr key={s.id} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: "6px 4px" }}>{idx + 1}</td>
+                        <td style={{ padding: "6px 4px" }}>{s.firstName} {s.lastName}</td>
+                        <td style={{ padding: "6px 4px", textAlign: "right" }}>{s.totalPaid.toLocaleString()}</td>
+                        <td style={{ padding: "6px 4px", textAlign: "right", color: s.balance >= 0 ? "#22c55e" : "#ef4444" }}>
+                          {s.balance >= 0 ? "To'langan" : `${Math.abs(s.balance).toLocaleString()} qarz`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ borderTop: "1px solid #eee", paddingTop: "10px", fontSize: "11px", color: "#aaa", display: "flex", justifyContent: "space-between" }}>
+              <span>Sana: {new Date().toLocaleDateString("uz-UZ")}</span>
+              <span>Zamonaviy-Edu</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

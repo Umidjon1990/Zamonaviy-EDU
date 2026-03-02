@@ -291,7 +291,7 @@ export default function PaymentReceipt({ payment, student, groupName, subjectNam
           <X className="h-4 w-4" />
         </Button>
         
-        <div ref={receiptRef}>
+        <div ref={receiptRef} className="print-receipt">
           <CardContent className="pt-6 space-y-4">
             {/* Logo and Header */}
             <div className="text-center">

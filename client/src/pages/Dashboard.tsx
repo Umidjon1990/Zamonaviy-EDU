@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useStats, useStudents, usePayments, useGroups, useLeads } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useStudents, usePayments, useGroups, useLeads } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Users, GraduationCap, Wallet, TrendingUp, BookOpen, Clock, UserPlus, ArrowUpRight, ArrowDownRight, Sparkles, CalendarDays, Target } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
@@ -13,8 +15,34 @@ interface DashboardStats {
   newLeads: number;
 }
 
+const monthNames = [
+  { value: "1", label: "Yanvar" },
+  { value: "2", label: "Fevral" },
+  { value: "3", label: "Mart" },
+  { value: "4", label: "Aprel" },
+  { value: "5", label: "May" },
+  { value: "6", label: "Iyun" },
+  { value: "7", label: "Iyul" },
+  { value: "8", label: "Avgust" },
+  { value: "9", label: "Sentyabr" },
+  { value: "10", label: "Oktyabr" },
+  { value: "11", label: "Noyabr" },
+  { value: "12", label: "Dekabr" },
+];
+
 export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useStats() as { data: DashboardStats | undefined; isLoading: boolean };
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState((now.getMonth() + 1).toString());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear().toString());
+
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ["stats", selectedMonth, selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/stats?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+  }) as { data: DashboardStats | undefined; isLoading: boolean };
   const { data: students } = useStudents();
   const { data: payments } = usePayments();
   const { data: groups } = useGroups();
@@ -35,14 +63,15 @@ export default function Dashboard() {
   const leadsList = Array.isArray(leads) ? leads : [];
   const attendanceList = Array.isArray(attendanceData) ? attendanceData : [];
 
-  // Calculate real monthly data for the bar chart (last 6 months)
+  const selMonth = parseInt(selectedMonth);
+  const selYear = parseInt(selectedYear);
+
   const getMonthlyData = () => {
-    const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
-    const now = new Date();
+    const monthLabels = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
     const data = [];
     
     for (let i = 5; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const date = new Date(selYear, selMonth - 1 - i, 1);
       const month = date.getMonth();
       const year = date.getFullYear();
       
@@ -52,13 +81,12 @@ export default function Dashboard() {
       });
       
       const total = monthPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-      data.push({ name: months[month], total });
+      data.push({ name: monthLabels[month], total });
     }
     
     return data;
   };
 
-  // Calculate real attendance data for pie chart
   const getAttendanceStats = () => {
     const present = attendanceList.filter((a: any) => a.status === 'present').length;
     const absent = attendanceList.filter((a: any) => a.status === 'absent').length;
@@ -80,62 +108,47 @@ export default function Dashboard() {
     ];
   };
 
-  // Calculate real performance metrics
   const getPerformanceMetrics = () => {
-    // Attendance rate
     const totalAtt = attendanceList.length;
     const presentAtt = attendanceList.filter((a: any) => a.status === 'present').length;
     const attendanceRate = totalAtt > 0 ? Math.round((presentAtt / totalAtt) * 100) : 0;
     
-    // Payment collection rate (students with positive balance / total students)
     const paidStudents = studentsList.filter((s: any) => s.balance > 0).length;
     const paymentRate = studentsList.length > 0 ? Math.round((paidStudents / studentsList.length) * 100) : 0;
     
-    // Lead conversion rate (converted leads / total leads)
     const convertedLeads = leadsList.filter((l: any) => l.status === 'converted').length;
     const conversionRate = leadsList.length > 0 ? Math.round((convertedLeads / leadsList.length) * 100) : 0;
     
-    // Student retention (active students / total students)
     const activeStudents = studentsList.filter((s: any) => s.status === 'active').length;
     const retentionRate = studentsList.length > 0 ? Math.round((activeStudents / studentsList.length) * 100) : 0;
     
     return { attendanceRate, paymentRate, conversionRate, retentionRate };
   };
 
-  // Calculate financial summary
   const getFinancialSummary = () => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    
-    // Monthly income
-    const monthlyPayments = paymentsList.filter((p: any) => {
+    const monthlyPaymentsFiltered = paymentsList.filter((p: any) => {
       const pDate = new Date(p.createdAt);
-      return pDate.getMonth() === currentMonth && pDate.getFullYear() === currentYear && p.status === 'completed';
+      return pDate.getMonth() + 1 === selMonth && pDate.getFullYear() === selYear && p.status === 'completed';
     });
-    const monthlyIncome = monthlyPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+    const monthlyIncome = monthlyPaymentsFiltered.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
     
-    // Total debt (students with negative balance)
     const totalDebt = studentsList
       .filter((s: any) => s.balance < 0)
       .reduce((sum: number, s: any) => sum + Math.abs(s.balance), 0);
     
-    // Expected payments (students with 0 or negative balance * average group price)
     const debtorCount = studentsList.filter((s: any) => s.balance <= 0).length;
     const avgGroupPrice = groupsList.length > 0 
       ? groupsList.reduce((sum: number, g: any) => sum + (g.price || 0), 0) / groupsList.length 
       : 500000;
     const expectedPayments = debtorCount * avgGroupPrice;
     
-    // Average payment
-    const avgPayment = monthlyPayments.length > 0 
-      ? Math.round(monthlyIncome / monthlyPayments.length)
+    const avgPayment = monthlyPaymentsFiltered.length > 0 
+      ? Math.round(monthlyIncome / monthlyPaymentsFiltered.length)
       : 0;
     
     return { monthlyIncome, totalDebt, expectedPayments, avgPayment };
   };
 
-  // Get today's classes
   const getTodayClasses = () => {
     const today = new Date();
     const dayNames = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
@@ -153,17 +166,13 @@ export default function Dashboard() {
         const time = g.time || '09:00';
         const [startHour, startMin] = time.split(':').map(Number);
         const classTime = (startHour || 9) * 60 + (startMin || 0);
-        const endTime = classTime + 90; // 1.5 hours
+        const endTime = classTime + 90;
         
         let status = 'waiting';
         if (currentTime > endTime) status = 'done';
         else if (currentTime >= classTime && currentTime <= endTime) status = 'now';
         
-        return {
-          name: g.name,
-          time: g.time || '09:00',
-          status,
-        };
+        return { name: g.name, time: g.time || '09:00', status };
       })
       .sort((a: any, b: any) => {
         const [aH, aM] = a.time.split(':').map(Number);
@@ -196,6 +205,11 @@ export default function Dashboard() {
   const financial = getFinancialSummary();
   const todayClasses = getTodayClasses();
 
+  const selectedMonthPaymentCount = paymentsList.filter((p: any) => {
+    const d = new Date(p.createdAt);
+    return d.getMonth() + 1 === selMonth && d.getFullYear() === selYear && p.status === 'completed';
+  }).length;
+
   const statsCards = [
     {
       title: "Jami o'quvchilar",
@@ -220,15 +234,12 @@ export default function Dashboard() {
     {
       title: "Oylik tushum",
       value: `${((stats?.monthlyIncome || financial.monthlyIncome) / 1000000).toFixed(1)}M`,
-      change: `${paymentsList.filter((p: any) => {
-        const d = new Date(p.createdAt);
-        return d.getMonth() === new Date().getMonth() && p.status === 'completed';
-      }).length} ta to'lov`,
+      change: `${selectedMonthPaymentCount} ta to'lov`,
       changeType: "up",
       icon: Wallet,
       iconBg: "bg-emerald-500/10",
       iconColor: "text-emerald-500",
-      description: "So'nggi 30 kun",
+      description: monthNames.find(m => m.value === selectedMonth)?.label || "",
     },
     {
       title: "Yangi lidlar",
@@ -257,7 +268,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 p-2">
-      {/* Hero Header */}
       <div className="relative overflow-hidden rounded-2xl gradient-hero p-6 md:p-8 text-white animate-slide-up">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24 blur-2xl" />
@@ -274,16 +284,35 @@ export default function Dashboard() {
               Markaz ko'rsatkichlari va statistika
             </p>
           </div>
-          <div className="flex items-center gap-3 bg-white/20 backdrop-blur-sm px-4 py-2.5 rounded-xl">
-            <CalendarDays className="h-5 w-5" />
-            <span className="text-sm font-medium">
-              {new Date().toLocaleDateString('uz-UZ', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-2 rounded-xl">
+              <CalendarDays className="h-4 w-4" />
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[110px] border-0 bg-transparent text-white h-7 p-0 focus:ring-0" data-testid="select-dashboard-month">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthNames.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-[70px] border-0 bg-transparent text-white h-7 p-0 focus:ring-0" data-testid="select-dashboard-year">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                  <SelectItem value="2027">2027</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statsCards.map((stat, index) => (
           <Card 
@@ -313,9 +342,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Charts Section */}
       <div className="grid gap-6 lg:grid-cols-7">
-        {/* Revenue Chart */}
         <Card className="lg:col-span-4 card-modern animate-slide-up" style={{ animationDelay: '200ms' }}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -333,35 +360,14 @@ export default function Dashboard() {
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyData} barSize={40}>
-                  <XAxis
-                    dataKey="name"
-                    stroke="#888888"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="#888888"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(value) => `${value / 1000000}M`}
-                  />
+                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value / 1000000}M`} />
                   <Tooltip 
                     cursor={{fill: 'rgba(0,0,0,0.05)', radius: 8}}
-                    contentStyle={{ 
-                      borderRadius: '12px', 
-                      border: 'none', 
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
-                      padding: '12px 16px'
-                    }}
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.12)', padding: '12px 16px' }}
                     formatter={(value: number) => [`${(value / 1000000).toFixed(1)}M so'm`, "Tushum"]}
                   />
-                  <Bar
-                    dataKey="total"
-                    fill="url(#colorGradient)"
-                    radius={[8, 8, 0, 0]}
-                  />
+                  <Bar dataKey="total" fill="url(#colorGradient)" radius={[8, 8, 0, 0]} />
                   <defs>
                     <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={1}/>
@@ -374,7 +380,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Attendance Pie Chart */}
         <Card className="lg:col-span-3 card-modern animate-slide-up" style={{ animationDelay: '300ms' }}>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-semibold">Davomat statistikasi</CardTitle>
@@ -384,25 +389,13 @@ export default function Dashboard() {
             <div className="h-[180px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={attendancePieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
+                  <Pie data={attendancePieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={5} dataKey="value">
                     {attendancePieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ 
-                      borderRadius: '12px', 
-                      border: 'none', 
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.12)' 
-                    }}
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.12)' }}
                     formatter={(value: number) => [`${value}%`, ""]}
                   />
                 </PieChart>
@@ -420,9 +413,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Quick Stats */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Today's Classes */}
         <Card className="card-modern animate-slide-up" style={{ animationDelay: '400ms' }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
@@ -458,7 +449,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Performance Metrics */}
         <Card className="card-modern animate-slide-up" style={{ animationDelay: '500ms' }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
@@ -503,7 +493,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Quick Summary */}
         <Card className="card-modern animate-slide-up" style={{ animationDelay: '600ms' }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
@@ -512,7 +501,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <CardTitle className="text-base font-semibold">Moliyaviy xulosa</CardTitle>
-                <p className="text-sm text-muted-foreground">Bu oy</p>
+                <p className="text-sm text-muted-foreground">{monthNames.find(m => m.value === selectedMonth)?.label} {selectedYear}</p>
               </div>
             </div>
           </CardHeader>

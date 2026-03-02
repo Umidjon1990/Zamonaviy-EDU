@@ -373,3 +373,34 @@
   animation: shimmer 1.5s infinite;
   border-radius: 8px;
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-receipt {
+    display: block !important;
+    visibility: visible !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 20px;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    z-index: 99999;
+  }
+  .print-receipt * {
+    visibility: visible !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    margin: 10mm;
+    size: A4;
+  }
+}
