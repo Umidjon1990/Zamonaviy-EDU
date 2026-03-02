@@ -15,8 +15,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Students() {
+  const { data: currentUser } = useQuery({
+    queryKey: ["/api/auth/me"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+  const isTeacher = currentUser?.role === "teacher";
+  const hasPermission = (perm: string) => isTeacher ? (currentUser?.permissions || []).includes(perm) : true;
   const { data: studentsData, isLoading } = useStudents();
   const students = (studentsData || []) as any[];
   const { data: groupsData } = useGroups();
@@ -264,6 +275,8 @@ export default function Students() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">{translations.students.title}</h1>
         <div className="flex flex-wrap gap-2">
+          {!isTeacher && (
+          <>
           <Button variant="outline" onClick={handleShowTemplate} data-testid="button-show-template">
             <Eye className="mr-2 h-4 w-4" /> Shablon
           </Button>
@@ -276,7 +289,15 @@ export default function Students() {
             </Button>
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileUpload} />
           </label>
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          </>
+          )}
+          {hasPermission('add_student') && (
+          <Dialog open={isOpen} onOpenChange={(open) => {
+            setIsOpen(open);
+            if (open && isTeacher) {
+              setFormData(prev => ({ ...prev, teacherId: currentUser?.userId || "", status: "active" }));
+            }
+          }}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-student">
                 <Plus className="mr-2 h-4 w-4" /> {translations.students.addStudent}
@@ -357,6 +378,7 @@ export default function Students() {
                   </SelectContent>
                 </Select>
               </div>
+              {!isTeacher && (
               <div className="space-y-2">
                 <Label htmlFor="teacherId">O'qituvchi</Label>
                 <Select value={formData.teacherId} onValueChange={(value) => setFormData({ ...formData, teacherId: value })}>
@@ -372,6 +394,8 @@ export default function Students() {
                   </SelectContent>
                 </Select>
               </div>
+              )}
+              {!isTeacher && (
               <div className="space-y-2">
                 <Label htmlFor="status">Holat</Label>
                 <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
@@ -385,12 +409,14 @@ export default function Students() {
                   </SelectContent>
                 </Select>
               </div>
+              )}
               <Button type="submit" className="w-full" disabled={createStudent.isPending} data-testid="button-submit">
                 {createStudent.isPending ? "Saqlanmoqda..." : "Saqlash"}
               </Button>
             </form>
           </DialogContent>
         </Dialog>
+          )}
         </div>
       </div>
 

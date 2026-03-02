@@ -13,6 +13,7 @@ import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup, useTeachers,
 import { Plus, Users, Clock, MapPin, Trash2, User, FileText, Copy, Pencil, BookOpen } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 const WEEKDAYS = [
   { value: "Dushanba", label: "Du" },
@@ -37,6 +38,17 @@ Familiyasi Ismi
 +998911234567`;
 
 export default function Groups() {
+  const { data: currentUser } = useQuery({
+    queryKey: ["/api/auth/me"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+  const isTeacher = currentUser?.role === "teacher";
+  const canCreateGroup = isTeacher ? (currentUser?.permissions || []).includes("create_group") : true;
+  const canEditGroup = isTeacher ? (currentUser?.permissions || []).includes("edit_group") : true;
   const { data: groupsData, isLoading } = useGroups();
   const groups = (groupsData || []) as any[];
   const { data: teachersData } = useTeachers();
@@ -323,7 +335,13 @@ export default function Groups() {
             </DialogContent>
           </Dialog>
           
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          {canCreateGroup && (
+          <Dialog open={isOpen} onOpenChange={(open) => {
+            setIsOpen(open);
+            if (open && isTeacher) {
+              setFormData(prev => ({ ...prev, teacherId: currentUser?.userId || "" }));
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="w-full sm:w-auto" data-testid="button-add-group">
                 <Plus className="mr-2 h-4 w-4" /> {translations.groups.addGroup}
@@ -431,6 +449,7 @@ export default function Groups() {
             </form>
           </DialogContent>
         </Dialog>
+          )}
 
           <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
             <DialogContent className="sm:max-w-md">
@@ -576,12 +595,16 @@ export default function Groups() {
                 </div>
               </CardContent>
               <CardFooter className="bg-muted/30 p-3 flex justify-end gap-2">
+                {canEditGroup && (
                 <Button variant="ghost" size="sm" className="text-xs" onClick={() => openEditDialog(group)} data-testid={`button-edit-${group.id}`}>
                   <Pencil className="h-4 w-4 mr-1" /> Tahrirlash
                 </Button>
+                )}
+                {!isTeacher && (
                 <Button variant="ghost" size="sm" className="text-xs text-destructive" onClick={() => handleDelete(group.id)}>
                   <Trash2 className="h-4 w-4 mr-1" /> O'chirish
                 </Button>
+                )}
               </CardFooter>
             </Card>
           ))}

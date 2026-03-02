@@ -10,7 +10,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 const roleRouteAccess: Record<string, string[]> = {
   markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/expenses", "/reports", "/settings"],
   manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/expenses", "/reports"],
-  teacher: ["/attendance", "/students", "/schedule", "/teacher-salary"],
+  teacher: ["/attendance", "/students", "/groups", "/schedule", "/teacher-salary"],
 };
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
