@@ -50,6 +50,8 @@ export default function Payments() {
   const [filterToDate, setFilterToDate] = useState("");
   const [filterTeacherId, setFilterTeacherId] = useState("");
   const [filterGroupId, setFilterGroupId] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [studentMode, setStudentMode] = useState<"existing" | "new">("existing");
   const [receiptData, setReceiptData] = useState<{
     payment: any;
@@ -122,8 +124,19 @@ export default function Payments() {
       .map((s: any) => s.id);
   }, [filterGroupId, groupsList, studentsList]);
 
+  const monthNames = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
+
+  const monthFilteredPayments = useMemo(() => {
+    const startOfMonth = new Date(selectedYear, selectedMonth, 1);
+    const endOfMonth = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+    return paymentsList.filter((p: any) => {
+      const date = new Date(p.createdAt);
+      return date >= startOfMonth && date <= endOfMonth;
+    });
+  }, [paymentsList, selectedMonth, selectedYear]);
+
   const filteredPayments = useMemo(() => {
-    let result = paymentsList;
+    let result = monthFilteredPayments;
 
     if (filterSearch.trim()) {
       const query = filterSearch.toLowerCase().trim();
@@ -160,7 +173,7 @@ export default function Payments() {
     }
 
     return result;
-  }, [paymentsList, filterSearch, filterFromDate, filterToDate, filterTeacherId, filterGroupId, studentsList, teachersList, groupsList]);
+  }, [monthFilteredPayments, filterSearch, filterFromDate, filterToDate, filterTeacherId, filterGroupId, studentsList, teachersList, groupsList]);
 
   const resetForm = () => {
     setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "", teacherId: "" });
@@ -316,7 +329,7 @@ export default function Payments() {
     );
   }
 
-  const completedPayments = paymentsList.filter((p: any) => p.status === 'completed');
+  const completedPayments = monthFilteredPayments.filter((p: any) => p.status === 'completed');
   const totalIncome = completedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
   const getStudentName = (studentId: number) => {
@@ -333,7 +346,32 @@ export default function Payments() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">{translations.nav.payments}</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold tracking-tight">{translations.nav.payments}</h1>
+          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-1.5">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v))}>
+              <SelectTrigger className="w-[120px] h-8 text-sm border-0 bg-transparent shadow-none" data-testid="select-filter-month">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthNames.map((name, i) => (
+                  <SelectItem key={i} value={i.toString()}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+              <SelectTrigger className="w-[80px] h-8 text-sm border-0 bg-transparent shadow-none" data-testid="select-filter-year">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[2024, 2025, 2026, 2027].map((y) => (
+                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
@@ -583,7 +621,7 @@ export default function Payments() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Jami tushum</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{monthNames[selectedMonth]} tushum</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-600" data-testid="text-total-income">{totalIncome.toLocaleString()} UZS</div>
@@ -594,7 +632,7 @@ export default function Payments() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Jami to'lovlar</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-payments">{paymentsList.length}</div>
+            <div className="text-2xl font-bold" data-testid="text-total-payments">{monthFilteredPayments.length}</div>
           </CardContent>
         </Card>
         <Card className="shadow-sm">
