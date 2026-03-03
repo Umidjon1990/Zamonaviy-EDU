@@ -644,7 +644,7 @@ async function showAdminStats(ctx: BotContext) {
   const activeStudents = students.filter(s => s.status === "active").length;
   const pausedStudents = students.filter(s => s.status === "paused").length;
   const newLeads = leads.filter(l => l.status === "new").length;
-  const debtors = students.filter(s => s.balance < 0).length;
+  const debtors = students.filter(s => s.balance <= 0).length;
   
   const message = 
     `📊 <b>Umumiy statistika</b>\n\n` +
@@ -707,7 +707,7 @@ async function showAdminIncome(ctx: BotContext) {
 async function showAdminDebtors(ctx: BotContext) {
   const tenantId = ctx.session.tenantId!;
   const students = await storage.getStudents(tenantId);
-  const debtors = students.filter(s => s.balance < 0).sort((a, b) => a.balance - b.balance);
+  const debtors = students.filter(s => s.balance <= 0).sort((a, b) => a.balance - b.balance);
   
   if (debtors.length === 0) {
     await ctx.reply("✅ Qarzdor o'quvchilar yo'q!");
@@ -760,8 +760,8 @@ async function showAdminDailyReport(ctx: BotContext) {
   
   // Active students and debtors
   const activeStudents = students.filter(s => s.status === "active").length;
-  const debtors = students.filter(s => s.balance < 0).length;
-  const totalDebt = students.filter(s => s.balance < 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
+  const debtors = students.filter(s => s.balance <= 0).length;
+  const totalDebt = students.filter(s => s.balance <= 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
   
   // Today's attendance - filter by today's date
   const allAttendance = await storage.getAttendance(tenantId, undefined, undefined, now.getMonth() + 1, now.getFullYear());
@@ -856,8 +856,8 @@ export async function sendDailyReportToAdmins(): Promise<void> {
           const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
           
           const activeStudents = students.filter(s => s.status === "active").length;
-          const debtors = students.filter(s => s.balance < 0).length;
-          const totalDebt = students.filter(s => s.balance < 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
+          const debtors = students.filter(s => s.balance <= 0).length;
+          const totalDebt = students.filter(s => s.balance <= 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
           
           const allAttendance = await storage.getAttendance(tenantId, undefined, undefined, now.getMonth() + 1, now.getFullYear());
           const todayStr = today.toISOString().split('T')[0];

@@ -218,8 +218,8 @@ export default function Reports() {
   const teacherIncome = salaryData?.totalPayments || 0;
   const salaryPercent = salaryData?.teacher?.salaryPercent || 0;
   const salaryStudents = salaryData?.students || [];
-  const paidStudentsList = salaryStudents.filter((s: any) => s.balance >= 0);
-  const debtorStudentsList = salaryStudents.filter((s: any) => s.balance < 0);
+  const paidStudentsList = salaryStudents.filter((s: any) => s.balance > 0);
+  const debtorStudentsList = salaryStudents.filter((s: any) => s.balance <= 0);
   const totalAdvance = salaryData?.totalAdvance || 0;
   const calculatedSalary = salaryData?.calculatedSalary || 0;
   const advanceExpenses = salaryData?.advanceExpenses || [];
@@ -346,7 +346,7 @@ export default function Reports() {
         s.phone || "-",
         `${s.totalPaid.toLocaleString()} UZS`,
         s.paymentCount,
-        s.balance >= 0 ? "To'langan" : `${Math.abs(s.balance).toLocaleString()} qarz`,
+        s.balance > 0 ? "To'langan" : `${Math.abs(s.balance).toLocaleString()} qarz`,
       ]);
       
       autoTable(doc, {
@@ -749,8 +749,8 @@ Zamonaviy-Edu
                                 <TableCell>{s.phone || "-"}</TableCell>
                                 <TableCell className="text-right">{s.totalPaid.toLocaleString()} UZS</TableCell>
                                 <TableCell className="text-right">
-                                  <Badge variant={s.balance >= 0 ? "secondary" : "destructive"} className="font-mono">
-                                    {s.balance >= 0 ? "+" : ""}{s.balance.toLocaleString()}
+                                  <Badge variant={s.balance > 0 ? "secondary" : "destructive"} className="font-mono">
+                                    {s.balance > 0 ? "+" : ""}{s.balance.toLocaleString()}
                                   </Badge>
                                 </TableCell>
                               </TableRow>
@@ -991,8 +991,8 @@ Zamonaviy-Edu
                         <td style={{ padding: "6px 4px" }}>{idx + 1}</td>
                         <td style={{ padding: "6px 4px" }}>{s.firstName} {s.lastName}</td>
                         <td style={{ padding: "6px 4px", textAlign: "right" }}>{s.totalPaid.toLocaleString()}</td>
-                        <td style={{ padding: "6px 4px", textAlign: "right", color: s.balance >= 0 ? "#22c55e" : "#ef4444" }}>
-                          {s.balance >= 0 ? "To'langan" : `${Math.abs(s.balance).toLocaleString()} qarz`}
+                        <td style={{ padding: "6px 4px", textAlign: "right", color: s.balance > 0 ? "#22c55e" : "#ef4444" }}>
+                          {s.balance > 0 ? "To'langan" : `${Math.abs(s.balance).toLocaleString()} qarz`}
                         </td>
                       </tr>
                     ))}

@@ -61,8 +61,8 @@ export default function TeacherSalary() {
     String(currentDate.getFullYear() + 1),
   ];
 
-  const debtStudents = students?.filter((s: any) => s.balance < 0) || [];
-  const paidStudents = students?.filter((s: any) => s.balance >= 0) || [];
+  const debtStudents = students?.filter((s: any) => s.balance <= 0) || [];
+  const paidStudents = students?.filter((s: any) => s.balance > 0) || [];
 
   return (
     <div className="space-y-6" data-testid="page-teacher-salary">
