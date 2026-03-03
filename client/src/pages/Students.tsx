@@ -187,6 +187,12 @@ export default function Students() {
     e.preventDefault();
     try {
       const { groupId, teacherId, balance, ...studentData } = formData;
+
+      if (isTeacher && (!groupId || groupId <= 0)) {
+        toast({ title: "Xatolik", description: "Guruhni tanlang", variant: "destructive" });
+        return;
+      }
+
       const newStudent = await createStudent.mutateAsync({
         ...studentData,
         balance: balance > 0 ? -balance : balance,

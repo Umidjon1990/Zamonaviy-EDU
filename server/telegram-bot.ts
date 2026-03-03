@@ -31,6 +31,14 @@ export async function startTelegramBot() {
     }),
   }));
 
+  bot.command("logout", async (ctx) => {
+    if (ctx.session.step === "verified") {
+      await handleLogout(ctx);
+    } else {
+      await ctx.reply("Siz hali tizimga kirmadingiz. /start buyrug'ini bosing.");
+    }
+  });
+
   bot.command("start", async (ctx) => {
     console.log("Bot /start buyrug'i qabul qilindi:", ctx.from?.id);
     ctx.session.step = "awaiting_phone";
@@ -239,6 +247,7 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
             keyboard: [
               [{ text: "📊 Statistika" }, { text: "💰 Tushum" }],
               [{ text: "⚠️ Qarzdorlar" }, { text: "📋 Hisobot" }],
+              [{ text: "🚪 Chiqish" }],
             ],
             resize_keyboard: true,
           },
@@ -281,7 +290,7 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
             keyboard: [
               [{ text: "📚 Guruhlar" }, { text: "💰 Oylik" }],
               [{ text: "📅 Davomat" }, { text: "📊 Ma'lumot" }],
-              [{ text: "⚠️ Qarzdorlar" }],
+              [{ text: "⚠️ Qarzdorlar" }, { text: "🚪 Chiqish" }],
             ],
             resize_keyboard: true,
           },
@@ -330,7 +339,7 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
           reply_markup: {
             keyboard: [
               [{ text: "💰 Balans" }, { text: "📅 Davomat" }],
-              [{ text: "📚 Guruhlar" }],
+              [{ text: "📚 Guruhlar" }, { text: "🚪 Chiqish" }],
             ],
             resize_keyboard: true,
           },
@@ -347,8 +356,52 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
   );
 }
 
+async function handleLogout(ctx: BotContext) {
+  const userType = ctx.session.userType;
+  const chatId = ctx.chat?.id?.toString();
+
+  if (chatId) {
+    try {
+      if (userType === "teacher" && ctx.session.teacherId) {
+        await storage.updateUserTelegramChatId(ctx.session.teacherId, "");
+      } else if (userType === "admin" && ctx.session.adminId) {
+        await storage.updateUserTelegramChatId(ctx.session.adminId, "");
+      } else if (userType === "student" && ctx.session.studentId) {
+        await storage.updateStudentTelegramChatId(ctx.session.studentId, "");
+      }
+    } catch (e) {
+      console.error("Logout telegramChatId tozalashda xato:", e);
+    }
+  }
+
+  ctx.session.step = "start";
+  ctx.session.userType = undefined;
+  ctx.session.studentId = undefined;
+  ctx.session.teacherId = undefined;
+  ctx.session.adminId = undefined;
+  ctx.session.phone = undefined;
+  ctx.session.tenantId = undefined;
+
+  await ctx.reply(
+    "✅ Siz tizimdan chiqib ketdingiz.\n\n" +
+    "Qayta kirish uchun /start buyrug'ini bosing.",
+    {
+      reply_markup: {
+        keyboard: [[{ text: "/start" }]],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      },
+    }
+  );
+}
+
 async function handleVerifiedUser(ctx: BotContext) {
   const text = ctx.message?.text?.toLowerCase() || "";
+
+  if (text.includes("chiqish") || text.includes("🚪")) {
+    await handleLogout(ctx);
+    return;
+  }
   
   if (ctx.session.userType === "admin") {
     if (text.includes("statistika") || text.includes("📊")) {
