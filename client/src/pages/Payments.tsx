@@ -48,6 +48,8 @@ export default function Payments() {
   const [filterSearch, setFilterSearch] = useState("");
   const [filterFromDate, setFilterFromDate] = useState("");
   const [filterToDate, setFilterToDate] = useState("");
+  const [filterTeacherId, setFilterTeacherId] = useState("");
+  const [filterGroupId, setFilterGroupId] = useState("");
   const [studentMode, setStudentMode] = useState<"existing" | "new">("existing");
   const [receiptData, setReceiptData] = useState<{
     payment: any;
@@ -111,6 +113,15 @@ export default function Payments() {
     return Math.round(formData.amount * (selectedTeacher.salaryPercent || 0) / 100);
   }, [selectedTeacher, formData.amount]);
 
+  const groupStudentIds = useMemo(() => {
+    if (!filterGroupId) return null;
+    const group = groupsList.find((g: any) => g.id?.toString() === filterGroupId);
+    if (!group) return null;
+    return studentsList
+      .filter((s: any) => s.groups?.includes(filterGroupId) || s.groupIds?.includes(parseInt(filterGroupId)))
+      .map((s: any) => s.id);
+  }, [filterGroupId, groupsList, studentsList]);
+
   const filteredPayments = useMemo(() => {
     let result = paymentsList;
 
@@ -137,8 +148,19 @@ export default function Payments() {
       result = result.filter((p: any) => new Date(p.createdAt) <= to);
     }
 
+    if (filterTeacherId) {
+      result = result.filter((p: any) => p.teacherId === filterTeacherId);
+    }
+
+    if (filterGroupId) {
+      const group = groupsList.find((g: any) => g.id?.toString() === filterGroupId);
+      if (group && group.teacherId) {
+        result = result.filter((p: any) => p.teacherId === group.teacherId);
+      }
+    }
+
     return result;
-  }, [paymentsList, filterSearch, filterFromDate, filterToDate, studentsList, teachersList]);
+  }, [paymentsList, filterSearch, filterFromDate, filterToDate, filterTeacherId, filterGroupId, studentsList, teachersList, groupsList]);
 
   const resetForm = () => {
     setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "", teacherId: "" });
@@ -622,11 +644,11 @@ export default function Payments() {
                 data-testid="input-filter-to-date"
               />
             </div>
-            {(filterSearch || filterFromDate || filterToDate) && (
+            {(filterSearch || filterFromDate || filterToDate || filterTeacherId || filterGroupId) && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => { setFilterSearch(""); setFilterFromDate(""); setFilterToDate(""); }}
+                onClick={() => { setFilterSearch(""); setFilterFromDate(""); setFilterToDate(""); setFilterTeacherId(""); setFilterGroupId(""); }}
                 className="whitespace-nowrap"
                 data-testid="button-clear-filters"
               >
@@ -635,7 +657,43 @@ export default function Payments() {
               </Button>
             )}
           </div>
-          {(filterSearch || filterFromDate || filterToDate) && (
+          <div className="flex flex-col sm:flex-row gap-3 items-end mt-3">
+            <div className="w-full sm:w-auto sm:min-w-[200px]">
+              <Label className="text-xs font-medium mb-1.5 block">
+                <GraduationCap className="w-3 h-3 inline mr-1" />
+                O'qituvchi bo'yicha
+              </Label>
+              <Select value={filterTeacherId} onValueChange={(val) => { setFilterTeacherId(val === "all" ? "" : val); }}>
+                <SelectTrigger data-testid="select-filter-teacher">
+                  <SelectValue placeholder="Barchasi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Barchasi</SelectItem>
+                  {teachersList.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.firstName} {t.lastName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-full sm:w-auto sm:min-w-[200px]">
+              <Label className="text-xs font-medium mb-1.5 block">
+                <Users className="w-3 h-3 inline mr-1" />
+                Guruh bo'yicha
+              </Label>
+              <Select value={filterGroupId} onValueChange={(val) => { setFilterGroupId(val === "all" ? "" : val); }}>
+                <SelectTrigger data-testid="select-filter-group">
+                  <SelectValue placeholder="Barchasi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Barchasi</SelectItem>
+                  {groupsList.map((g: any) => (
+                    <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {(filterSearch || filterFromDate || filterToDate || filterTeacherId || filterGroupId) && (
             <div className="mt-3 text-sm text-muted-foreground flex items-center gap-1">
               <Filter className="w-4 h-4" />
               {filteredPayments.length} ta to'lov topildi (jami {paymentsList.length} tadan)
