@@ -273,12 +273,15 @@ async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
         `📊 Buyruqlar:\n` +
         `/guruhlar - Guruhlaringiz\n` +
         `/oylik - Oylik hisobi\n` +
-        `/davomat - Davomat statistikasi\n`,
+        `/davomat - Davomat statistikasi\n` +
+        `/malumot - Umumiy ma'lumot\n` +
+        `/qarzdorlar - Qarzdor o'quvchilar\n`,
         {
           reply_markup: {
             keyboard: [
               [{ text: "📚 Guruhlar" }, { text: "💰 Oylik" }],
-              [{ text: "📅 Davomat" }],
+              [{ text: "📅 Davomat" }, { text: "📊 Ma'lumot" }],
+              [{ text: "⚠️ Qarzdorlar" }],
             ],
             resize_keyboard: true,
           },
@@ -372,12 +375,18 @@ async function handleVerifiedUser(ctx: BotContext) {
       await showTeacherSalary(ctx, ctx.session.teacherId);
     } else if (text.includes("davomat") || text.includes("📅")) {
       await showTeacherAttendance(ctx, ctx.session.teacherId);
+    } else if (text.includes("malumot") || text.includes("ma'lumot") || text.includes("📊")) {
+      await showTeacherInfo(ctx, ctx.session.teacherId);
+    } else if (text.includes("qarzdor") || text.includes("⚠️")) {
+      await showTeacherDebtors(ctx, ctx.session.teacherId);
     } else {
       await ctx.reply(
         "Quyidagi buyruqlardan birini tanlang:\n\n" +
         "📚 Guruhlar - Sizning guruhlaringiz\n" +
         "💰 Oylik - Oylik hisobi\n" +
-        "📅 Davomat - Davomat statistikasi"
+        "📅 Davomat - Davomat statistikasi\n" +
+        "📊 Ma'lumot - Umumiy ma'lumot\n" +
+        "⚠️ Qarzdorlar - Qarzdor o'quvchilar"
       );
     }
   } else if (ctx.session.studentId) {
@@ -532,7 +541,6 @@ async function showTeacherSalary(ctx: BotContext, teacherId: string) {
   const now = new Date();
   const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
   
-  // Get all payments for this month
   const payments = await storage.getPayments(tenantId);
   const monthlyPayments = payments.filter(p => {
     const paymentDate = new Date(p.createdAt);
@@ -541,27 +549,24 @@ async function showTeacherSalary(ctx: BotContext, teacherId: string) {
            p.status === "completed";
   });
 
-  // Get students in teacher's groups
   let teacherStudentIds: number[] = [];
+  const allStudentsMap = new Map<number, any>();
   for (const group of groups) {
     const students = await storage.getStudentsByGroup(group.id);
-    teacherStudentIds = [...teacherStudentIds, ...students.map(s => s.id)];
+    for (const s of students) {
+      teacherStudentIds.push(s.id);
+      allStudentsMap.set(s.id, s);
+    }
   }
-  teacherStudentIds = Array.from(new Set(teacherStudentIds)); // Remove duplicates
+  teacherStudentIds = Array.from(new Set(teacherStudentIds));
 
-  // Calculate teacher's share
   const teacherPayments = monthlyPayments.filter(p => teacherStudentIds.includes(p.studentId));
   const totalIncome = teacherPayments.reduce((sum, p) => sum + p.amount, 0);
   const salaryPercent = teacher.salaryPercent || 30;
   const teacherSalary = Math.round(totalIncome * salaryPercent / 100);
 
-  // Get attendance stats
   const attendanceRecords = await storage.getAttendance(
-    tenantId,
-    undefined,
-    undefined,
-    now.getMonth() + 1,
-    now.getFullYear()
+    tenantId, undefined, undefined, now.getMonth() + 1, now.getFullYear()
   );
   
   let totalLessons = 0;
@@ -571,7 +576,14 @@ async function showTeacherSalary(ctx: BotContext, teacherId: string) {
     totalLessons += uniqueDates.size;
   }
 
-  await ctx.reply(
+  const debtStudents = teacherStudentIds
+    .map(id => allStudentsMap.get(id))
+    .filter(s => s && s.balance <= 0);
+  const paidStudents = teacherStudentIds
+    .map(id => allStudentsMap.get(id))
+    .filter(s => s && s.balance > 0);
+
+  let message = 
     `💰 <b>Oylik hisobi (${now.toLocaleString("uz-UZ", { month: "long" })})</b>\n\n` +
     `👨‍🏫 ${teacher.firstName} ${teacher.lastName}\n\n` +
     `📊 Guruhlar: ${groups.length} ta\n` +
@@ -580,9 +592,124 @@ async function showTeacherSalary(ctx: BotContext, teacherId: string) {
     `💵 Umumiy tushum: ${totalIncome.toLocaleString()} so'm\n` +
     `📈 Sizning ulush: ${salaryPercent}%\n` +
     `━━━━━━━━━━━━━━━\n` +
-    `💰 <b>Oylik: ${teacherSalary.toLocaleString()} so'm</b>`,
+    `💰 <b>Oylik: ${teacherSalary.toLocaleString()} so'm</b>\n\n`;
+
+  if (paidStudents.length > 0) {
+    message += `✅ <b>To'lov qilganlar (${paidStudents.length}):</b>\n`;
+    for (const s of paidStudents.slice(0, 15)) {
+      message += `  • ${s.firstName} ${s.lastName} — ${s.balance.toLocaleString()} so'm\n`;
+    }
+    if (paidStudents.length > 15) message += `  ... va yana ${paidStudents.length - 15} ta\n`;
+    message += `\n`;
+  }
+
+  if (debtStudents.length > 0) {
+    message += `⚠️ <b>Qarzdorlar (${debtStudents.length}):</b>\n`;
+    for (const s of debtStudents.slice(0, 15)) {
+      const debt = Math.abs(s.balance);
+      message += `  • ${s.firstName} ${s.lastName} — ${debt > 0 ? debt.toLocaleString() + " so'm qarz" : "to'lov qilmagan"}\n`;
+    }
+    if (debtStudents.length > 15) message += `  ... va yana ${debtStudents.length - 15} ta\n`;
+  }
+
+  await ctx.reply(message, { parse_mode: "HTML" });
+}
+
+async function showTeacherInfo(ctx: BotContext, teacherId: string) {
+  const teacher = await storage.getUser(teacherId);
+  if (!teacher) {
+    await ctx.reply("Ma'lumot topilmadi");
+    return;
+  }
+
+  const tenantId = ctx.session.tenantId || teacher.tenantId;
+  const now = new Date();
+  const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
+
+  let teacherStudentIds: number[] = [];
+  let debtorCount = 0;
+  let paidCount = 0;
+  for (const group of groups) {
+    const students = await storage.getStudentsByGroup(group.id);
+    for (const s of students) {
+      teacherStudentIds.push(s.id);
+      if (s.balance <= 0) debtorCount++;
+      else paidCount++;
+    }
+  }
+  teacherStudentIds = Array.from(new Set(teacherStudentIds));
+
+  const payments = await storage.getPayments(tenantId);
+  const monthlyIncome = payments
+    .filter(p => {
+      const d = new Date(p.createdAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() &&
+             p.status === "completed" && teacherStudentIds.includes(p.studentId);
+    })
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const salaryPercent = teacher.salaryPercent || 30;
+  const salary = Math.round(monthlyIncome * salaryPercent / 100);
+
+  await ctx.reply(
+    `📊 <b>Umumiy ma'lumot</b>\n\n` +
+    `👨‍🏫 ${teacher.firstName} ${teacher.lastName}\n` +
+    `📈 Oylik foiz: ${salaryPercent}%\n\n` +
+    `📚 Guruhlar: <b>${groups.length} ta</b>\n` +
+    `👥 Jami o'quvchilar: <b>${teacherStudentIds.length} ta</b>\n` +
+    `✅ To'lov qilganlar: <b>${paidCount} ta</b>\n` +
+    `⚠️ Qarzdorlar: <b>${debtorCount} ta</b>\n\n` +
+    `💵 Joriy oy tushum: ${monthlyIncome.toLocaleString()} so'm\n` +
+    `💰 Oylik: <b>${salary.toLocaleString()} so'm</b>`,
     { parse_mode: "HTML" }
   );
+}
+
+async function showTeacherDebtors(ctx: BotContext, teacherId: string) {
+  const teacher = await storage.getUser(teacherId);
+  if (!teacher) {
+    await ctx.reply("Ma'lumot topilmadi");
+    return;
+  }
+
+  const tenantId = ctx.session.tenantId || teacher.tenantId;
+  const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
+
+  if (groups.length === 0) {
+    await ctx.reply("Sizga guruh biriktirilmagan.");
+    return;
+  }
+
+  let message = `⚠️ <b>Qarzdor o'quvchilar</b>\n\n`;
+  let totalDebtors = 0;
+
+  for (const group of groups) {
+    const students = await storage.getStudentsByGroup(group.id);
+    const debtors = students.filter(s => s.balance <= 0);
+    
+    if (debtors.length === 0) continue;
+    
+    totalDebtors += debtors.length;
+    message += `📖 <b>${group.name}</b> (${debtors.length} ta):\n`;
+    
+    for (const s of debtors) {
+      const debt = Math.abs(s.balance);
+      const phone = s.phone || "-";
+      message += `  • ${s.firstName} ${s.lastName} — ${debt > 0 ? debt.toLocaleString() + " so'm" : "to'lov qilmagan"}\n`;
+      message += `    📱 ${phone}\n`;
+    }
+    message += `\n`;
+  }
+
+  if (totalDebtors === 0) {
+    await ctx.reply("✅ Qarzdor o'quvchilar yo'q! Barcha o'quvchilar to'lov qilgan.");
+    return;
+  }
+
+  message += `━━━━━━━━━━━━━━━\n`;
+  message += `📊 Jami qarzdorlar: <b>${totalDebtors} ta</b>`;
+
+  await ctx.reply(message, { parse_mode: "HTML" });
 }
 
 async function showTeacherAttendance(ctx: BotContext, teacherId: string) {
@@ -1013,6 +1140,43 @@ export async function sendPaymentReceipt(
   }
 }
 
+export async function notifyTeacherAboutPayment(
+  studentId: number,
+  amount: number,
+  tenantId: number
+): Promise<void> {
+  try {
+    const student = await storage.getStudent(studentId, tenantId);
+    if (!student) return;
+
+    const studentGroups = await storage.getStudentGroups(studentId, tenantId);
+    if (!studentGroups || studentGroups.length === 0) return;
+
+    const notifiedTeachers = new Set<string>();
+
+    for (const sg of studentGroups) {
+      const group = await storage.getGroup(sg.groupId, tenantId);
+      if (!group || !group.teacherId) continue;
+      if (notifiedTeachers.has(group.teacherId)) continue;
+      notifiedTeachers.add(group.teacherId);
+
+      const teacher = await storage.getUser(group.teacherId);
+      if (!teacher?.telegramChatId) continue;
+
+      const message =
+        `💰 <b>To'lov qabul qilindi!</b>\n\n` +
+        `👤 O'quvchi: ${student.firstName} ${student.lastName}\n` +
+        `💵 Summa: <b>${amount.toLocaleString()} so'm</b>\n` +
+        `📖 Guruh: ${group.name}\n\n` +
+        `✅ Muvaffaqiyatli!`;
+
+      await sendTelegramMessage(teacher.telegramChatId, message);
+    }
+  } catch (err) {
+    console.error("notifyTeacherAboutPayment error:", err);
+  }
+}
+
 export async function notifyTeacherDailySchedule(teacherId: string): Promise<boolean> {
   const teacher = await storage.getUser(teacherId);
   if (!teacher?.telegramChatId) return false;
@@ -1039,8 +1203,24 @@ export async function notifyTeacherDailySchedule(teacherId: string): Promise<boo
     const students = await storage.getStudentsByGroup(group.id);
     message += `⏰ <b>${group.time}</b>\n`;
     message += `📖 ${group.name}\n`;
-    message += `👥 O'quvchilar: ${students.length} ta\n`;
+    message += `👥 O'quvchilar (${students.length} ta):\n`;
+    for (const s of students.slice(0, 20)) {
+      message += `  • ${s.firstName} ${s.lastName}\n`;
+    }
+    if (students.length > 20) message += `  ... va yana ${students.length - 20} ta\n`;
     if (group.room) message += `🏫 Xona: ${group.room}\n`;
+    
+    const attendanceRecords = await storage.getAttendance(
+      teacher.tenantId, group.id, undefined, today.getMonth() + 1, today.getFullYear()
+    );
+    if (attendanceRecords.length > 0) {
+      const dates = [...new Set(attendanceRecords.map(a => a.date?.toISOString().split('T')[0]))].sort();
+      const lastDate = dates[dates.length - 1];
+      const lastAttendance = attendanceRecords.filter(a => a.date?.toISOString().split('T')[0] === lastDate);
+      const present = lastAttendance.filter(a => a.status === "present").length;
+      const absent = lastAttendance.filter(a => a.status === "absent").length;
+      message += `📊 Oxirgi dars: ✅${present} ❌${absent}\n`;
+    }
     message += `\n`;
   }
   
@@ -1053,7 +1233,8 @@ export async function notifyTeacherClassReminder(
   teacherId: string,
   groupName: string,
   time: string,
-  room?: string | null
+  room?: string | null,
+  groupId?: number
 ): Promise<boolean> {
   const teacher = await storage.getUser(teacherId);
   if (!teacher?.telegramChatId) return false;
@@ -1064,6 +1245,34 @@ export async function notifyTeacherClassReminder(
     `🕐 Vaqt: ${time}\n`;
   
   if (room) message += `🏫 Xona: ${room}\n`;
+
+  if (groupId) {
+    try {
+      const students = await storage.getStudentsByGroup(groupId);
+      if (students.length > 0) {
+        message += `\n👥 O'quvchilar (${students.length} ta):\n`;
+        for (const s of students.slice(0, 20)) {
+          message += `  • ${s.firstName} ${s.lastName}\n`;
+        }
+        if (students.length > 20) message += `  ... va yana ${students.length - 20} ta\n`;
+      }
+
+      const now = new Date();
+      const attendanceRecords = await storage.getAttendance(
+        teacher.tenantId, groupId, undefined, now.getMonth() + 1, now.getFullYear()
+      );
+      if (attendanceRecords.length > 0) {
+        const dates = [...new Set(attendanceRecords.map(a => a.date?.toISOString().split('T')[0]))].sort();
+        const lastDate = dates[dates.length - 1];
+        const lastAtt = attendanceRecords.filter(a => a.date?.toISOString().split('T')[0] === lastDate);
+        const present = lastAtt.filter(a => a.status === "present").length;
+        const absent = lastAtt.filter(a => a.status === "absent").length;
+        message += `📊 Oxirgi dars: ✅${present} ❌${absent}\n`;
+      }
+    } catch (err) {
+      console.error("Error getting students for reminder:", err);
+    }
+  }
   
   message += `\n30 daqiqadan so'ng boshlanadi! 🔔`;
   
@@ -1221,7 +1430,7 @@ async function checkClassReminders() {
             
             if (uzHour === reminderHour && uzMinutes === reminderMinute) {
               try {
-                await notifyTeacherClassReminder(teacher.id, group.name, group.time, group.room);
+                await notifyTeacherClassReminder(teacher.id, group.name, group.time, group.room, group.id);
               } catch (error) {
                 console.error(`Error sending reminder for group ${group.id}:`, error);
               }

@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import * as XLSX from "xlsx";
 import { storage, DuplicatePhoneError } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
-import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt } from "./telegram-bot";
+import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt, notifyTeacherAboutPayment } from "./telegram-bot";
 import { verifyObjectPath } from "./replit_integrations/object_storage/routes";
 import {
   type Student,
@@ -1371,6 +1371,9 @@ export async function registerRoutes(
           
           notifyStudentPayment(payment.studentId, payment.amount, newBalance)
             .catch(err => console.error("Telegram notification error:", err));
+          
+          notifyTeacherAboutPayment(payment.studentId, payment.amount, tenantId)
+            .catch(err => console.error("Teacher payment notification error:", err));
         }
       }
       

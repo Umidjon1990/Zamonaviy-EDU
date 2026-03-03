@@ -176,3 +176,15 @@ Preferred communication style: Simple, everyday language.
 - Tenant-scoped: first validates student IDs belong to tenant before deleting
 - Confirmation dialog warns that payments will be preserved
 - Permissions returned in both login and `/api/auth/me` responses
+
+### Telegram Bot - Teacher Enhancements (March 2026)
+- **Payment notifications**: When a student makes a payment, all teachers of that student's groups get a Telegram notification with student name, amount, and group name
+- **New teacher commands**:
+  - `📊 Ma'lumot` — Personal overview: groups count, students count, debtors, paid, monthly income, salary
+  - `⚠️ Qarzdorlar` — Debtor students list by group with names, phone numbers, and debt amounts
+- **Enhanced salary view** (`💰 Oylik`): Now includes paid students list and debtors list with balances
+- **Enhanced daily schedule**: Morning schedule shows student names list per group + last attendance stats
+- **Enhanced class reminder**: 30-min reminder now includes student names and last attendance (present/absent count)
+- **Debtor logic**: `balance <= 0` = debtor (includes newly added students with 0 balance), `balance > 0` = paid
+- Teacher keyboard: [📚 Guruhlar, 💰 Oylik], [📅 Davomat, 📊 Ma'lumot], [⚠️ Qarzdorlar]
+- `notifyTeacherAboutPayment()` exported from telegram-bot.ts, called in POST /api/payments
