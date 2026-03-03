@@ -465,6 +465,85 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/students/bulk-add", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { text, groupId } = req.body;
+      
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ error: "O'quvchilar ro'yxati kerak" });
+      }
+      if (!groupId) {
+        return res.status(400).json({ error: "Guruh tanlanmagan" });
+      }
+
+      const lines = text.split("\n").map((l: string) => l.trim()).filter((l: string) => l);
+      const students: { firstName: string; lastName: string; phone: string }[] = [];
+      let pendingName = "";
+
+      for (const line of lines) {
+        const isPhoneLine = /^\+?\d[\d\s\-]+$/.test(line) || /\+998/.test(line);
+        
+        if (pendingName && isPhoneLine) {
+          const phone = line.replace(/[\s\-]+/g, "").replace(/^\+/, "");
+          const nameParts = pendingName.split(/\s+/);
+          const lastName = nameParts.length >= 2 ? nameParts[0] : "";
+          const firstName = nameParts.length >= 2 ? nameParts.slice(1).join(" ") : pendingName;
+          students.push({ firstName, lastName, phone });
+          pendingName = "";
+        } else if (!isPhoneLine && line.length > 2 && /[a-zA-Z\u0400-\u04FF]/.test(line)) {
+          let name = line;
+          const numMatch = line.match(/^\d+[\.\)]\s*(.+)$/);
+          if (numMatch) name = numMatch[1].trim();
+          pendingName = name;
+        }
+      }
+
+      if (students.length === 0) {
+        return res.status(400).json({ error: "O'quvchilar topilmadi. Format: Ism Familiya, keyingi qatorda telefon raqami" });
+      }
+
+      let created = 0;
+      let existing = 0;
+      const allStudents = await storage.getStudents(tenantId);
+
+      for (const s of students) {
+        try {
+          const normalizedPhone = s.phone.replace(/\D/g, "");
+          let student = allStudents.find((st: any) => st.phone?.replace(/\D/g, "") === normalizedPhone);
+
+          if (student) {
+            existing++;
+          } else {
+            student = await storage.createStudent({
+              tenantId,
+              firstName: s.firstName,
+              lastName: s.lastName,
+              phone: "+" + normalizedPhone,
+              parentPhone: "",
+              status: "active",
+              balance: 0,
+            });
+            created++;
+          }
+
+          const studentGroupsList = await storage.getStudentGroups(student!.id, tenantId);
+          const alreadyInGroup = studentGroupsList.some((sg: any) => sg.groupId === groupId);
+          if (!alreadyInGroup) {
+            await storage.addStudentToGroup({ studentId: student!.id, groupId });
+          }
+        } catch (err) {
+          console.error("Bulk add student error:", err);
+        }
+      }
+
+      res.json({ created, existing, total: students.length });
+    } catch (error) {
+      console.error("Bulk add error:", error);
+      res.status(500).json({ error: "O'quvchilar qo'shishda xatolik" });
+    }
+  });
+
   // ===== STUDENTS EXCEL IMPORT/EXPORT =====
   const studentTemplateColumns = ["Ism", "Familiya", "Telefon", "Ota-ona telefoni", "Guruh nomi", "Fan nomi", "Kunlari", "Vaqti", "Xonasi", "Oqituvchi"];
   const studentTemplateData = [

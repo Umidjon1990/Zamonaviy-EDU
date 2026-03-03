@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
 import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useBulkDeleteStudents, useGroups, useTeachers, useAddStudentToGroup, useUnassignedStudents } from "@/lib/api";
-import { Plus, Search, Trash2, Pencil, Download, Upload, FileSpreadsheet, Eye } from "lucide-react";
+import { Plus, Search, Trash2, Pencil, Download, Upload, FileSpreadsheet, Eye, FileText } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import * as XLSX from "xlsx";
@@ -65,6 +66,10 @@ export default function Students() {
   const [templateInfo, setTemplateInfo] = useState<{ columns: string[], data: any[] } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
+  const [bulkAddText, setBulkAddText] = useState("");
+  const [bulkAddGroupId, setBulkAddGroupId] = useState("");
+  const [bulkAddLoading, setBulkAddLoading] = useState(false);
 
   const handleShowTemplate = async () => {
     try {
@@ -135,6 +140,46 @@ export default function Students() {
       toast({ title: "Xatolik", description: "Import qilishda xatolik", variant: "destructive" });
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const handleBulkAddStudents = async () => {
+    if (!bulkAddText.trim()) {
+      toast({ title: "Xatolik", description: "O'quvchilar ro'yxatini kiriting", variant: "destructive" });
+      return;
+    }
+    if (!bulkAddGroupId) {
+      toast({ title: "Xatolik", description: "Guruhni tanlang", variant: "destructive" });
+      return;
+    }
+    setBulkAddLoading(true);
+    try {
+      const res = await fetch("/api/students/bulk-add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          text: bulkAddText,
+          groupId: parseInt(bulkAddGroupId),
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast({ title: "Xatolik", description: result.error || "Import xatosi", variant: "destructive" });
+        return;
+      }
+      toast({
+        title: "Muvaffaqiyat",
+        description: `${result.created} ta yangi, ${result.existing} ta mavjud o'quvchi guruhga qo'shildi`,
+      });
+      setIsBulkAddOpen(false);
+      setBulkAddText("");
+      setBulkAddGroupId("");
+      window.location.reload();
+    } catch (error) {
+      toast({ title: "Xatolik", description: "Import qilishda xatolik", variant: "destructive" });
+    } finally {
+      setBulkAddLoading(false);
     }
   };
 
@@ -290,6 +335,55 @@ export default function Students() {
             <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileUpload} />
           </label>
           </>
+          )}
+          {isTeacher && hasPermission('add_student') && (
+          <Dialog open={isBulkAddOpen} onOpenChange={(open) => {
+            setIsBulkAddOpen(open);
+            if (!open) { setBulkAddText(""); setBulkAddGroupId(""); }
+          }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-bulk-add-students">
+                <FileText className="mr-2 h-4 w-4" /> Shablon bilan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Shablon bilan o'quvchilar qo'shish</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Guruhni tanlang</Label>
+                  <Select value={bulkAddGroupId} onValueChange={setBulkAddGroupId}>
+                    <SelectTrigger data-testid="select-bulk-group">
+                      <SelectValue placeholder="Guruhni tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups.map((g: any) => (
+                        <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>O'quvchilar ro'yxati</Label>
+                  <Textarea
+                    value={bulkAddText}
+                    onChange={(e) => setBulkAddText(e.target.value)}
+                    placeholder={"Familiyasi Ismi\n+998901234567\nFamiliyasi Ismi\n+998911234567"}
+                    className="min-h-[200px] font-mono text-sm"
+                    data-testid="textarea-bulk-students"
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  <p className="font-medium mb-1">Format:</p>
+                  <p>Har bir o'quvchi uchun ism-familiya va keyingi qatorda telefon raqami</p>
+                </div>
+                <Button onClick={handleBulkAddStudents} className="w-full" disabled={bulkAddLoading} data-testid="button-bulk-add-submit">
+                  {bulkAddLoading ? "Yuklanmoqda..." : "Qo'shish"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           )}
           {hasPermission('add_student') && (
           <Dialog open={isOpen} onOpenChange={(open) => {

@@ -255,6 +255,7 @@ export default function Groups() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">{translations.groups.title}</h1>
         <div className="flex gap-2">
+          {!isTeacher && (
           <Dialog open={isTemplateOpen} onOpenChange={(open) => {
             setIsTemplateOpen(open);
             if (!open) {
@@ -263,9 +264,6 @@ export default function Groups() {
               setTemplateDays([]);
               setTemplateTeacherId("");
               setTemplateSubjectId("");
-            }
-            if (open && isTeacher) {
-              setTemplateTeacherId(currentUser?.userId || "");
             }
           }}>
             <DialogTrigger asChild>
@@ -403,6 +401,7 @@ export default function Groups() {
               )}
             </DialogContent>
           </Dialog>
+          )}
           
           {canCreateGroup && (
           <Dialog open={isOpen} onOpenChange={(open) => {
