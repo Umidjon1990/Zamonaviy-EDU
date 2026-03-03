@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStudents, usePayments, useGroups, useLeads } from "@/lib/api";
+import { useStudents, usePayments, useGroups, useLeads, useTeachers } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { Users, GraduationCap, Wallet, TrendingUp, BookOpen, Clock, UserPlus, ArrowUpRight, ArrowDownRight, Sparkles, CalendarDays, Target } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
@@ -47,12 +47,12 @@ export default function Dashboard() {
   const { data: payments } = usePayments();
   const { data: groups } = useGroups();
   const { data: leads } = useLeads();
+  const { data: teachers } = useTeachers();
 
   const { data: attendanceData } = useQuery({
-    queryKey: ["dashboard-attendance"],
+    queryKey: ["dashboard-attendance", selectedMonth, selectedYear],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/attendance?date=${today}`, { credentials: "include" });
+      const res = await fetch(`/api/attendance?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
       return res.json();
     },
   });
@@ -61,6 +61,7 @@ export default function Dashboard() {
   const paymentsList = Array.isArray(payments) ? payments : [];
   const groupsList = Array.isArray(groups) ? groups : [];
   const leadsList = Array.isArray(leads) ? leads : [];
+  const teachersList = Array.isArray(teachers) ? teachers : [];
   const attendanceList = Array.isArray(attendanceData) ? attendanceData : [];
 
   const selMonth = parseInt(selectedMonth);
@@ -113,14 +114,18 @@ export default function Dashboard() {
     const presentAtt = attendanceList.filter((a: any) => a.status === 'present').length;
     const attendanceRate = totalAtt > 0 ? Math.round((presentAtt / totalAtt) * 100) : 0;
     
-    const paidStudents = studentsList.filter((s: any) => s.balance > 0).length;
-    const paymentRate = studentsList.length > 0 ? Math.round((paidStudents / studentsList.length) * 100) : 0;
+    const monthPayments = paymentsList.filter((p: any) => {
+      const d = new Date(p.createdAt);
+      return d.getMonth() + 1 === selMonth && d.getFullYear() === selYear && p.status === 'completed';
+    });
+    const paidStudentIds = new Set(monthPayments.map((p: any) => p.studentId));
+    const activeStudentCount = studentsList.filter((s: any) => s.status === 'active').length;
+    const paymentRate = activeStudentCount > 0 ? Math.round((paidStudentIds.size / activeStudentCount) * 100) : 0;
     
     const convertedLeads = leadsList.filter((l: any) => l.status === 'converted').length;
     const conversionRate = leadsList.length > 0 ? Math.round((convertedLeads / leadsList.length) * 100) : 0;
     
-    const activeStudents = studentsList.filter((s: any) => s.status === 'active').length;
-    const retentionRate = studentsList.length > 0 ? Math.round((activeStudents / studentsList.length) * 100) : 0;
+    const retentionRate = studentsList.length > 0 ? Math.round((activeStudentCount / studentsList.length) * 100) : 0;
     
     return { attendanceRate, paymentRate, conversionRate, retentionRate };
   };
@@ -166,20 +171,22 @@ export default function Dashboard() {
         const time = g.time || '09:00';
         const [startHour, startMin] = time.split(':').map(Number);
         const classTime = (startHour || 9) * 60 + (startMin || 0);
-        const endTime = classTime + 90;
+        const duration = g.duration || 90;
+        const endTime = classTime + duration;
+        const endHour = Math.floor(endTime / 60);
+        const endMinute = endTime % 60;
+        const timeRange = `${time}-${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
         
         let status = 'waiting';
         if (currentTime > endTime) status = 'done';
         else if (currentTime >= classTime && currentTime <= endTime) status = 'now';
         
-        return { name: g.name, time: g.time || '09:00', status };
+        const teacher = teachersList.find((t: any) => t.id === g.teacherId);
+        const teacherName = teacher ? `${teacher.firstName} ${teacher.lastName}` : '';
+        return { name: g.name, time: timeRange, sortTime: classTime, status, teacherName };
       })
-      .sort((a: any, b: any) => {
-        const [aH, aM] = a.time.split(':').map(Number);
-        const [bH, bM] = b.time.split(':').map(Number);
-        return (aH * 60 + aM) - (bH * 60 + bM);
-      })
-      .slice(0, 4);
+      .sort((a: any, b: any) => a.sortTime - b.sortTime)
+      .slice(0, 6);
   };
 
   if (statsLoading) {
@@ -431,7 +438,10 @@ export default function Dashboard() {
               <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                 <div>
                   <p className="font-medium">{cls.name}</p>
-                  <p className="text-sm text-muted-foreground">{cls.time}</p>
+                  <p className="text-xs text-muted-foreground">{cls.time}</p>
+                  {cls.teacherName && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{cls.teacherName}</p>
+                  )}
                 </div>
                 <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                   cls.status === 'done' ? 'bg-emerald-500/10 text-emerald-500' :
