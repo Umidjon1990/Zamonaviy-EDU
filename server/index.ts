@@ -19,11 +19,23 @@ async function fixDatabaseSchema() {
     // Make subject_id nullable in groups and users tables
     await client.query(`
       ALTER TABLE groups ALTER COLUMN subject_id DROP NOT NULL;
-    `).catch(() => {}); // Ignore if already nullable or column doesn't exist
+    `).catch(() => {});
     
     await client.query(`
       ALTER TABLE users ALTER COLUMN subject_id DROP NOT NULL;
-    `).catch(() => {}); // Ignore if already nullable or column doesn't exist
+    `).catch(() => {});
+
+    // Ensure all required columns exist on users table
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT;`).catch(() => {});
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT[];`).catch(() => {});
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;`).catch(() => {});
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS teacher_id TEXT;`).catch(() => {});
+
+    // Ensure telegram_chat_id on students table
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;`).catch(() => {});
+
+    // Ensure teacher_id on expenses table
+    await client.query(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS teacher_id TEXT;`).catch(() => {});
     
     console.log("Database schema check completed");
   } catch (error) {
