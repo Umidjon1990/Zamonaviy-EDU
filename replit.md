@@ -188,3 +188,22 @@ Preferred communication style: Simple, everyday language.
 - **Debtor logic**: `balance <= 0` = debtor (includes newly added students with 0 balance), `balance > 0` = paid
 - Teacher keyboard: [📚 Guruhlar, 💰 Oylik], [📅 Davomat, 📊 Ma'lumot], [⚠️ Qarzdorlar]
 - `notifyTeacherAboutPayment()` exported from telegram-bot.ts, called in POST /api/payments
+
+### Payment Student Name Preservation (March 2026)
+- Payments table now has `studentName` text column storing student's full name at payment time
+- When a payment is created, `studentName` is populated from the student record
+- Frontend `getStudentName()` falls back to `payment.studentName` if student no longer exists in DB
+- This ensures deleted students' names still appear in payment history
+- Search filter also checks `payment.studentName` for deleted students
+- `fixDatabaseSchema()` includes `ALTER TABLE payments ADD COLUMN IF NOT EXISTS student_name TEXT`
+
+### Payments Month Filter (March 2026)
+- Payments page has month/year selector (defaults to current month) next to title
+- All stats cards (tushum, jami to'lovlar, to'langan) filter by selected month
+- Payment list filters by selected month first, then applies additional filters
+
+### Dashboard Improvements (March 2026)
+- Attendance stats now fetched for selected month (not just today)
+- Payment rate: percentage of active students who paid in selected month
+- Today's classes show teacher name and time range (start-end)
+- Today's classes show up to 6 classes (was 4)

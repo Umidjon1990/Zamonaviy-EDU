@@ -36,6 +36,9 @@ async function fixDatabaseSchema() {
 
     // Ensure teacher_id on expenses table
     await client.query(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS teacher_id TEXT;`).catch(() => {});
+
+    // Ensure student_name on payments table
+    await client.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS student_name TEXT;`).catch(() => {});
     
     console.log("Database schema check completed");
   } catch (error) {

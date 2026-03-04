@@ -142,7 +142,7 @@ export default function Payments() {
       const query = filterSearch.toLowerCase().trim();
       result = result.filter((p: any) => {
         const student = studentsList.find((s: any) => s.id === p.studentId);
-        const studentName = student ? `${student.firstName} ${student.lastName}`.toLowerCase() : '';
+        const studentName = student ? `${student.firstName} ${student.lastName}`.toLowerCase() : (p.studentName || '').toLowerCase();
         const teacher = teachersList.find((t: any) => t.id === p.teacherId);
         const teacherName = teacher ? `${teacher.firstName} ${teacher.lastName}`.toLowerCase() : '';
         return studentName.includes(query) || teacherName.includes(query);
@@ -303,7 +303,7 @@ export default function Payments() {
   };
 
   const handleDelete = async (payment: any) => {
-    if (!confirm(`Bu to'lovni o'chirishni xohlaysizmi?\n\nO'quvchi: ${getStudentName(payment.studentId)}\nSumma: ${payment.amount.toLocaleString()} UZS\n\nDiqqat: O'quvchi balansi qaytariladi!`)) {
+    if (!confirm(`Bu to'lovni o'chirishni xohlaysizmi?\n\nO'quvchi: ${getStudentName(payment.studentId, payment)}\nSumma: ${payment.amount.toLocaleString()} UZS\n\nDiqqat: O'quvchi balansi qaytariladi!`)) {
       return;
     }
     
@@ -332,9 +332,11 @@ export default function Payments() {
   const completedPayments = monthFilteredPayments.filter((p: any) => p.status === 'completed');
   const totalIncome = completedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
-  const getStudentName = (studentId: number) => {
+  const getStudentName = (studentId: number, payment?: any) => {
     const student = studentsList.find((s: any) => s.id === studentId);
-    return student ? `${student.firstName} ${student.lastName}` : `#${studentId}`;
+    if (student) return `${student.firstName} ${student.lastName}`;
+    if (payment?.studentName) return payment.studentName;
+    return `#${studentId}`;
   };
 
   const getTeacherName = (teacherId: string | null) => {
@@ -759,7 +761,7 @@ export default function Payments() {
                 filteredPayments.map((payment: any) => (
                   <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
                     <TableCell className="font-medium" data-testid={`text-student-${payment.id}`}>
-                      {getStudentName(payment.studentId)}
+                      {getStudentName(payment.studentId, payment)}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {getTeacherName(payment.teacherId)}
@@ -840,7 +842,7 @@ export default function Payments() {
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-4">
             <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm font-medium">O'quvchi: {editPayment && getStudentName(editPayment.studentId)}</p>
+              <p className="text-sm font-medium">O'quvchi: {editPayment && getStudentName(editPayment.studentId, editPayment)}</p>
               <p className="text-xs text-muted-foreground">
                 Sana: {editPayment && new Date(editPayment.createdAt).toLocaleDateString('uz-UZ')}
               </p>

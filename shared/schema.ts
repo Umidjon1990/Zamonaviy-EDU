@@ -225,6 +225,7 @@ export const payments = pgTable("payments", {
   paymentType: text("payment_type").notNull(), // cash, card, bank_transfer
   status: text("status").notNull(), // completed, pending, failed
   notes: text("notes"),
+  studentName: text("student_name"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

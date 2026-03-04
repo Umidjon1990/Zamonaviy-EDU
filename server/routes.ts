@@ -1348,6 +1348,16 @@ export async function registerRoutes(
           teacherEarning = Math.round(amount * teacher.salaryPercent / 100);
         }
       }
+
+      let studentName = null;
+      if (createdStudent) {
+        studentName = `${createdStudent.firstName} ${createdStudent.lastName}`;
+      } else {
+        const existingStudent = await storage.getStudent(finalStudentId, tenantId);
+        if (existingStudent) {
+          studentName = `${existingStudent.firstName} ${existingStudent.lastName}`;
+        }
+      }
       
       const data = insertPaymentSchema.parse({
         tenantId,
@@ -1358,6 +1368,7 @@ export async function registerRoutes(
         paymentType: paymentType || "cash",
         status: status || "completed",
         notes: notes || null,
+        studentName,
       });
       const payment = await storage.createPayment(data);
       
