@@ -648,16 +648,22 @@ export default function Groups() {
                     <span>{group.room}</span>
                   </div>
                 )}
+                {group.teacherName && (
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Users className="mr-2 h-4 w-4 text-primary" />
+                    <span>{group.teacherName}</span>
+                  </div>
+                )}
                 
                 <div className="pt-2">
                   <div className="flex justify-between text-xs mb-1">
                     <span>Sig'im</span>
-                    <span>0 / {group.maxStudents}</span>
+                    <span>{group.studentCount || 0} / {group.maxStudents}</span>
                   </div>
                   <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-primary rounded-full" 
-                      style={{ width: `0%` }}
+                      className="h-full bg-primary rounded-full transition-all" 
+                      style={{ width: `${group.maxStudents > 0 ? Math.min(100, ((group.studentCount || 0) / group.maxStudents) * 100) : 0}%` }}
                     />
                   </div>
                 </div>

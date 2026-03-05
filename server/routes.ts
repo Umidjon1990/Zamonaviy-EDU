@@ -778,13 +778,26 @@ export async function registerRoutes(
   // ===== GROUPS =====
   app.get("/api/groups", async (req, res) => {
     try {
-      // O'qituvchi faqat o'z guruhlarini ko'radi
+      const tenantId = getTenantId(req);
+      let groups;
       if (isTeacher(req)) {
-        const groups = await storage.getGroupsByTeacher(getUserId(req), getTenantId(req));
-        return res.json(groups);
+        groups = await storage.getGroupsByTeacher(getUserId(req), tenantId);
+      } else {
+        groups = await storage.getGroups(tenantId);
       }
-      const groups = await storage.getGroups(getTenantId(req));
-      res.json(groups);
+      
+      const teachers = await storage.getTeachers(tenantId);
+      const enriched = await Promise.all(groups.map(async (g) => {
+        const groupStudents = await storage.getStudentsByGroup(g.id, tenantId);
+        const teacher = teachers.find(t => t.id === g.teacherId);
+        return {
+          ...g,
+          studentCount: groupStudents.length,
+          teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : null,
+        };
+      }));
+      
+      res.json(enriched);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch groups" });
     }
@@ -1537,6 +1550,13 @@ export async function registerRoutes(
         });
       }
 
+      const teacherGroups = await storage.getGroupsByTeacher(teacherId, tenantId);
+      let totalStudentCount = 0;
+      for (const g of teacherGroups) {
+        const groupStudents = await storage.getStudentsByGroup(g.id, tenantId);
+        totalStudentCount += groupStudents.length;
+      }
+
       res.json({
         teacher: {
           id: teacher.id,
@@ -1552,6 +1572,8 @@ export async function registerRoutes(
         advanceExpenses,
         paymentCount: teacherPayments.length,
         students: studentsData,
+        groupCount: teacherGroups.length,
+        totalStudentCount,
         period: {
           fromMonth,
           toMonth,
