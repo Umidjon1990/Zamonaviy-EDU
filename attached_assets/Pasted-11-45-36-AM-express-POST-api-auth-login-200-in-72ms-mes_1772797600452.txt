@@ -1,0 +1,56 @@
+11:45:36 AM [express] POST /api/auth/login 200 in 72ms :: {"message":"Login muvaffaqiyatli","user":{"…
+  hint: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  position: '390',
+  file: 'parse_relation.c',
+  internalPosition: undefined,
+  line: '3716',
+  internalQuery: undefined,
+11:45:38 AM [express] GET /api/site-settings 304 in 6ms :: [{"id":"20fea85f-af1b-4038-bbe4-381c40d3df…
+  routine: 'errorMissingColumn'
+  where: undefined,
+11:45:38 AM [express] GET /api/auth/user 304 in 44ms :: {"id":"a5e440a3-bd14-4d99-ae23-2897f48ed546",…
+  schema: undefined,
+Error in /api/courses/public: error: column courses.unlock_type does not exist
+    at /app/node_modules/pg-pool/index.js:45:11
+  table: undefined,
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+  column: undefined,
+    at async file:///app/node_modules/drizzle-orm/node-postgres/session.js:83:22
+    at async DatabaseStorage.getPublicCourses (file:///app/dist/index.js:1649:21)
+    at async file:///app/dist/index.js:5564:24 {
+  length: 118,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+}
+11:45:38 AM [express] GET /api/courses/public 500 in 62ms :: {"message":"column courses.unlock_type d…
+11:45:38 AM [express] GET /api/language-levels 304 in 8ms :: [{"id":"a613f0b7-825b-4dc2-b2c0-db14a50e…
+11:45:38 AM [express] GET /api/testimonials 304 in 20ms :: []
+[Enrolled Courses] Request from userId: a5e440a3-bd14-4d99-ae23-2897f48ed546
+[Storage] getEnrolledCourses called for userId: a5e440a3-bd14-4d99-ae23-2897f48ed546
+[Enrolled Courses] Error: error: column courses.unlock_type does not exist
+    at /app/node_modules/pg-pool/index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async file:///app/node_modules/drizzle-orm/node-postgres/session.js:83:22
+    at async DatabaseStorage.getEnrolledCourses (file:///app/dist/index.js:1898:20)
+    at async file:///app/dist/index.js:5904:24 {
+  length: 118,
+  severity: 'ERROR',
+  code: '42703',
+  detail: undefined,
+  hint: undefined,
+  position: '390',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'parse_relation.c',
+  line: '3716',
+  routine: 'errorMissingColumn'
+}
