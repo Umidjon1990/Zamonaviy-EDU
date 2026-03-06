@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import * as XLSX from "xlsx";
 import { storage, DuplicatePhoneError } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
-import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt, notifyTeacherAboutPayment } from "./telegram-bot";
+import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt, notifyTeacherAboutPayment, notifyAdminAttendanceTaken } from "./telegram-bot";
 import { verifyObjectPath } from "./replit_integrations/object_storage/routes";
 import {
   type Student,
@@ -1213,6 +1213,9 @@ export async function registerRoutes(
     }
   });
 
+  const attendanceNotifyTimers = new Map<string, NodeJS.Timeout>();
+  const attendancePendingCounts = new Map<string, { present: number; absent: number; total: number; tenantId: number; teacherId: string; groupId: number; date: Date }>();
+
   // ===== ATTENDANCE =====
   app.get("/api/attendance", async (req, res) => {
     try {
@@ -1263,6 +1266,50 @@ export async function registerRoutes(
             new Date(data.date)
           ).catch(err => console.error("Telegram notification error:", err));
         }
+      }
+      
+      // Debounced admin notification for attendance batch
+      if (data.groupId && data.date) {
+        const userId = getUserId(req);
+        const dateKey = new Date(data.date).toISOString().split('T')[0];
+        const key = `${tenantId}-${data.groupId}-${dateKey}`;
+        
+        const existing = attendancePendingCounts.get(key);
+        if (existing) {
+          if (data.status === 'present') existing.present++;
+          else if (data.status === 'absent') existing.absent++;
+          existing.total++;
+        } else {
+          attendancePendingCounts.set(key, {
+            present: data.status === 'present' ? 1 : 0,
+            absent: data.status === 'absent' ? 1 : 0,
+            total: 1,
+            tenantId,
+            teacherId: userId,
+            groupId: data.groupId,
+            date: new Date(data.date),
+          });
+        }
+        
+        const existingTimer = attendanceNotifyTimers.get(key);
+        if (existingTimer) clearTimeout(existingTimer);
+        
+        attendanceNotifyTimers.set(key, setTimeout(async () => {
+          const counts = attendancePendingCounts.get(key);
+          if (counts) {
+            notifyAdminAttendanceTaken(
+              counts.tenantId,
+              counts.teacherId,
+              counts.groupId,
+              counts.date,
+              counts.present,
+              counts.absent,
+              counts.total
+            ).catch(err => console.error("Admin attendance notify error:", err));
+            attendancePendingCounts.delete(key);
+            attendanceNotifyTimers.delete(key);
+          }
+        }, 5000));
       }
       
       res.status(201).json(attendance);

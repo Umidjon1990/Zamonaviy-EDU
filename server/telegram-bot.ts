@@ -1050,6 +1050,50 @@ export async function sendTelegramMessage(chatId: string | number, message: stri
 
 // ===== NOTIFICATION FUNCTIONS =====
 
+export async function notifyAdminAttendanceTaken(
+  tenantId: number,
+  teacherId: string,
+  groupId: number,
+  date: Date,
+  presentCount: number,
+  absentCount: number,
+  totalCount: number
+): Promise<void> {
+  try {
+    const teacher = await storage.getTeacher(teacherId, tenantId);
+    const group = await storage.getGroup(groupId, tenantId);
+    if (!teacher || !group) return;
+
+    const teacherName = `${teacher.firstName} ${teacher.lastName}`;
+    const groupName = group.name;
+    const dateStr = date.toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" });
+    const timeStr = new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+    const message =
+      `📋 <b>Davomat olindi!</b>\n\n` +
+      `👨‍🏫 O'qituvchi: <b>${teacherName}</b>\n` +
+      `📚 Guruh: <b>${groupName}</b>\n` +
+      `📆 Sana: ${dateStr}\n` +
+      `🕐 Vaqt: ${timeStr}\n\n` +
+      `✅ Keldi: <b>${presentCount}</b>\n` +
+      `❌ Kelmadi: <b>${absentCount}</b>\n` +
+      `👥 Jami: <b>${totalCount}</b>`;
+
+    const admins = await storage.getAdmins(tenantId);
+    for (const admin of admins) {
+      if (admin.telegramChatId) {
+        try {
+          await sendTelegramMessage(admin.telegramChatId, message);
+        } catch (error) {
+          console.error(`Error notifying admin ${admin.id} about attendance:`, error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("notifyAdminAttendanceTaken error:", error);
+  }
+}
+
 export async function notifyStudentAttendance(
   studentId: number, 
   groupName: string, 

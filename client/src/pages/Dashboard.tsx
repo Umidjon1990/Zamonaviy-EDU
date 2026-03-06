@@ -390,7 +390,7 @@ export default function Dashboard() {
         <Card className="lg:col-span-3 card-modern animate-slide-up" style={{ animationDelay: '300ms' }}>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-semibold">Davomat statistikasi</CardTitle>
-            <p className="text-sm text-muted-foreground">Bugungi holat ({attendanceList.length} ta yozuv)</p>
+            <p className="text-sm text-muted-foreground">{monthNames.find(m => m.value === String(selMonth))?.label} {selYear} ({attendanceList.length} ta yozuv)</p>
           </CardHeader>
           <CardContent className="pt-4">
             <div className="h-[180px]">

@@ -204,6 +204,20 @@ Preferred communication style: Simple, everyday language.
 
 ### Dashboard Improvements (March 2026)
 - Attendance stats now fetched for selected month (not just today)
+- Attendance chart subtitle shows selected month name + year + record count
 - Payment rate: percentage of active students who paid in selected month
 - Today's classes show teacher name and time range (start-end)
 - Today's classes show up to 6 classes (was 4)
+
+### Telegram Admin Attendance Notifications (March 2026)
+- When a teacher takes attendance, all admins with Telegram get a summary notification
+- Notification includes: teacher name, group name, date, time, present/absent/total counts
+- Uses 5-second debounce to batch individual attendance records into one summary message
+- `notifyAdminAttendanceTaken()` exported from telegram-bot.ts
+- Debounce logic in POST /api/attendance using `attendanceNotifyTimers` and `attendancePendingCounts` maps
+
+### Groups Page Enrichment (March 2026)
+- Groups API now returns `studentCount` and `teacherName` for each group
+- Groups page cards show real student count in capacity bar (was hardcoded to 0)
+- Groups page cards show teacher name with Users icon
+- Progress bar fills proportionally based on studentCount / maxStudents
