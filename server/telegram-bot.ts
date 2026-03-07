@@ -1,6 +1,10 @@
 import { Bot, Context, session, SessionFlavor, GrammyError, HttpError } from "grammy";
 import { storage } from "./storage";
 
+function getNowUz(): Date {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }));
+}
+
 interface SessionData {
   step: "start" | "awaiting_phone" | "verified";
   phone?: string;
@@ -437,7 +441,7 @@ async function showAttendance(ctx: BotContext, studentId: number) {
   }
 
   const tenantId = ctx.session.tenantId || student.tenantId;
-  const now = new Date();
+  const now = getNowUz();
   const attendanceRecords = await storage.getAttendance(
     tenantId,
     undefined,
@@ -538,7 +542,7 @@ async function showTeacherSalary(ctx: BotContext, teacherId: string) {
   }
 
   const tenantId = ctx.session.tenantId || teacher.tenantId;
-  const now = new Date();
+  const now = getNowUz();
   const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
   
   const payments = await storage.getPayments(tenantId);
@@ -623,7 +627,7 @@ async function showTeacherInfo(ctx: BotContext, teacherId: string) {
   }
 
   const tenantId = ctx.session.tenantId || teacher.tenantId;
-  const now = new Date();
+  const now = getNowUz();
   const groups = await storage.getGroupsByTeacher(teacherId, tenantId);
 
   let teacherStudentIds: number[] = [];
@@ -719,7 +723,7 @@ async function showTeacherAttendance(ctx: BotContext, teacherId: string) {
     return;
   }
 
-  const now = new Date();
+  const now = getNowUz();
   const tenantIdForAttendance = ctx.session.tenantId || teacher.tenantId;
   const groups = await storage.getGroupsByTeacher(teacherId, tenantIdForAttendance);
   const attendanceRecords = await storage.getAttendance(
@@ -790,7 +794,7 @@ async function showAdminStats(ctx: BotContext) {
 
 async function showAdminIncome(ctx: BotContext) {
   const tenantId = ctx.session.tenantId!;
-  const now = new Date();
+  const now = getNowUz();
   const payments = await storage.getPayments(tenantId);
   
   // Current month payments
@@ -813,7 +817,7 @@ async function showAdminIncome(ctx: BotContext) {
   const transferTotal = transferPayments.reduce((sum, p) => sum + p.amount, 0);
   
   // Today's income
-  const today = new Date();
+  const today = getNowUz();
   today.setHours(0, 0, 0, 0);
   const todayPayments = monthlyPayments.filter(p => new Date(p.createdAt) >= today);
   const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -867,8 +871,8 @@ async function showAdminDebtors(ctx: BotContext) {
 
 async function showAdminDailyReport(ctx: BotContext) {
   const tenantId = ctx.session.tenantId!;
-  const now = new Date();
-  const today = new Date();
+  const now = getNowUz();
+  const today = getNowUz();
   today.setHours(0, 0, 0, 0);
   
   const students = await storage.getStudents(tenantId);
@@ -968,8 +972,8 @@ export async function sendDailyReportToAdmins(): Promise<void> {
     for (const admin of admins) {
       if (admin.telegramChatId) {
         try {
-          const now = new Date();
-          const today = new Date();
+          const now = getNowUz();
+          const today = getNowUz();
           today.setHours(0, 0, 0, 0);
           
           const students = await storage.getStudents(tenantId);
@@ -1067,7 +1071,7 @@ export async function notifyAdminAttendanceTaken(
     const teacherName = `${teacher.firstName} ${teacher.lastName}`;
     const groupName = group.name;
     const dateStr = date.toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" });
-    const timeStr = new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const timeStr = getNowUz().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", hour12: false });
 
     const message =
       `📋 <b>Davomat olindi!</b>\n\n` +
@@ -1149,7 +1153,7 @@ export async function sendPaymentReceipt(
     return { success: false, error: "O'quvchi Telegram botga ulanmagan" };
   }
   
-  const now = new Date();
+  const now = getNowUz();
   const dateStr = now.toLocaleDateString("uz-UZ", { 
     day: "numeric", 
     month: "long", 
@@ -1228,7 +1232,7 @@ export async function notifyTeacherDailySchedule(teacherId: string): Promise<boo
   const groups = await storage.getGroupsByTeacher(teacherId, teacher.tenantId);
   if (groups.length === 0) return false;
   
-  const today = new Date();
+  const today = getNowUz();
   const dayNames: Record<string, string> = {
     "0": "Yakshanba", "1": "Du", "2": "Se", "3": "Chor", "4": "Pay", "5": "Juma", "6": "Shanba"
   };
@@ -1301,7 +1305,7 @@ export async function notifyTeacherClassReminder(
         if (students.length > 20) message += `  ... va yana ${students.length - 20} ta\n`;
       }
 
-      const now = new Date();
+      const now = getNowUz();
       const attendanceRecords = await storage.getAttendance(
         teacher.tenantId, groupId, undefined, now.getMonth() + 1, now.getFullYear()
       );
@@ -1350,7 +1354,7 @@ export function startScheduledNotifications() {
   dailyScheduleInterval = setInterval(async () => {
     if (isSendingDailySchedules) return; // Prevent overlapping
     
-    const now = new Date();
+    const now = getNowUz();
     // Uzbekistan is UTC+5
     const uzHour = (now.getUTCHours() + 5) % 24;
     const uzMinutes = now.getUTCMinutes();
@@ -1425,7 +1429,7 @@ async function sendDailySchedulesToAllTeachers() {
 
 async function checkClassReminders() {
   try {
-    const now = new Date();
+    const now = getNowUz();
     // Uzbekistan is UTC+5
     const uzHour = (now.getUTCHours() + 5) % 24;
     const uzMinutes = now.getUTCMinutes();
@@ -1494,7 +1498,7 @@ async function checkClassReminders() {
 async function checkExpiredTrials() {
   try {
     const allTenants = await storage.getTenants();
-    const now = new Date();
+    const now = getNowUz();
     
     for (const tenant of allTenants) {
       // Skip if already suspended or active with valid subscription
