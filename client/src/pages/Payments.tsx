@@ -124,6 +124,43 @@ export default function Payments() {
       .map((s: any) => s.id);
   }, [filterGroupId, groupsList, studentsList]);
 
+  const teacherGroupIds = useMemo(() => {
+    if (!filterTeacherId) return [];
+    return groupsList.filter((g: any) => g.teacherId === filterTeacherId).map((g: any) => g.id);
+  }, [filterTeacherId, groupsList]);
+
+  const relevantGroupIds = useMemo(() => {
+    if (filterGroupId) return [parseInt(filterGroupId)];
+    if (filterTeacherId) return teacherGroupIds;
+    return [];
+  }, [filterGroupId, filterTeacherId, teacherGroupIds]);
+
+  const { data: groupStudentsData } = useQuery({
+    queryKey: ["group-students-for-filter", relevantGroupIds],
+    queryFn: async () => {
+      if (relevantGroupIds.length === 0) return [];
+      const allStudents: any[] = [];
+      const seenIds = new Set<number>();
+      for (const gId of relevantGroupIds) {
+        const res = await fetch(`/api/groups/${gId}/students`);
+        if (res.ok) {
+          const data = await res.json();
+          const group = groupsList.find((g: any) => g.id === gId);
+          data.forEach((s: any) => {
+            if (!seenIds.has(s.id)) {
+              seenIds.add(s.id);
+              allStudents.push({ ...s, groupId: gId, groupName: group?.name });
+            }
+          });
+        }
+      }
+      return allStudents;
+    },
+    enabled: relevantGroupIds.length > 0,
+  });
+
+  const [quickPayStudentId, setQuickPayStudentId] = useState<number | null>(null);
+
   const monthNames = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentyabr", "Oktyabr", "Noyabr", "Dekabr"];
 
   const monthFilteredPayments = useMemo(() => {
@@ -134,6 +171,26 @@ export default function Payments() {
       return date >= startOfMonth && date <= endOfMonth;
     });
   }, [paymentsList, selectedMonth, selectedYear]);
+
+  const paidUnpaidData = useMemo(() => {
+    const gsData = Array.isArray(groupStudentsData) ? groupStudentsData : [];
+    if (gsData.length === 0) return null;
+
+    const relevantTeacherId = filterTeacherId || (filterGroupId ? groupsList.find((g: any) => g.id?.toString() === filterGroupId)?.teacherId : null);
+
+    const relevantPayments = monthFilteredPayments.filter((p: any) => {
+      if (!p.status || p.status !== 'completed') return false;
+      if (relevantTeacherId && p.teacherId !== relevantTeacherId) return false;
+      return true;
+    });
+
+    const paidStudentIds = new Set(relevantPayments.map((p: any) => p.studentId));
+
+    const paid = gsData.filter((s: any) => paidStudentIds.has(s.id));
+    const unpaid = gsData.filter((s: any) => !paidStudentIds.has(s.id));
+
+    return { paid, unpaid, total: gsData.length, relevantTeacherId };
+  }, [groupStudentsData, monthFilteredPayments, filterTeacherId, filterGroupId, groupsList]);
 
   const filteredPayments = useMemo(() => {
     let result = monthFilteredPayments;
@@ -741,6 +798,101 @@ export default function Payments() {
           )}
         </CardContent>
       </Card>
+
+      {paidUnpaidData && (filterTeacherId || filterGroupId) && (
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold">
+                O'quvchilar holati — {monthNames[selectedMonth]} {selectedYear}
+              </CardTitle>
+              <Badge variant="outline" className="text-sm">
+                Jami: {paidUnpaidData.total} ta o'quvchi
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <h3 className="text-sm font-semibold text-emerald-700">To'lov qilganlar ({paidUnpaidData.paid.length})</h3>
+                </div>
+                <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                  {paidUnpaidData.paid.length > 0 ? paidUnpaidData.paid.map((s: any) => {
+                    const studentPayments = monthFilteredPayments.filter((p: any) => p.studentId === s.id && p.status === 'completed');
+                    const totalPaid = studentPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                    return (
+                      <div key={s.id} className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50 border border-emerald-100" data-testid={`paid-student-${s.id}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-700 text-[10px] font-bold flex-shrink-0">
+                            {s.firstName?.[0]}{s.lastName?.[0]}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{s.firstName} {s.lastName}</p>
+                            {s.phone && <p className="text-[10px] text-muted-foreground">{s.phone}</p>}
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-700 flex-shrink-0">{totalPaid.toLocaleString()} UZS</span>
+                      </div>
+                    );
+                  }) : (
+                    <p className="text-xs text-muted-foreground text-center py-4">Hali to'lov qilgan o'quvchi yo'q</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <h3 className="text-sm font-semibold text-red-700">To'lov qilmaganlar ({paidUnpaidData.unpaid.length})</h3>
+                </div>
+                <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                  {paidUnpaidData.unpaid.length > 0 ? paidUnpaidData.unpaid.map((s: any) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-red-50 border border-red-100 cursor-pointer hover:bg-red-100 transition-colors"
+                      onClick={() => {
+                        setFormData({
+                          studentId: s.id,
+                          amount: 0,
+                          paymentType: "cash",
+                          status: "completed",
+                          notes: "",
+                          teacherId: paidUnpaidData.relevantTeacherId || "",
+                        });
+                        setStudentMode("existing");
+                        setSearchQuery(`${s.firstName} ${s.lastName}`);
+                        setIsOpen(true);
+                      }}
+                      data-testid={`unpaid-student-${s.id}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-red-200 flex items-center justify-center text-red-700 text-[10px] font-bold flex-shrink-0">
+                          {s.firstName?.[0]}{s.lastName?.[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{s.firstName} {s.lastName}</p>
+                          {s.phone && <p className="text-[10px] text-muted-foreground">{s.phone}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-xs text-red-600 font-medium">{(s.balance || 0).toLocaleString()}</span>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] border-red-200 text-red-700 hover:bg-red-100">
+                          <Wallet className="w-3 h-3 mr-1" />
+                          To'lov
+                        </Button>
+                      </div>
+                    </div>
+                  )) : (
+                    <p className="text-xs text-muted-foreground text-center py-4">Barcha o'quvchilar to'lov qilgan</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="shadow-sm">
         <CardContent className="p-0">
