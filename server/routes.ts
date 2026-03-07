@@ -1447,11 +1447,16 @@ export async function registerRoutes(
         });
 
         const currentMinutes = nowUz.getHours() * 60 + nowUz.getMinutes();
-        const classStarted = period === 'day' ? relevantGroups.some((g: any) => {
-          const time = g.time || '09:00';
-          const [h, m] = time.split(':').map(Number);
-          return currentMinutes >= ((h || 9) * 60 + (m || 0));
-        }) : true;
+
+        const groupDetailsWithStatus = groupDetails.map((g: any) => {
+          const timeStr = (g.time || '09:00').split('-')[0];
+          const [h, m] = timeStr.split(':').map(Number);
+          const groupStartMin = (h || 9) * 60 + (m || 0);
+          const started = period === 'day' ? currentMinutes >= groupStartMin : true;
+          return { ...g, classStarted: started };
+        });
+
+        const anyClassStarted = period === 'day' ? groupDetailsWithStatus.some((g: any) => g.classStarted) : true;
 
         return {
           teacherId: teacher.id,
@@ -1464,9 +1469,9 @@ export async function registerRoutes(
           daysWorked: uniqueDates.length,
           lastAttendanceDate: lastDate,
           hasTodayClass: hasClassInPeriod,
-          classStarted,
+          classStarted: anyClassStarted,
           todayGroups: periodGroups,
-          groupDetails,
+          groupDetails: groupDetailsWithStatus,
         };
       });
 

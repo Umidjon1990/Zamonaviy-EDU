@@ -481,14 +481,52 @@ export default function Dashboard() {
         <CardContent className="pt-3">
           {(() => {
             const summaryList = Array.isArray(teacherAttendanceSummary) ? teacherAttendanceSummary : [];
-            const withClass = attendancePeriod === 'day'
-              ? summaryList.filter((t: any) => t.hasTodayClass || t.totalRecords > 0)
-              : summaryList.filter((t: any) => t.totalRecords > 0 || t.hasTodayClass);
-            const noAttendance = attendancePeriod === 'day'
-              ? summaryList.filter((t: any) => t.hasTodayClass && t.classStarted && t.totalRecords === 0)
-              : [];
+            const groupRows: any[] = [];
+            summaryList.forEach((t: any) => {
+              if (t.groupDetails?.length > 0) {
+                t.groupDetails.forEach((g: any) => {
+                  groupRows.push({
+                    teacherId: t.teacherId,
+                    teacherName: t.teacherName,
+                    teacherInitials: t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2),
+                    groupId: g.id,
+                    groupName: g.name,
+                    groupTime: g.time,
+                    groupRoom: g.room,
+                    present: g.present,
+                    absent: g.absent,
+                    total: g.total,
+                    rate: g.total > 0 ? Math.round((g.present / g.total) * 100) : 0,
+                    classStarted: g.classStarted !== undefined ? g.classStarted : t.classStarted,
+                    hasTodayClass: t.hasTodayClass,
+                  });
+                });
+              } else if (t.hasTodayClass) {
+                t.todayGroups?.forEach((tg: any) => {
+                  groupRows.push({
+                    teacherId: t.teacherId,
+                    teacherName: t.teacherName,
+                    teacherInitials: t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2),
+                    groupId: `${t.teacherId}-${tg.name}`,
+                    groupName: tg.name,
+                    groupTime: tg.time,
+                    groupRoom: tg.room,
+                    present: 0,
+                    absent: 0,
+                    total: 0,
+                    rate: 0,
+                    classStarted: t.classStarted,
+                    hasTodayClass: true,
+                  });
+                });
+              }
+            });
 
-            if (summaryList.length === 0) {
+            const completedRows = groupRows.filter((r: any) => r.total > 0);
+            const waitingRows = groupRows.filter((r: any) => r.total === 0 && r.classStarted === false);
+            const notTakenRows = groupRows.filter((r: any) => r.total === 0 && r.classStarted !== false);
+
+            if (groupRows.length === 0) {
               return (
                 <div className="text-center py-8 text-muted-foreground">
                   <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -497,89 +535,84 @@ export default function Dashboard() {
               );
             }
 
+            const renderGroupRow = (r: any) => (
+              <div key={r.groupId} className="flex items-center justify-between p-3 rounded-xl border hover:bg-muted/30 transition-colors" data-testid={`group-attendance-${r.groupId}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${
+                    r.total > 0 ? 'bg-gradient-to-br from-emerald-500 to-teal-500' :
+                    r.classStarted === false ? 'bg-gradient-to-br from-blue-400 to-blue-500' :
+                    'bg-gradient-to-br from-amber-500 to-orange-500'
+                  }`}>
+                    {r.teacherInitials}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm">{r.groupName}</p>
+                      <span className="text-xs text-muted-foreground">{r.groupTime}</span>
+                      {r.groupRoom && <span className="text-xs text-muted-foreground">({r.groupRoom})</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{r.teacherName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  {r.total > 0 ? (
+                    <>
+                      <span className="text-xs font-semibold text-emerald-600">✓{r.present}</span>
+                      <span className="text-xs font-semibold text-red-500">✗{r.absent}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        r.rate >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                        r.rate >= 50 ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>{r.rate}%</span>
+                    </>
+                  ) : r.classStarted === false ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Kutilmoqda</span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Olinmagan</span>
+                  )}
+                </div>
+              </div>
+            );
+
             return (
               <div className="space-y-4">
-                {withClass.length > 0 && (
+                {completedRows.length > 0 && (
                   <div className="space-y-2">
-                    {withClass.map((t: any) => (
-                      <div key={t.teacherId} className="rounded-xl border overflow-hidden" data-testid={`teacher-attendance-${t.teacherId}`}>
-                        <div className="flex items-center justify-between p-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${
-                              t.totalRecords > 0 ? 'bg-gradient-to-br from-emerald-500 to-teal-500' :
-                              t.hasTodayClass ? 'bg-gradient-to-br from-amber-500 to-orange-500' : 'bg-gray-400'
-                            }`}>
-                              {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-medium text-sm truncate">{t.teacherName}</p>
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                                {t.groupDetails?.map((g: any, i: number) => (
-                                  <span key={g.id} className="inline-flex items-center gap-1">
-                                    {i > 0 && <span className="text-muted-foreground/50">|</span>}
-                                    <span className="font-medium">{g.name}</span>
-                                    <span className="text-muted-foreground/70">{g.time}</span>
-                                    {g.total > 0 && (
-                                      <span className="inline-flex items-center gap-0.5">
-                                        <span className="text-emerald-600">✓{g.present}</span>
-                                        <span className="text-red-500">✗{g.absent}</span>
-                                      </span>
-                                    )}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                            {t.totalRecords > 0 ? (
-                              <>
-                                <span className="text-xs font-semibold text-emerald-600">✓{t.present}</span>
-                                <span className="text-xs font-semibold text-red-500">✗{t.absent}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                                  t.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                                  t.attendanceRate >= 50 ? 'bg-amber-100 text-amber-700' :
-                                  'bg-red-100 text-red-700'
-                                }`}>{t.attendanceRate}%</span>
-                              </>
-                            ) : t.classStarted === false ? (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Kutilmoqda</span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Olinmagan</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                    {completedRows.map(renderGroupRow)}
                   </div>
                 )}
 
-                {noAttendance.length > 0 && attendancePeriod === 'day' && (
-                  <div className="mt-3 pt-3 border-t">
+                {waitingRows.length > 0 && (
+                  <div className="space-y-2">
+                    {completedRows.length > 0 && <div className="border-t my-1" />}
+                    {waitingRows.map(renderGroupRow)}
+                  </div>
+                )}
+
+                {notTakenRows.length > 0 && attendancePeriod === 'day' && (
+                  <div className="pt-2 border-t">
                     <p className="text-xs font-semibold text-red-600 mb-2 flex items-center gap-1.5">
                       <AlertCircle className="h-3.5 w-3.5" />
-                      Davomat olmagan o'qituvchilar ({noAttendance.length})
+                      Davomat olinmagan ({notTakenRows.length})
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {noAttendance.map((t: any) => (
-                        <div key={t.teacherId} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 border border-red-100 text-xs">
-                          <div className="w-6 h-6 rounded-full bg-red-200 flex items-center justify-center text-red-700 text-[10px] font-bold">
-                            {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                    <div className="space-y-1.5">
+                      {notTakenRows.map((r: any) => (
+                        <div key={r.groupId} className="flex items-center justify-between px-3 py-2 rounded-lg bg-red-50 border border-red-100 text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-red-200 flex items-center justify-center text-red-700 text-[10px] font-bold">
+                              {r.teacherInitials}
+                            </div>
+                            <span className="font-medium text-red-700">{r.groupName}</span>
+                            <span className="text-red-500">{r.groupTime}</span>
                           </div>
-                          <div>
-                            <span className="font-medium text-red-700">{t.teacherName}</span>
-                            {t.todayGroups?.length > 0 && (
-                              <span className="text-red-500 ml-1">
-                                ({t.todayGroups.map((g: any) => g.time).join(', ')})
-                              </span>
-                            )}
-                          </div>
+                          <span className="text-red-500">{r.teacherName}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {withClass.length === 0 && (
+                {groupRows.length === 0 && (
                   <div className="text-center py-6 text-muted-foreground">
                     <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">Bu {attendancePeriod === 'day' ? 'kunda' : attendancePeriod === 'week' ? 'haftada' : 'oyda'} darslar yo'q</p>
