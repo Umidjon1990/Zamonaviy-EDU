@@ -223,8 +223,10 @@ Preferred communication style: Simple, everyday language.
 - Progress bar fills proportionally based on studentCount / maxStudents
 
 ### Dashboard Teacher Attendance Summary (March 2026)
-- New `GET /api/attendance/teacher-summary?month=&year=` endpoint returns per-teacher attendance stats
-- Dashboard shows "O'qituvchilar davomati" section with each teacher's attendance data
-- Per teacher: name, group count, days worked, present/absent counts, attendance rate %, last attendance date
+- `GET /api/attendance/teacher-summary?period=day|week|month&date=&month=&year=` endpoint returns per-teacher attendance stats
+- Dashboard shows "O'qituvchilar davomati" section with period filter (Kun/Hafta/Oy tabs)
+- Date navigation arrows for day/week modes, date input picker
+- Per teacher: name, group count, days worked, present/absent counts, attendance rate %, today's class indicator
+- Group-level breakdown showing per-group present/absent counts
+- "Bugun darsi bor" badge for teachers with classes today, with time and room info
 - Color-coded badges: green (>=80%), amber (>=50%), red (<50%), gray (no records)
-- Attendance pie chart subtitle now shows selected month name + year

@@ -1328,27 +1328,79 @@ export async function registerRoutes(
   app.get("/api/attendance/teacher-summary", requireTenantAuth, async (req, res) => {
     try {
       const tenantId = getTenantId(req);
-      const month = parseInt(req.query.month as string) || (new Date().getMonth() + 1);
-      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const period = (req.query.period as string) || 'month';
+      const dateStr = req.query.date as string;
+
+      let startDate: Date;
+      let endDate: Date;
+      const now = new Date();
+
+      if (period === 'day') {
+        const d = dateStr ? new Date(dateStr) : now;
+        startDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        endDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      } else if (period === 'week') {
+        const d = dateStr ? new Date(dateStr) : now;
+        const dayOfWeek = d.getDay();
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        startDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + mondayOffset);
+        endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 6, 23, 59, 59, 999);
+      } else {
+        const month = parseInt(req.query.month as string) || (now.getMonth() + 1);
+        const year = parseInt(req.query.year as string) || now.getFullYear();
+        startDate = new Date(year, month - 1, 1);
+        endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      }
 
       const teachers = await storage.getTeachers(tenantId);
       const allGroups = await storage.getGroups(tenantId);
-      const attendance = await storage.getAttendance(tenantId, undefined, undefined, month, year);
+      const allAttendance = await storage.getAttendance(tenantId);
+      const filtered = allAttendance.filter((a: any) => {
+        const aDate = new Date(a.date);
+        return aDate >= startDate && aDate <= endDate;
+      });
+
+      const dayNames: Record<string, string> = { 'Monday': 'Dushanba', 'Tuesday': 'Seshanba', 'Wednesday': 'Chorshanba', 'Thursday': 'Payshanba', 'Friday': 'Juma', 'Saturday': 'Shanba', 'Sunday': 'Yakshanba' };
+      const todayDayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+      const todayUz = dayNames[todayDayName] || todayDayName;
 
       const summary = teachers.map((teacher: any) => {
         const teacherGroups = allGroups.filter((g: any) => g.teacherId === teacher.id);
         const teacherGroupIds = teacherGroups.map((g: any) => g.id);
-        const teacherAttendance = attendance.filter((a: any) => teacherGroupIds.includes(a.groupId));
+        const teacherAttendance = filtered.filter((a: any) => teacherGroupIds.includes(a.groupId));
         const present = teacherAttendance.filter((a: any) => a.status === 'present').length;
         const absent = teacherAttendance.filter((a: any) => a.status === 'absent').length;
         const total = teacherAttendance.length;
 
-        const uniqueDates = [...new Set(teacherAttendance.map((a: any) => 
+        const uniqueDates = [...new Set(teacherAttendance.map((a: any) =>
           new Date(a.date).toISOString().split('T')[0]
         ))];
-        const lastDate = uniqueDates.length > 0 
-          ? uniqueDates.sort().reverse()[0] 
+        const lastDate = uniqueDates.length > 0
+          ? uniqueDates.sort().reverse()[0]
           : null;
+
+        const hasTodayClass = teacherGroups.some((g: any) =>
+          g.days && g.days.includes(todayUz)
+        );
+
+        const todayGroups = teacherGroups
+          .filter((g: any) => g.days && g.days.includes(todayUz))
+          .map((g: any) => ({ name: g.name, time: g.time, room: g.room }));
+
+        const groupDetails = teacherGroups.map((g: any) => {
+          const gAttendance = filtered.filter((a: any) => a.groupId === g.id);
+          const gPresent = gAttendance.filter((a: any) => a.status === 'present').length;
+          const gAbsent = gAttendance.filter((a: any) => a.status === 'absent').length;
+          return {
+            id: g.id,
+            name: g.name,
+            time: g.time,
+            days: g.days,
+            present: gPresent,
+            absent: gAbsent,
+            total: gAttendance.length,
+          };
+        });
 
         return {
           teacherId: teacher.id,
@@ -1360,6 +1412,9 @@ export async function registerRoutes(
           attendanceRate: total > 0 ? Math.round((present / total) * 100) : 0,
           daysWorked: uniqueDates.length,
           lastAttendanceDate: lastDate,
+          hasTodayClass,
+          todayGroups,
+          groupDetails,
         };
       });
 

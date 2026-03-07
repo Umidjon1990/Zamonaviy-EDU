@@ -34,6 +34,8 @@ export default function Dashboard() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState((now.getMonth() + 1).toString());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear().toString());
+  const [attendancePeriod, setAttendancePeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [attendanceDate, setAttendanceDate] = useState(now.toISOString().split('T')[0]);
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["stats", selectedMonth, selectedYear],
@@ -58,9 +60,15 @@ export default function Dashboard() {
   });
 
   const { data: teacherAttendanceSummary } = useQuery({
-    queryKey: ["teacher-attendance-summary", selectedMonth, selectedYear],
+    queryKey: ["teacher-attendance-summary", attendancePeriod, attendanceDate, selectedMonth, selectedYear],
     queryFn: async () => {
-      const res = await fetch(`/api/attendance/teacher-summary?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
+      let url = `/api/attendance/teacher-summary?period=${attendancePeriod}`;
+      if (attendancePeriod === 'day' || attendancePeriod === 'week') {
+        url += `&date=${attendanceDate}`;
+      } else {
+        url += `&month=${selectedMonth}&year=${selectedYear}`;
+      }
+      const res = await fetch(url, { credentials: "include" });
       return res.json();
     },
   });
@@ -431,13 +439,74 @@ export default function Dashboard() {
       {/* O'qituvchilar kesimida davomat */}
       <Card className="card-modern animate-slide-up" style={{ animationDelay: '350ms' }}>
         <CardHeader className="pb-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-500/10">
-              <CalendarDays className="h-5 w-5 text-indigo-500" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-500/10">
+                <CalendarDays className="h-5 w-5 text-indigo-500" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold">O'qituvchilar davomati</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {attendancePeriod === 'day' ? new Date(attendanceDate).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long', year: 'numeric' }) :
+                   attendancePeriod === 'week' ? 'Shu hafta' :
+                   `${monthNames.find(m => m.value === selectedMonth)?.label} ${selectedYear}`}
+                </p>
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-base font-semibold">O'qituvchilar davomati</CardTitle>
-              <p className="text-sm text-muted-foreground">{monthNames.find(m => m.value === selectedMonth)?.label} {selectedYear} — kim davomat olgan?</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex bg-muted rounded-lg p-0.5">
+                {[
+                  { key: 'day' as const, label: 'Kun' },
+                  { key: 'week' as const, label: 'Hafta' },
+                  { key: 'month' as const, label: 'Oy' },
+                ].map(p => (
+                  <button
+                    key={p.key}
+                    onClick={() => setAttendancePeriod(p.key)}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                      attendancePeriod === p.key
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    data-testid={`btn-period-${p.key}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {(attendancePeriod === 'day' || attendancePeriod === 'week') && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => {
+                      const d = new Date(attendanceDate);
+                      d.setDate(d.getDate() - (attendancePeriod === 'week' ? 7 : 1));
+                      setAttendanceDate(d.toISOString().split('T')[0]);
+                    }}
+                    className="p-1 rounded hover:bg-muted transition-colors"
+                    data-testid="btn-prev-date"
+                  >
+                    <ArrowDownRight className="h-4 w-4 rotate-135" />
+                  </button>
+                  <input
+                    type="date"
+                    value={attendanceDate}
+                    onChange={e => setAttendanceDate(e.target.value)}
+                    className="text-xs border rounded-md px-2 py-1 bg-background"
+                    data-testid="input-attendance-date"
+                  />
+                  <button
+                    onClick={() => {
+                      const d = new Date(attendanceDate);
+                      d.setDate(d.getDate() + (attendancePeriod === 'week' ? 7 : 1));
+                      setAttendanceDate(d.toISOString().split('T')[0]);
+                    }}
+                    className="p-1 rounded hover:bg-muted transition-colors"
+                    data-testid="btn-next-date"
+                  >
+                    <ArrowUpRight className="h-4 w-4 rotate-45" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -455,44 +524,66 @@ export default function Dashboard() {
             return (
               <div className="space-y-3">
                 {summaryList.map((t: any) => (
-                  <div key={t.teacherId} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 hover:bg-muted/60 transition-colors" data-testid={`teacher-attendance-${t.teacherId}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
-                        {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                  <div key={t.teacherId} className="rounded-xl border bg-card overflow-hidden" data-testid={`teacher-attendance-${t.teacherId}`}>
+                    <div className="flex items-center justify-between p-3 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          t.hasTodayClass ? 'bg-gradient-to-br from-indigo-500 to-purple-500' : 'bg-gray-400'
+                        }`}>
+                          {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm">{t.teacherName}</p>
+                            {t.hasTodayClass && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700">Bugun darsi bor</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                            <span>{t.groupCount} guruh</span>
+                            <span>•</span>
+                            <span>{t.daysWorked} kun</span>
+                            {t.todayGroups?.length > 0 && (
+                              <>
+                                <span>•</span>
+                                <span>{t.todayGroups.map((g: any) => `${g.time}${g.room ? ` (${g.room})` : ''}`).join(', ')}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-sm">{t.teacherName}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{t.groupCount} guruh</span>
-                          <span>•</span>
-                          <span>{t.daysWorked} kun ishladi</span>
-                          {t.lastAttendanceDate && (
-                            <>
-                              <span>•</span>
-                              <span>Oxirgi: {new Date(t.lastAttendanceDate).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })}</span>
-                            </>
-                          )}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-sm">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          <span className="font-semibold text-emerald-600">{t.present}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm">
+                          <XCircle className="h-4 w-4 text-red-500" />
+                          <span className="font-semibold text-red-600">{t.absent}</span>
+                        </div>
+                        <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          t.totalRecords === 0 ? 'bg-gray-100 text-gray-500' :
+                          t.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                          t.attendanceRate >= 50 ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {t.totalRecords === 0 ? 'Yo\'q' : `${t.attendanceRate}%`}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1 text-sm">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        <span className="font-semibold text-emerald-600">{t.present}</span>
+                    {t.groupDetails?.length > 0 && t.totalRecords > 0 && (
+                      <div className="border-t px-3 py-2 bg-muted/20">
+                        <div className="flex flex-wrap gap-2">
+                          {t.groupDetails.filter((g: any) => g.total > 0).map((g: any) => (
+                            <div key={g.id} className="flex items-center gap-1.5 text-xs bg-background rounded-lg px-2 py-1 border">
+                              <span className="font-medium">{g.name}</span>
+                              <span className="text-emerald-600">✓{g.present}</span>
+                              <span className="text-red-500">✗{g.absent}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 text-sm">
-                        <XCircle className="h-4 w-4 text-red-500" />
-                        <span className="font-semibold text-red-600">{t.absent}</span>
-                      </div>
-                      <div className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        t.totalRecords === 0 ? 'bg-gray-100 text-gray-500' :
-                        t.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                        t.attendanceRate >= 50 ? 'bg-amber-100 text-amber-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {t.totalRecords === 0 ? 'Yo\'q' : `${t.attendanceRate}%`}
-                      </div>
-                    </div>
+                    )}
                   </div>
                 ))}
               </div>
