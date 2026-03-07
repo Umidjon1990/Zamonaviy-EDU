@@ -1360,9 +1360,34 @@ export async function registerRoutes(
         return aDate >= startDate && aDate <= endDate;
       });
 
-      const dayNames: Record<string, string> = { 'Monday': 'Dushanba', 'Tuesday': 'Seshanba', 'Wednesday': 'Chorshanba', 'Thursday': 'Payshanba', 'Friday': 'Juma', 'Saturday': 'Shanba', 'Sunday': 'Yakshanba' };
+      const dayNamesMap: Record<string, string> = { 'Monday': 'Dushanba', 'Tuesday': 'Seshanba', 'Wednesday': 'Chorshanba', 'Thursday': 'Payshanba', 'Friday': 'Juma', 'Saturday': 'Shanba', 'Sunday': 'Yakshanba' };
       const todayDayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-      const todayUz = dayNames[todayDayName] || todayDayName;
+      const todayUz = dayNamesMap[todayDayName] || todayDayName;
+
+      const selectedDayName = period === 'day'
+        ? (dateStr
+            ? dayNamesMap[new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' })] || todayUz
+            : todayUz)
+        : null;
+
+      const weekDayNames = period === 'week' ? (() => {
+        const days: string[] = [];
+        const d = new Date(startDate);
+        for (let i = 0; i < 7; i++) {
+          const name = dayNamesMap[d.toLocaleDateString('en-US', { weekday: 'long' })];
+          if (name) days.push(name);
+          d.setDate(d.getDate() + 1);
+        }
+        return days;
+      })() : [];
+
+      const formatGroupTime = (g: any) => {
+        const time = g.time || '09:00';
+        const duration = g.duration || 90;
+        const [h, m] = time.split(':').map(Number);
+        const endMin = (h || 9) * 60 + (m || 0) + duration;
+        return `${time}-${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
+      };
 
       const summary = teachers.map((teacher: any) => {
         const teacherGroups = allGroups.filter((g: any) => g.teacherId === teacher.id);
@@ -1379,22 +1404,41 @@ export async function registerRoutes(
           ? uniqueDates.sort().reverse()[0]
           : null;
 
-        const hasTodayClass = teacherGroups.some((g: any) =>
-          g.days && g.days.includes(todayUz)
-        );
+        let hasClassInPeriod = false;
+        let periodGroups: any[] = [];
 
-        const todayGroups = teacherGroups
-          .filter((g: any) => g.days && g.days.includes(todayUz))
-          .map((g: any) => ({ name: g.name, time: g.time, room: g.room }));
+        if (period === 'day' && selectedDayName) {
+          hasClassInPeriod = teacherGroups.some((g: any) => g.days && g.days.includes(selectedDayName));
+          periodGroups = teacherGroups
+            .filter((g: any) => g.days && g.days.includes(selectedDayName))
+            .map((g: any) => ({ name: g.name, time: formatGroupTime(g), room: g.room }));
+        } else if (period === 'week') {
+          hasClassInPeriod = teacherGroups.some((g: any) =>
+            g.days && g.days.some((d: string) => weekDayNames.includes(d))
+          );
+          periodGroups = teacherGroups
+            .filter((g: any) => g.days && g.days.some((d: string) => weekDayNames.includes(d)))
+            .map((g: any) => ({ name: g.name, time: formatGroupTime(g), room: g.room }));
+        } else {
+          hasClassInPeriod = teacherGroups.length > 0;
+          periodGroups = teacherGroups.map((g: any) => ({ name: g.name, time: formatGroupTime(g), room: g.room }));
+        }
 
-        const groupDetails = teacherGroups.map((g: any) => {
+        const relevantGroups = period === 'day' && selectedDayName
+          ? teacherGroups.filter((g: any) => g.days && g.days.includes(selectedDayName))
+          : period === 'week'
+          ? teacherGroups.filter((g: any) => g.days && g.days.some((d: string) => weekDayNames.includes(d)))
+          : teacherGroups;
+
+        const groupDetails = relevantGroups.map((g: any) => {
           const gAttendance = filtered.filter((a: any) => a.groupId === g.id);
           const gPresent = gAttendance.filter((a: any) => a.status === 'present').length;
           const gAbsent = gAttendance.filter((a: any) => a.status === 'absent').length;
           return {
             id: g.id,
             name: g.name,
-            time: g.time,
+            time: formatGroupTime(g),
+            room: g.room,
             days: g.days,
             present: gPresent,
             absent: gAbsent,
@@ -1412,8 +1456,8 @@ export async function registerRoutes(
           attendanceRate: total > 0 ? Math.round((present / total) * 100) : 0,
           daysWorked: uniqueDates.length,
           lastAttendanceDate: lastDate,
-          hasTodayClass,
-          todayGroups,
+          hasTodayClass: hasClassInPeriod,
+          todayGroups: periodGroups,
           groupDetails,
         };
       });

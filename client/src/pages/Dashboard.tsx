@@ -170,40 +170,6 @@ export default function Dashboard() {
     return { monthlyIncome, totalDebt, expectedPayments, avgPayment };
   };
 
-  const getTodayClasses = () => {
-    const today = new Date();
-    const dayNames = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba'];
-    const todayName = dayNames[today.getDay()];
-    const currentHour = today.getHours();
-    const currentMinute = today.getMinutes();
-    const currentTime = currentHour * 60 + currentMinute;
-    
-    return groupsList
-      .filter((g: any) => {
-        const days = g.days || [];
-        return days.some((d: string) => d.toLowerCase().includes(todayName.toLowerCase().substring(0, 3)));
-      })
-      .map((g: any) => {
-        const time = g.time || '09:00';
-        const [startHour, startMin] = time.split(':').map(Number);
-        const classTime = (startHour || 9) * 60 + (startMin || 0);
-        const duration = g.duration || 90;
-        const endTime = classTime + duration;
-        const endHour = Math.floor(endTime / 60);
-        const endMinute = endTime % 60;
-        const timeRange = `${time}-${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
-        
-        let status = 'waiting';
-        if (currentTime > endTime) status = 'done';
-        else if (currentTime >= classTime && currentTime <= endTime) status = 'now';
-        
-        const teacher = teachersList.find((t: any) => t.id === g.teacherId);
-        const teacherName = teacher ? `${teacher.firstName} ${teacher.lastName}` : '';
-        return { name: g.name, time: timeRange, sortTime: classTime, status, teacherName };
-      })
-      .sort((a: any, b: any) => a.sortTime - b.sortTime)
-      .slice(0, 6);
-  };
 
   if (statsLoading) {
     return (
@@ -226,7 +192,7 @@ export default function Dashboard() {
   const attendancePieData = getAttendanceStats();
   const metrics = getPerformanceMetrics();
   const financial = getFinancialSummary();
-  const todayClasses = getTodayClasses();
+
 
   const selectedMonthPaymentCount = paymentsList.filter((p: any) => {
     const d = new Date(p.createdAt);
@@ -436,20 +402,26 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* O'qituvchilar kesimida davomat */}
+      {/* Darslar va Davomat - birlashtirilgan */}
       <Card className="card-modern animate-slide-up" style={{ animationDelay: '350ms' }}>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-indigo-500/10">
-                <CalendarDays className="h-5 w-5 text-indigo-500" />
+                <BookOpen className="h-5 w-5 text-indigo-500" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold">O'qituvchilar davomati</CardTitle>
+                <CardTitle className="text-base font-semibold">Darslar va Davomat</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  {attendancePeriod === 'day' ? new Date(attendanceDate).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long', year: 'numeric' }) :
-                   attendancePeriod === 'week' ? 'Shu hafta' :
-                   `${monthNames.find(m => m.value === selectedMonth)?.label} ${selectedYear}`}
+                  {attendancePeriod === 'day'
+                    ? (() => {
+                        const d = new Date(attendanceDate + 'T12:00:00');
+                        const today = new Date(); today.setHours(12,0,0,0);
+                        const isToday = d.toDateString() === today.toDateString();
+                        return isToday ? 'Bugun' : d.toLocaleDateString('uz-UZ', { weekday: 'long', day: 'numeric', month: 'long' });
+                      })()
+                    : attendancePeriod === 'week' ? 'Shu hafta'
+                    : `${monthNames.find(m => m.value === selectedMonth)?.label} ${selectedYear}`}
                 </p>
               </div>
             </div>
@@ -463,7 +435,7 @@ export default function Dashboard() {
                   <button
                     key={p.key}
                     onClick={() => setAttendancePeriod(p.key)}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       attendancePeriod === p.key
                         ? 'bg-background shadow-sm text-foreground'
                         : 'text-muted-foreground hover:text-foreground'
@@ -482,16 +454,14 @@ export default function Dashboard() {
                       d.setDate(d.getDate() - (attendancePeriod === 'week' ? 7 : 1));
                       setAttendanceDate(d.toISOString().split('T')[0]);
                     }}
-                    className="p-1 rounded hover:bg-muted transition-colors"
+                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     data-testid="btn-prev-date"
-                  >
-                    <ArrowDownRight className="h-4 w-4 rotate-135" />
-                  </button>
+                  >←</button>
                   <input
                     type="date"
                     value={attendanceDate}
                     onChange={e => setAttendanceDate(e.target.value)}
-                    className="text-xs border rounded-md px-2 py-1 bg-background"
+                    className="text-xs border rounded-md px-2 py-1.5 bg-background w-[130px]"
                     data-testid="input-attendance-date"
                   />
                   <button
@@ -500,92 +470,119 @@ export default function Dashboard() {
                       d.setDate(d.getDate() + (attendancePeriod === 'week' ? 7 : 1));
                       setAttendanceDate(d.toISOString().split('T')[0]);
                     }}
-                    className="p-1 rounded hover:bg-muted transition-colors"
+                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     data-testid="btn-next-date"
-                  >
-                    <ArrowUpRight className="h-4 w-4 rotate-45" />
-                  </button>
+                  >→</button>
                 </div>
               )}
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-3">
           {(() => {
             const summaryList = Array.isArray(teacherAttendanceSummary) ? teacherAttendanceSummary : [];
+            const withClass = attendancePeriod === 'day'
+              ? summaryList.filter((t: any) => t.hasTodayClass || t.totalRecords > 0)
+              : summaryList.filter((t: any) => t.totalRecords > 0 || t.hasTodayClass);
+            const noAttendance = attendancePeriod === 'day'
+              ? summaryList.filter((t: any) => t.hasTodayClass && t.totalRecords === 0)
+              : [];
+
             if (summaryList.length === 0) {
               return (
                 <div className="text-center py-8 text-muted-foreground">
                   <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>O'qituvchilar topilmadi</p>
+                  <p>Ma'lumot topilmadi</p>
                 </div>
               );
             }
+
             return (
-              <div className="space-y-3">
-                {summaryList.map((t: any) => (
-                  <div key={t.teacherId} className="rounded-xl border bg-card overflow-hidden" data-testid={`teacher-attendance-${t.teacherId}`}>
-                    <div className="flex items-center justify-between p-3 hover:bg-muted/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                          t.hasTodayClass ? 'bg-gradient-to-br from-indigo-500 to-purple-500' : 'bg-gray-400'
-                        }`}>
-                          {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">{t.teacherName}</p>
-                            {t.hasTodayClass && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700">Bugun darsi bor</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                            <span>{t.groupCount} guruh</span>
-                            <span>•</span>
-                            <span>{t.daysWorked} kun</span>
-                            {t.todayGroups?.length > 0 && (
-                              <>
-                                <span>•</span>
-                                <span>{t.todayGroups.map((g: any) => `${g.time}${g.room ? ` (${g.room})` : ''}`).join(', ')}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 text-sm">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          <span className="font-semibold text-emerald-600">{t.present}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm">
-                          <XCircle className="h-4 w-4 text-red-500" />
-                          <span className="font-semibold text-red-600">{t.absent}</span>
-                        </div>
-                        <div className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          t.totalRecords === 0 ? 'bg-gray-100 text-gray-500' :
-                          t.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                          t.attendanceRate >= 50 ? 'bg-amber-100 text-amber-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {t.totalRecords === 0 ? 'Yo\'q' : `${t.attendanceRate}%`}
-                        </div>
-                      </div>
-                    </div>
-                    {t.groupDetails?.length > 0 && t.totalRecords > 0 && (
-                      <div className="border-t px-3 py-2 bg-muted/20">
-                        <div className="flex flex-wrap gap-2">
-                          {t.groupDetails.filter((g: any) => g.total > 0).map((g: any) => (
-                            <div key={g.id} className="flex items-center gap-1.5 text-xs bg-background rounded-lg px-2 py-1 border">
-                              <span className="font-medium">{g.name}</span>
-                              <span className="text-emerald-600">✓{g.present}</span>
-                              <span className="text-red-500">✗{g.absent}</span>
+              <div className="space-y-4">
+                {withClass.length > 0 && (
+                  <div className="space-y-2">
+                    {withClass.map((t: any) => (
+                      <div key={t.teacherId} className="rounded-xl border overflow-hidden" data-testid={`teacher-attendance-${t.teacherId}`}>
+                        <div className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold ${
+                              t.totalRecords > 0 ? 'bg-gradient-to-br from-emerald-500 to-teal-500' :
+                              t.hasTodayClass ? 'bg-gradient-to-br from-amber-500 to-orange-500' : 'bg-gray-400'
+                            }`}>
+                              {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                             </div>
-                          ))}
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm truncate">{t.teacherName}</p>
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+                                {t.groupDetails?.map((g: any, i: number) => (
+                                  <span key={g.id} className="inline-flex items-center gap-1">
+                                    {i > 0 && <span className="text-muted-foreground/50">|</span>}
+                                    <span className="font-medium">{g.name}</span>
+                                    <span className="text-muted-foreground/70">{g.time}</span>
+                                    {g.total > 0 && (
+                                      <span className="inline-flex items-center gap-0.5">
+                                        <span className="text-emerald-600">✓{g.present}</span>
+                                        <span className="text-red-500">✗{g.absent}</span>
+                                      </span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            {t.totalRecords > 0 ? (
+                              <>
+                                <span className="text-xs font-semibold text-emerald-600">✓{t.present}</span>
+                                <span className="text-xs font-semibold text-red-500">✗{t.absent}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                  t.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                                  t.attendanceRate >= 50 ? 'bg-amber-100 text-amber-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>{t.attendanceRate}%</span>
+                              </>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Olinmagan</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                )}
+
+                {noAttendance.length > 0 && attendancePeriod === 'day' && (
+                  <div className="mt-3 pt-3 border-t">
+                    <p className="text-xs font-semibold text-red-600 mb-2 flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Davomat olmagan o'qituvchilar ({noAttendance.length})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {noAttendance.map((t: any) => (
+                        <div key={t.teacherId} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 border border-red-100 text-xs">
+                          <div className="w-6 h-6 rounded-full bg-red-200 flex items-center justify-center text-red-700 text-[10px] font-bold">
+                            {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                          </div>
+                          <div>
+                            <span className="font-medium text-red-700">{t.teacherName}</span>
+                            {t.todayGroups?.length > 0 && (
+                              <span className="text-red-500 ml-1">
+                                ({t.todayGroups.map((g: any) => g.time).join(', ')})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {withClass.length === 0 && (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Bu {attendancePeriod === 'day' ? 'kunda' : attendancePeriod === 'week' ? 'haftada' : 'oyda'} darslar yo'q</p>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -593,43 +590,6 @@ export default function Dashboard() {
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="card-modern animate-slide-up" style={{ animationDelay: '400ms' }}>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <BookOpen className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <CardTitle className="text-base font-semibold">Bugungi darslar</CardTitle>
-                <p className="text-sm text-muted-foreground">{todayClasses.length} ta dars</p>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {todayClasses.length > 0 ? todayClasses.map((cls: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                <div>
-                  <p className="font-medium">{cls.name}</p>
-                  <p className="text-xs text-muted-foreground">{cls.time}</p>
-                  {cls.teacherName && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{cls.teacherName}</p>
-                  )}
-                </div>
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  cls.status === 'done' ? 'bg-emerald-500/10 text-emerald-500' :
-                  cls.status === 'now' ? 'bg-blue-500/10 text-blue-500' :
-                  'bg-amber-500/10 text-amber-500'
-                }`}>
-                  {cls.status === 'done' ? 'Tugadi' : cls.status === 'now' ? 'Hozir' : 'Kutilmoqda'}
-                </span>
-              </div>
-            )) : (
-              <div className="text-center py-8 text-muted-foreground">
-                Bugun darslar yo'q
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         <Card className="card-modern animate-slide-up" style={{ animationDelay: '500ms' }}>
           <CardHeader className="pb-3">
