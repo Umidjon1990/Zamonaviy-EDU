@@ -174,7 +174,7 @@ export function useCreateGroup() {
 export function useUpdateGroup() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: any) => apiCall(`/groups/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiCall(`/groups/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["groups"] }),
   });
 }
