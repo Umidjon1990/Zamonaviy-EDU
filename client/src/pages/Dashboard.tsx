@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStudents, usePayments, useGroups, useLeads, useTeachers } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
-import { Users, GraduationCap, Wallet, TrendingUp, BookOpen, Clock, UserPlus, ArrowUpRight, ArrowDownRight, Sparkles, CalendarDays, Target } from "lucide-react";
+import { Users, GraduationCap, Wallet, TrendingUp, BookOpen, Clock, UserPlus, ArrowUpRight, ArrowDownRight, Sparkles, CalendarDays, Target, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
@@ -53,6 +53,14 @@ export default function Dashboard() {
     queryKey: ["dashboard-attendance", selectedMonth, selectedYear],
     queryFn: async () => {
       const res = await fetch(`/api/attendance?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
+      return res.json();
+    },
+  });
+
+  const { data: teacherAttendanceSummary } = useQuery({
+    queryKey: ["teacher-attendance-summary", selectedMonth, selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/attendance/teacher-summary?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
       return res.json();
     },
   });
@@ -419,6 +427,79 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* O'qituvchilar kesimida davomat */}
+      <Card className="card-modern animate-slide-up" style={{ animationDelay: '350ms' }}>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-500/10">
+              <CalendarDays className="h-5 w-5 text-indigo-500" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">O'qituvchilar davomati</CardTitle>
+              <p className="text-sm text-muted-foreground">{monthNames.find(m => m.value === selectedMonth)?.label} {selectedYear} — kim davomat olgan?</p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const summaryList = Array.isArray(teacherAttendanceSummary) ? teacherAttendanceSummary : [];
+            if (summaryList.length === 0) {
+              return (
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>O'qituvchilar topilmadi</p>
+                </div>
+              );
+            }
+            return (
+              <div className="space-y-3">
+                {summaryList.map((t: any) => (
+                  <div key={t.teacherId} className="flex items-center justify-between p-3 rounded-xl bg-muted/40 hover:bg-muted/60 transition-colors" data-testid={`teacher-attendance-${t.teacherId}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+                        {t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{t.teacherName}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{t.groupCount} guruh</span>
+                          <span>•</span>
+                          <span>{t.daysWorked} kun ishladi</span>
+                          {t.lastAttendanceDate && (
+                            <>
+                              <span>•</span>
+                              <span>Oxirgi: {new Date(t.lastAttendanceDate).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        <span className="font-semibold text-emerald-600">{t.present}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-sm">
+                        <XCircle className="h-4 w-4 text-red-500" />
+                        <span className="font-semibold text-red-600">{t.absent}</span>
+                      </div>
+                      <div className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        t.totalRecords === 0 ? 'bg-gray-100 text-gray-500' :
+                        t.attendanceRate >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                        t.attendanceRate >= 50 ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {t.totalRecords === 0 ? 'Yo\'q' : `${t.attendanceRate}%`}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="card-modern animate-slide-up" style={{ animationDelay: '400ms' }}>

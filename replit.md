@@ -221,3 +221,10 @@ Preferred communication style: Simple, everyday language.
 - Groups page cards show real student count in capacity bar (was hardcoded to 0)
 - Groups page cards show teacher name with Users icon
 - Progress bar fills proportionally based on studentCount / maxStudents
+
+### Dashboard Teacher Attendance Summary (March 2026)
+- New `GET /api/attendance/teacher-summary?month=&year=` endpoint returns per-teacher attendance stats
+- Dashboard shows "O'qituvchilar davomati" section with each teacher's attendance data
+- Per teacher: name, group count, days worked, present/absent counts, attendance rate %, last attendance date
+- Color-coded badges: green (>=80%), amber (>=50%), red (<50%), gray (no records)
+- Attendance pie chart subtitle now shows selected month name + year

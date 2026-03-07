@@ -1318,6 +1318,51 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/attendance/teacher-summary", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const month = parseInt(req.query.month as string) || (new Date().getMonth() + 1);
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+
+      const teachers = await storage.getTeachers(tenantId);
+      const allGroups = await storage.getGroups(tenantId);
+      const attendance = await storage.getAttendance(tenantId, undefined, undefined, month, year);
+
+      const summary = teachers.map((teacher: any) => {
+        const teacherGroups = allGroups.filter((g: any) => g.teacherId === teacher.id);
+        const teacherGroupIds = teacherGroups.map((g: any) => g.id);
+        const teacherAttendance = attendance.filter((a: any) => teacherGroupIds.includes(a.groupId));
+        const present = teacherAttendance.filter((a: any) => a.status === 'present').length;
+        const absent = teacherAttendance.filter((a: any) => a.status === 'absent').length;
+        const total = teacherAttendance.length;
+
+        const uniqueDates = [...new Set(teacherAttendance.map((a: any) => 
+          new Date(a.date).toISOString().split('T')[0]
+        ))];
+        const lastDate = uniqueDates.length > 0 
+          ? uniqueDates.sort().reverse()[0] 
+          : null;
+
+        return {
+          teacherId: teacher.id,
+          teacherName: `${teacher.firstName} ${teacher.lastName}`,
+          groupCount: teacherGroups.length,
+          totalRecords: total,
+          present,
+          absent,
+          attendanceRate: total > 0 ? Math.round((present / total) * 100) : 0,
+          daysWorked: uniqueDates.length,
+          lastAttendanceDate: lastDate,
+        };
+      });
+
+      res.json(summary);
+    } catch (error) {
+      console.error("Teacher attendance summary error:", error);
+      res.status(500).json({ error: "Failed to fetch teacher attendance summary" });
+    }
+  });
+
   app.patch("/api/attendance/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
