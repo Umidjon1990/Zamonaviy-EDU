@@ -1240,7 +1240,14 @@ export async function registerRoutes(
   app.post("/api/attendance", async (req, res) => {
     try {
       const tenantId = getTenantId(req);
-      const data = insertAttendanceSchema.parse({ ...req.body, tenantId });
+      const body = {
+        ...req.body,
+        tenantId,
+        studentId: typeof req.body.studentId === 'string' ? parseInt(req.body.studentId) : req.body.studentId,
+        groupId: typeof req.body.groupId === 'string' ? parseInt(req.body.groupId) : req.body.groupId,
+        date: req.body.date ? new Date(req.body.date) : undefined,
+      };
+      const data = insertAttendanceSchema.parse(body);
       
       // Check if attendance record already exists for this student/group/date
       const existingRecords = await storage.getAttendance(tenantId, data.groupId, new Date(data.date));
@@ -1751,7 +1758,15 @@ export async function registerRoutes(
   app.post("/api/grades", async (req, res) => {
     try {
       const tenantId = getTenantId(req);
-      const data = insertGradeSchema.parse({ ...req.body, tenantId });
+      const gradeBody = {
+        ...req.body,
+        tenantId,
+        studentId: typeof req.body.studentId === 'string' ? parseInt(req.body.studentId) : req.body.studentId,
+        groupId: typeof req.body.groupId === 'string' ? parseInt(req.body.groupId) : req.body.groupId,
+        grade: typeof req.body.grade === 'string' ? parseInt(req.body.grade) : req.body.grade,
+        date: req.body.date ? new Date(req.body.date) : undefined,
+      };
+      const data = insertGradeSchema.parse(gradeBody);
       
       // Check if grade record already exists for this student/group/date
       const existingRecords = await storage.getGrades(tenantId, data.groupId, data.studentId, new Date(data.date));
