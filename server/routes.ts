@@ -1333,21 +1333,21 @@ export async function registerRoutes(
 
       let startDate: Date;
       let endDate: Date;
-      const now = new Date();
+      const nowUz = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }));
 
       if (period === 'day') {
-        const d = dateStr ? new Date(dateStr) : now;
+        const d = dateStr ? new Date(dateStr + 'T12:00:00') : nowUz;
         startDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
         endDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
       } else if (period === 'week') {
-        const d = dateStr ? new Date(dateStr) : now;
+        const d = dateStr ? new Date(dateStr + 'T12:00:00') : nowUz;
         const dayOfWeek = d.getDay();
         const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
         startDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + mondayOffset);
         endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 6, 23, 59, 59, 999);
       } else {
-        const month = parseInt(req.query.month as string) || (now.getMonth() + 1);
-        const year = parseInt(req.query.year as string) || now.getFullYear();
+        const month = parseInt(req.query.month as string) || (nowUz.getMonth() + 1);
+        const year = parseInt(req.query.year as string) || nowUz.getFullYear();
         startDate = new Date(year, month - 1, 1);
         endDate = new Date(year, month, 0, 23, 59, 59, 999);
       }
@@ -1361,7 +1361,7 @@ export async function registerRoutes(
       });
 
       const dayNamesMap: Record<string, string> = { 'Monday': 'Dushanba', 'Tuesday': 'Seshanba', 'Wednesday': 'Chorshanba', 'Thursday': 'Payshanba', 'Friday': 'Juma', 'Saturday': 'Shanba', 'Sunday': 'Yakshanba' };
-      const todayDayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+      const todayDayName = nowUz.toLocaleDateString('en-US', { weekday: 'long' });
       const todayUz = dayNamesMap[todayDayName] || todayDayName;
 
       const selectedDayName = period === 'day'
@@ -1446,6 +1446,13 @@ export async function registerRoutes(
           };
         });
 
+        const currentMinutes = nowUz.getHours() * 60 + nowUz.getMinutes();
+        const classStarted = period === 'day' ? relevantGroups.some((g: any) => {
+          const time = g.time || '09:00';
+          const [h, m] = time.split(':').map(Number);
+          return currentMinutes >= ((h || 9) * 60 + (m || 0));
+        }) : true;
+
         return {
           teacherId: teacher.id,
           teacherName: `${teacher.firstName} ${teacher.lastName}`,
@@ -1457,6 +1464,7 @@ export async function registerRoutes(
           daysWorked: uniqueDates.length,
           lastAttendanceDate: lastDate,
           hasTodayClass: hasClassInPeriod,
+          classStarted,
           todayGroups: periodGroups,
           groupDetails,
         };

@@ -485,7 +485,7 @@ export default function Dashboard() {
               ? summaryList.filter((t: any) => t.hasTodayClass || t.totalRecords > 0)
               : summaryList.filter((t: any) => t.totalRecords > 0 || t.hasTodayClass);
             const noAttendance = attendancePeriod === 'day'
-              ? summaryList.filter((t: any) => t.hasTodayClass && t.totalRecords === 0)
+              ? summaryList.filter((t: any) => t.hasTodayClass && t.classStarted && t.totalRecords === 0)
               : [];
 
             if (summaryList.length === 0) {
@@ -541,6 +541,8 @@ export default function Dashboard() {
                                   'bg-red-100 text-red-700'
                                 }`}>{t.attendanceRate}%</span>
                               </>
+                            ) : t.classStarted === false ? (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Kutilmoqda</span>
                             ) : (
                               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Olinmagan</span>
                             )}
