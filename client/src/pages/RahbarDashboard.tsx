@@ -137,7 +137,8 @@ export default function RahbarDashboard() {
     }
   };
 
-  const toBeSubmitted = Math.max(0, monthlyIncome - (cashStats?.totalAccepted || 0));
+  const monthlyExpenses = dashboardData?.monthlyExpenses || 0;
+  const toBeSubmitted = Math.max(0, monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50">
@@ -202,7 +203,7 @@ export default function RahbarDashboard() {
               <p className="text-2xl font-bold text-red-600" data-testid="text-rahbar-remaining">
                 {toBeSubmitted.toLocaleString()} UZS
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Umumiy - Tasdiqlangan</p>
+              <p className="text-xs text-muted-foreground mt-1">Tushum - Xarajat - Tasdiqlangan</p>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-orange-500">

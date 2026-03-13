@@ -1027,9 +1027,9 @@ Zamonaviy-Edu
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground mb-1">Topshirilishi kerak</p>
                 <p className="text-xl font-bold text-orange-600" data-testid="text-kassa-remaining">
-                  {(monthlyIncome - (cashStats?.totalAccepted || 0)).toLocaleString()} UZS
+                  {Math.max(0, monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0)).toLocaleString()} UZS
                 </p>
-                <p className="text-xs text-muted-foreground">Umumiy - Tasdiqlangan</p>
+                <p className="text-xs text-muted-foreground">Tushum - Xarajat - Tasdiqlangan</p>
               </CardContent>
             </Card>
             <Card className="card-modern border-l-4 border-l-yellow-500">
