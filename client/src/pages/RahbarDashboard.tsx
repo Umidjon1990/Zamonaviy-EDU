@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  ShieldCheck, LogOut, HandCoins, Clock, ThumbsUp, ThumbsDown, Banknote, CheckCircle2, XCircle
+  ShieldCheck, LogOut, HandCoins, Clock, ThumbsUp, ThumbsDown, Banknote, CheckCircle2, XCircle, Wallet
 } from "lucide-react";
 
 const months = [
@@ -71,6 +71,15 @@ export default function RahbarDashboard() {
     queryFn: async () => {
       const res = await fetch(`/api/finance/dashboard?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
       if (!res.ok) throw new Error("Moliya ma'lumotlarini olishda xatolik");
+      return res.json();
+    },
+  });
+
+  const { data: expensesData } = useQuery({
+    queryKey: ["expenses", selectedMonth, selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/expenses?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
+      if (!res.ok) return [];
       return res.json();
     },
   });
@@ -244,6 +253,51 @@ export default function RahbarDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {monthlyExpenses > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Wallet className="w-4 h-4 text-red-500" />
+                <h3 className="font-semibold text-sm">Oylik xarajatlar ro'yxati</h3>
+                <Badge variant="secondary" className="ml-auto">{(expensesData || []).length} ta</Badge>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sana</TableHead>
+                      <TableHead>Nomi</TableHead>
+                      <TableHead>Kategoriya</TableHead>
+                      <TableHead className="text-right">Summa</TableHead>
+                      <TableHead>Izoh</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(expensesData || []).map((e: any) => (
+                      <TableRow key={e.id}>
+                        <TableCell className="whitespace-nowrap text-sm">{new Date(e.date).toLocaleDateString("uz-UZ")}</TableCell>
+                        <TableCell className="font-medium text-sm">{e.title}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-xs">
+                            {e.category === "rent" ? "Ijara" : e.category === "salary" ? "O'qituvchi oyligi" : e.category === "staff_salary" ? "Xodim oyligi" : e.category === "supplies" ? "Jihozlar" : e.category === "utilities" ? "Kommunal" : e.category === "marketing" ? "Reklama" : "Boshqa"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-red-600 text-sm">{e.amount.toLocaleString()} UZS</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{e.notes || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell colSpan={3}>Jami xarajat</TableCell>
+                      <TableCell className="text-right text-red-600">{monthlyExpenses.toLocaleString()} UZS</TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex gap-2 items-center">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
