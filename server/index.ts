@@ -29,6 +29,8 @@ async function fixDatabaseSchema() {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT;`).catch(() => {});
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT[];`).catch(() => {});
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;`).catch(() => {});
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS salary_amount INTEGER DEFAULT 0;`).catch(() => {});
+    await client.query(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS staff_id TEXT;`).catch(() => {});
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS teacher_id TEXT;`).catch(() => {});
 
     // Ensure telegram_chat_id on students table

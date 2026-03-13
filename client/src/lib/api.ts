@@ -317,6 +317,38 @@ export function useDeleteTeacher() {
   });
 }
 
+// ===== STAFF (Xodimlar) =====
+export function useStaff() {
+  return useQuery({
+    queryKey: ["staff"],
+    queryFn: () => apiCall("/staff"),
+  });
+}
+
+export function useCreateStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: any) => apiCall("/staff", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useUpdateStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: any) => apiCall(`/staff/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
+export function useDeleteStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiCall(`/staff/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["staff"] }),
+  });
+}
+
 // ===== STUDENT GROUPS =====
 export function useAddStudentToGroup() {
   const queryClient = useQueryClient();

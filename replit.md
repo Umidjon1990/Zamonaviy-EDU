@@ -85,3 +85,11 @@ The system manages entities such as Tenants, Users (with roles), Leads, Students
 - **Admin UI**: Moliya sahifasida "Kassa" tab — faqat pul topshirish formasi va ro'yxat (qabul/rad tugmalari yo'q)
 - **Rahbar UI**: `/rahbar` sahifasi — alohida kabinet: kassa tasdiqlash, rad etish, statistika kartalari (Umumiy yig'ilgan, Kutilayotgan, Tasdiqlangan)
 - **Pages**: `client/src/pages/RahbarLogin.tsx`, `client/src/pages/RahbarDashboard.tsx`
+
+### Staff Management (Xodimlar)
+- **Role**: `staff` — login huquqi yo'q, faqat ma'lumot saqlash uchun
+- **Fields**: firstName, lastName, phone, salaryAmount (oylik miqdori so'mda)
+- **API**: `/api/staff` (GET, POST, PATCH, DELETE) — faqat `markaz_admin` yaratishi/o'zgartirishi mumkin
+- **UI**: Sozlamalar sahifasida "Xodimlar" bo'limi — qo'shish, tahrirlash, o'chirish
+- **Expenses Integration**: Xarajat kategoriyasida "Xodim oyligi" (staff_salary) — xodim tanlanadi, summa avtomatik to'ldiriladi
+- **Kassa Formula**: Topshirilishi kerak = Tushum - Xarajatlar - Tasdiqlangan (xodim oyligi ham xarajat sifatida hisoblanadi)

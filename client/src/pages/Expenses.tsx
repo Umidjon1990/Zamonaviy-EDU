@@ -7,14 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense, useTeachers } from "@/lib/api";
+import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense, useTeachers, useStaff } from "@/lib/api";
 import { Plus, Pencil, Trash2, Wallet, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
 const categories = [
   { value: "rent", label: "Ijara" },
-  { value: "salary", label: "Oylik maosh" },
+  { value: "salary", label: "O'qituvchi oyligi" },
+  { value: "staff_salary", label: "Xodim oyligi" },
   { value: "supplies", label: "Jihozlar" },
   { value: "utilities", label: "Kommunal" },
   { value: "marketing", label: "Reklama" },
@@ -24,6 +25,7 @@ const categories = [
 const categoryColors: Record<string, string> = {
   rent: "bg-blue-100 text-blue-800",
   salary: "bg-green-100 text-green-800",
+  staff_salary: "bg-teal-100 text-teal-800",
   supplies: "bg-orange-100 text-orange-800",
   utilities: "bg-purple-100 text-purple-800",
   marketing: "bg-pink-100 text-pink-800",
@@ -53,15 +55,26 @@ export default function Expenses() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const { data: expenses, isLoading } = useExpenses(selectedMonth, selectedYear);
   const { data: teachers } = useTeachers();
+  const { data: staffData } = useStaff();
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
   const { toast } = useToast();
 
   const teachersList = Array.isArray(teachers) ? teachers : [];
+  const staffList = Array.isArray(staffData) ? staffData : [];
   const getTeacherName = (teacherId: string) => {
     const teacher = teachersList.find((t: any) => t.id === teacherId);
     return teacher ? `${teacher.firstName} ${teacher.lastName}` : "";
+  };
+  const getStaffName = (staffId: string) => {
+    const staff = staffList.find((s: any) => s.id === staffId);
+    return staff ? `${staff.firstName} ${staff.lastName}` : "";
+  };
+  const getPersonName = (expense: any) => {
+    if (expense.category === "salary" && expense.teacherId) return getTeacherName(expense.teacherId);
+    if (expense.category === "staff_salary" && expense.staffId) return getStaffName(expense.staffId);
+    return "-";
   };
 
   const [isOpen, setIsOpen] = useState(false);
@@ -72,6 +85,7 @@ export default function Expenses() {
     amount: 0,
     category: "other",
     teacherId: "" as string,
+    staffId: "" as string,
     notes: "",
     date: new Date().toISOString().split("T")[0],
   });
@@ -89,7 +103,7 @@ export default function Expenses() {
   }, {});
 
   const resetForm = () => {
-    setFormData({ title: "", amount: 0, category: "other", teacherId: "", notes: "", date: new Date().toISOString().split("T")[0] });
+    setFormData({ title: "", amount: 0, category: "other", teacherId: "", staffId: "", notes: "", date: new Date().toISOString().split("T")[0] });
     setEditExpense(null);
   };
 
@@ -99,12 +113,17 @@ export default function Expenses() {
       return;
     }
     if (formData.category === "salary" && !formData.teacherId) {
-      toast({ title: "Xatolik", description: "Oylik maosh uchun o'qituvchini tanlang", variant: "destructive" });
+      toast({ title: "Xatolik", description: "O'qituvchi oyligiga o'qituvchini tanlang", variant: "destructive" });
+      return;
+    }
+    if (formData.category === "staff_salary" && !formData.staffId) {
+      toast({ title: "Xatolik", description: "Xodim oyligiga xodimni tanlang", variant: "destructive" });
       return;
     }
     const submitData = {
       ...formData,
       teacherId: formData.category === "salary" ? formData.teacherId : null,
+      staffId: formData.category === "staff_salary" ? formData.staffId : null,
     };
     try {
       if (editExpense) {
@@ -128,6 +147,7 @@ export default function Expenses() {
       amount: expense.amount,
       category: expense.category,
       teacherId: expense.teacherId || "",
+      staffId: expense.staffId || "",
       notes: expense.notes || "",
       date: new Date(expense.date).toISOString().split("T")[0],
     });
@@ -227,6 +247,24 @@ export default function Expenses() {
                     </Select>
                   </div>
                 )}
+                {formData.category === "staff_salary" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="staffId">Xodim</Label>
+                    <Select value={formData.staffId} onValueChange={(v) => {
+                      const selectedStaff = staffList.find((s: any) => s.id === v);
+                      setFormData({ ...formData, staffId: v, amount: selectedStaff?.salaryAmount || formData.amount });
+                    }}>
+                      <SelectTrigger data-testid="select-expense-staff">
+                        <SelectValue placeholder="Xodimni tanlang" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {staffList.map((s: any) => (
+                          <SelectItem key={s.id} value={s.id}>{s.firstName} {s.lastName} — {(s.salaryAmount || 0).toLocaleString()} so'm</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid gap-2">
                   <Label htmlFor="date">Sana</Label>
                   <Input id="date" data-testid="input-expense-date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
@@ -292,7 +330,7 @@ export default function Expenses() {
                     <TableHead>Sana</TableHead>
                     <TableHead>Nomi</TableHead>
                     <TableHead>Kategoriya</TableHead>
-                    <TableHead>O'qituvchi</TableHead>
+                    <TableHead>Xodim/O'qituvchi</TableHead>
                     <TableHead className="text-right">Summa</TableHead>
                     <TableHead>Izoh</TableHead>
                     <TableHead className="text-right">Amallar</TableHead>
@@ -308,8 +346,8 @@ export default function Expenses() {
                           {getCategoryLabel(expense.category)}
                         </Badge>
                       </TableCell>
-                      <TableCell data-testid={`text-expense-teacher-${expense.id}`}>
-                        {expense.category === "salary" && expense.teacherId ? getTeacherName(expense.teacherId) : "-"}
+                      <TableCell data-testid={`text-expense-person-${expense.id}`}>
+                        {getPersonName(expense)}
                       </TableCell>
                       <TableCell className="text-right font-medium text-red-600">{expense.amount.toLocaleString()} so'm</TableCell>
                       <TableCell className="max-w-[200px] truncate">{expense.notes || "-"}</TableCell>

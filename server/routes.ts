@@ -1884,9 +1884,9 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       const tenantId = getTenantId(req);
-      const { title, amount, category, teacherId, notes, date } = req.body;
+      const { title, amount, category, teacherId, staffId, notes, date } = req.body;
       const parsedDate = date && typeof date === "string" ? new Date(date) : date;
-      const updated = await storage.updateExpense(id, tenantId, { title, amount, category, teacherId: teacherId || null, notes, date: parsedDate });
+      const updated = await storage.updateExpense(id, tenantId, { title, amount, category, teacherId: teacherId || null, staffId: staffId || null, notes, date: parsedDate });
       if (!updated) return res.status(404).json({ error: "Expense not found" });
       res.json(updated);
     } catch (error) {
@@ -2797,6 +2797,122 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Manager delete error:", error);
       res.status(500).json({ error: "Rahbarni o'chirishda xatolik" });
+    }
+  });
+
+  // ===== STAFF (Xodimlar) =====
+  app.get("/api/staff", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const staffList = await storage.getStaff(tenantId);
+      res.json(staffList.map(s => ({
+        id: s.id,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        phone: s.phone,
+        salaryAmount: s.salaryAmount || 0,
+        createdAt: s.createdAt,
+      })));
+    } catch (error) {
+      console.error("Staff fetch error:", error);
+      res.status(500).json({ error: "Xodimlar ro'yxatini olishda xatolik" });
+    }
+  });
+
+  app.post("/api/staff", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const role = getUserRole(req);
+      if (role !== "markaz_admin") {
+        return res.status(403).json({ error: "Faqat admin xodim qo'shishi mumkin" });
+      }
+
+      const { firstName, lastName, phone, salaryAmount } = req.body;
+      if (!firstName || !lastName || !phone) {
+        return res.status(400).json({ error: "Ism, familiya va telefon raqamni kiriting" });
+      }
+
+      const staff = await storage.createStaff({
+        tenantId,
+        firstName,
+        lastName,
+        email: null,
+        password: "staff-no-login",
+        phone: phone.replace(/\D/g, ''),
+        role: "staff",
+        salaryPercent: 0,
+        salaryAmount: salaryAmount || 0,
+      });
+
+      res.status(201).json({
+        id: staff.id,
+        firstName: staff.firstName,
+        lastName: staff.lastName,
+        phone: staff.phone,
+        salaryAmount: staff.salaryAmount || 0,
+        createdAt: staff.createdAt,
+      });
+    } catch (error) {
+      if (error instanceof DuplicatePhoneError) {
+        return res.status(409).json({ error: error.message });
+      }
+      console.error("Staff creation error:", error);
+      res.status(500).json({ error: "Xodim qo'shishda xatolik" });
+    }
+  });
+
+  app.patch("/api/staff/:id", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const role = getUserRole(req);
+      if (role !== "markaz_admin") {
+        return res.status(403).json({ error: "Faqat admin xodimni tahrirlashi mumkin" });
+      }
+
+      const staffId = req.params.id;
+      const { firstName, lastName, phone, salaryAmount } = req.body;
+      const updated = await storage.updateStaff(staffId, tenantId, {
+        firstName,
+        lastName,
+        phone: phone ? phone.replace(/\D/g, '') : undefined,
+        salaryAmount: salaryAmount || 0,
+      });
+
+      if (!updated) {
+        return res.status(404).json({ error: "Xodim topilmadi" });
+      }
+
+      res.json({
+        id: updated.id,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        phone: updated.phone,
+        salaryAmount: updated.salaryAmount || 0,
+        createdAt: updated.createdAt,
+      });
+    } catch (error) {
+      console.error("Staff update error:", error);
+      res.status(500).json({ error: "Xodimni yangilashda xatolik" });
+    }
+  });
+
+  app.delete("/api/staff/:id", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const role = getUserRole(req);
+      if (role !== "markaz_admin") {
+        return res.status(403).json({ error: "Faqat admin xodimni o'chirishi mumkin" });
+      }
+
+      const staffId = req.params.id;
+      const deleted = await storage.deleteStaff(staffId, tenantId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Xodim topilmadi" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Staff delete error:", error);
+      res.status(500).json({ error: "Xodimni o'chirishda xatolik" });
     }
   });
 

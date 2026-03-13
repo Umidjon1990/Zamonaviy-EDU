@@ -101,6 +101,10 @@ export interface IStorage {
   updateTeacher(id: string, tenantId: number, teacher: Partial<InsertUser>): Promise<User | undefined>;
   getAdmins(tenantId: number): Promise<User[]>;
   getManagers(tenantId: number): Promise<User[]>;
+  getStaff(tenantId: number): Promise<User[]>;
+  createStaff(staff: InsertUser): Promise<User>;
+  updateStaff(id: string, tenantId: number, data: Partial<InsertUser>): Promise<User | undefined>;
+  deleteStaff(id: string, tenantId: number): Promise<boolean>;
   
   // Leads
   getLeads(tenantId: number): Promise<Lead[]>;
@@ -348,6 +352,25 @@ export class DatabaseStorage implements IStorage {
 
   async getManagers(tenantId: number): Promise<User[]> {
     return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'manager')));
+  }
+
+  async getStaff(tenantId: number): Promise<User[]> {
+    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'staff')));
+  }
+
+  async createStaff(staff: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(staff).returning();
+    return result[0];
+  }
+
+  async updateStaff(id: string, tenantId: number, data: Partial<InsertUser>): Promise<User | undefined> {
+    const result = await db.update(users).set(data).where(and(eq(users.id, id), eq(users.tenantId, tenantId), eq(users.role, 'staff'))).returning();
+    return result[0];
+  }
+
+  async deleteStaff(id: string, tenantId: number): Promise<boolean> {
+    const result = await db.delete(users).where(and(eq(users.id, id), eq(users.tenantId, tenantId), eq(users.role, 'staff'))).returning();
+    return result.length > 0;
   }
 
   async getTeacher(id: string, tenantId: number): Promise<User | undefined> {

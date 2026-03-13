@@ -80,10 +80,11 @@ export const users = pgTable("users", {
   plainPassword: text("plain_password"),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
-  role: text("role").notNull(), // super_admin, markaz_admin, teacher, manager, student, parent
+  role: text("role").notNull(), // super_admin, markaz_admin, teacher, manager, staff, student, parent
   phone: text("phone"),
   subjectId: integer("subject_id"), // O'qituvchi o'qitadigan fan
   salaryPercent: integer("salary_percent").default(0), // O'qituvchi oylik foizi (masalan 30%)
+  salaryAmount: integer("salary_amount").default(0), // Xodim oylik miqdori (so'mda)
   permissions: text("permissions").array(), // O'qituvchi huquqlari: accept_payment, move_student, edit_group, remove_student, add_student
   telegramChatId: text("telegram_chat_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -262,8 +263,9 @@ export const expenses = pgTable("expenses", {
   tenantId: integer("tenant_id").notNull(),
   title: text("title").notNull(),
   amount: integer("amount").notNull(),
-  category: text("category").notNull(), // rent, salary, supplies, utilities, marketing, other
+  category: text("category").notNull(), // rent, salary, supplies, utilities, marketing, other, staff_salary
   teacherId: varchar("teacher_id"),
+  staffId: varchar("staff_id"),
   notes: text("notes"),
   date: timestamp("date").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

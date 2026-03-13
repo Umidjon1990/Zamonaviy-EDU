@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { translations } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, AlertCircle, CheckCircle2, Image, ShieldCheck, Plus, Trash2, Eye, EyeOff, Copy } from "lucide-react";
+import { MessageSquare, AlertCircle, CheckCircle2, Image, ShieldCheck, Plus, Trash2, Eye, EyeOff, Copy, Users, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { convertGoogleDriveUrl } from "@/lib/utils";
@@ -40,6 +40,10 @@ export default function Settings() {
   const [rahbarDialogOpen, setRahbarDialogOpen] = useState(false);
   const [rahbarForm, setRahbarForm] = useState({ firstName: "", lastName: "", phone: "", password: "" });
   const [createdRahbarPassword, setCreatedRahbarPassword] = useState<string | null>(null);
+
+  const [staffDialogOpen, setStaffDialogOpen] = useState(false);
+  const [editStaffId, setEditStaffId] = useState<string | null>(null);
+  const [staffForm, setStaffForm] = useState({ firstName: "", lastName: "", phone: "", salaryAmount: 0 });
 
   const { data: brandingData, isLoading: isBrandingLoading } = useQuery({
     queryKey: ["branding"],
@@ -153,6 +157,87 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["managers"] });
       toast({ title: "O'chirildi", description: "Rahbar o'chirildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const { data: staffList, isLoading: staffLoading } = useQuery({
+    queryKey: ["staff"],
+    queryFn: async () => {
+      const res = await fetch("/api/staff", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const createStaffMutation = useMutation({
+    mutationFn: async (data: { firstName: string; lastName: string; phone: string; salaryAmount: number }) => {
+      const res = await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+      setStaffDialogOpen(false);
+      setStaffForm({ firstName: "", lastName: "", phone: "", salaryAmount: 0 });
+      toast({ title: "Muvaffaqiyat", description: "Xodim qo'shildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateStaffMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; firstName: string; lastName: string; phone: string; salaryAmount: number }) => {
+      const res = await fetch(`/api/staff/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+      setStaffDialogOpen(false);
+      setEditStaffId(null);
+      setStaffForm({ firstName: "", lastName: "", phone: "", salaryAmount: 0 });
+      toast({ title: "Muvaffaqiyat", description: "Xodim yangilandi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteStaffMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/staff/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+      toast({ title: "O'chirildi", description: "Xodim o'chirildi" });
     },
     onError: (err: Error) => {
       toast({ title: "Xatolik", description: err.message, variant: "destructive" });
@@ -562,6 +647,154 @@ export default function Settings() {
               <ShieldCheck className="w-12 h-12 mx-auto mb-2 opacity-20" />
               <p>Hali rahbar qo'shilmagan</p>
               <p className="text-xs mt-1">Rahbar qo'shish tugmasini bosing</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users className="w-6 h-6 text-blue-600" />
+              <div>
+                <CardTitle>Xodimlar</CardTitle>
+                <CardDescription>Admin, buxgalter va boshqa xodimlarni qo'shing. Oylik maosh belgilang.</CardDescription>
+              </div>
+            </div>
+            <Dialog open={staffDialogOpen} onOpenChange={(open) => { setStaffDialogOpen(open); if (!open) { setEditStaffId(null); setStaffForm({ firstName: "", lastName: "", phone: "", salaryAmount: 0 }); } }}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-add-staff">
+                  <Plus className="w-4 h-4 mr-2" /> Xodim qo'shish
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editStaffId ? "Xodimni tahrirlash" : "Yangi xodim qo'shish"}</DialogTitle>
+                  <DialogDescription>Xodim ma'lumotlarini kiriting</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ism</Label>
+                      <Input
+                        value={staffForm.firstName}
+                        onChange={(e) => setStaffForm({ ...staffForm, firstName: e.target.value })}
+                        placeholder="Ism"
+                        data-testid="input-staff-firstname"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Familiya</Label>
+                      <Input
+                        value={staffForm.lastName}
+                        onChange={(e) => setStaffForm({ ...staffForm, lastName: e.target.value })}
+                        placeholder="Familiya"
+                        data-testid="input-staff-lastname"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Telefon raqam</Label>
+                    <Input
+                      value={staffForm.phone}
+                      onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
+                      placeholder="+998901234567"
+                      data-testid="input-staff-phone"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Oylik miqdori (so'm)</Label>
+                    <Input
+                      type="number"
+                      value={staffForm.salaryAmount || ""}
+                      onChange={(e) => setStaffForm({ ...staffForm, salaryAmount: parseInt(e.target.value) || 0 })}
+                      placeholder="0"
+                      data-testid="input-staff-salary"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => { setStaffDialogOpen(false); setEditStaffId(null); }}>Bekor qilish</Button>
+                  <Button
+                    onClick={() => {
+                      if (!staffForm.firstName || !staffForm.lastName || !staffForm.phone) {
+                        toast({ title: "Xatolik", description: "Ism, familiya va telefon kiriting", variant: "destructive" });
+                        return;
+                      }
+                      if (editStaffId) {
+                        updateStaffMutation.mutate({ id: editStaffId, ...staffForm });
+                      } else {
+                        createStaffMutation.mutate(staffForm);
+                      }
+                    }}
+                    disabled={createStaffMutation.isPending || updateStaffMutation.isPending}
+                    data-testid="button-submit-staff"
+                  >
+                    {editStaffId ? "Yangilash" : "Qo'shish"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {staffLoading ? (
+            <p className="text-muted-foreground text-sm">Yuklanmoqda...</p>
+          ) : (staffList || []).length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ism</TableHead>
+                  <TableHead>Telefon</TableHead>
+                  <TableHead>Oylik</TableHead>
+                  <TableHead className="text-right">Amallar</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(staffList || []).map((s: any) => (
+                  <TableRow key={s.id} data-testid={`row-staff-${s.id}`}>
+                    <TableCell className="font-medium">{s.firstName} {s.lastName}</TableCell>
+                    <TableCell>{s.phone}</TableCell>
+                    <TableCell>{(s.salaryAmount || 0).toLocaleString()} so'm</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setEditStaffId(s.id);
+                            setStaffForm({ firstName: s.firstName, lastName: s.lastName, phone: s.phone || "", salaryAmount: s.salaryAmount || 0 });
+                            setStaffDialogOpen(true);
+                          }}
+                          data-testid={`button-edit-staff-${s.id}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            if (confirm("Xodimni o'chirishni xohlaysizmi?")) {
+                              deleteStaffMutation.mutate(s.id);
+                            }
+                          }}
+                          data-testid={`button-delete-staff-${s.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="w-12 h-12 mx-auto mb-2 opacity-20" />
+              <p>Hali xodim qo'shilmagan</p>
+              <p className="text-xs mt-1">Xodim qo'shish tugmasini bosing</p>
             </div>
           )}
         </CardContent>
