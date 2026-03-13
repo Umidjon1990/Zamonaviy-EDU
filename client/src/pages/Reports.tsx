@@ -1036,17 +1036,16 @@ Zamonaviy-Edu
               <CardContent className="p-4">
                 {(() => {
                   const mustSubmit = monthlyIncome - monthlyExpenses;
-                  const diff = mustSubmit - (cashStats?.totalAccepted || 0);
+                  const remaining = mustSubmit - (cashStats?.totalAccepted || 0);
                   return (
                     <>
                       <p className="text-xs text-muted-foreground mb-1">Topshirilishi kerak</p>
-                      <p className="text-xl font-bold text-orange-600" data-testid="text-kassa-remaining">
-                        {mustSubmit.toLocaleString()} UZS
+                      <p className={`text-xl font-bold ${remaining > 0 ? 'text-orange-600' : remaining < 0 ? 'text-red-600' : 'text-green-600'}`} data-testid="text-kassa-remaining">
+                        {remaining > 0 ? `${remaining.toLocaleString()} UZS` : remaining < 0 ? `${Math.abs(remaining).toLocaleString()} UZS ortiqcha` : "0 UZS"}
                       </p>
-                      <p className="text-xs text-muted-foreground">Tushum - Xarajat</p>
                       <hr className="my-2 border-dashed" />
-                      <p className={`text-sm font-bold ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                        {diff > 0 ? `${diff.toLocaleString()} UZS kam topshirilgan` : diff < 0 ? `${Math.abs(diff).toLocaleString()} UZS ortiqcha topshirilgan` : "To'liq topshirilgan"}
+                      <p className="text-[11px] text-muted-foreground">
+                        Jami: {mustSubmit.toLocaleString()} - Tasdiqlangan: {(cashStats?.totalAccepted || 0).toLocaleString()}
                       </p>
                     </>
                   );
