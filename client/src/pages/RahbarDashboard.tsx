@@ -147,7 +147,6 @@ export default function RahbarDashboard() {
   };
 
   const monthlyExpenses = dashboardData?.monthlyExpenses || 0;
-  const toBeSubmitted = monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50">
@@ -215,18 +214,29 @@ export default function RahbarDashboard() {
               <p className="text-xs text-muted-foreground mt-1">Oylik xarajat</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-red-600">
+          <Card className="border-l-4 border-l-orange-500">
             <CardContent className="p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <HandCoins className="w-5 h-5 text-red-600" />
-                <p className="text-sm text-muted-foreground">Topshirilishi kerak</p>
-              </div>
-              <p className={`text-2xl font-bold ${toBeSubmitted < 0 ? 'text-red-600' : 'text-orange-600'}`} data-testid="text-rahbar-remaining">
-                {toBeSubmitted.toLocaleString()} UZS
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {monthlyIncome.toLocaleString()} - {monthlyExpenses.toLocaleString()} - {(cashStats?.totalAccepted || 0).toLocaleString()}
-              </p>
+              {(() => {
+                const mustSubmit = monthlyIncome - monthlyExpenses;
+                const diff = mustSubmit - (cashStats?.totalAccepted || 0);
+                return (
+                  <>
+                    <div className="flex items-center gap-3 mb-2">
+                      <HandCoins className="w-5 h-5 text-orange-500" />
+                      <p className="text-sm text-muted-foreground">Topshirilishi kerak</p>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-600" data-testid="text-rahbar-remaining">
+                      {mustSubmit.toLocaleString()} UZS
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Tushum - Xarajat</p>
+                    <hr className="my-2 border-dashed" />
+                    <p className="text-xs text-muted-foreground">Farq (qoldiq)</p>
+                    <p className={`text-sm font-bold ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                      {diff.toLocaleString()} UZS
+                    </p>
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-orange-500">

@@ -1034,16 +1034,23 @@ Zamonaviy-Edu
             </Card>
             <Card className="card-modern border-l-4 border-l-orange-500">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Topshirilishi kerak</p>
                 {(() => {
-                  const remaining = monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0);
+                  const mustSubmit = monthlyIncome - monthlyExpenses;
+                  const diff = mustSubmit - (cashStats?.totalAccepted || 0);
                   return (
                     <>
-                      <p className={`text-xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-orange-600'}`} data-testid="text-kassa-remaining">
-                        {remaining.toLocaleString()} UZS
+                      <p className="text-xs text-muted-foreground mb-1">Topshirilishi kerak</p>
+                      <p className="text-xl font-bold text-orange-600" data-testid="text-kassa-remaining">
+                        {mustSubmit.toLocaleString()} UZS
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {monthlyIncome.toLocaleString()} - {monthlyExpenses.toLocaleString()} - {(cashStats?.totalAccepted || 0).toLocaleString()}
+                      <p className="text-xs text-muted-foreground">Tushum - Xarajat</p>
+                      <hr className="my-2 border-dashed" />
+                      <p className="text-xs text-muted-foreground">Farq (qoldiq)</p>
+                      <p className={`text-sm font-bold ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                        {diff.toLocaleString()} UZS
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {mustSubmit.toLocaleString()} - {(cashStats?.totalAccepted || 0).toLocaleString()}
                       </p>
                     </>
                   );
