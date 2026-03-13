@@ -138,7 +138,7 @@ export default function RahbarDashboard() {
   };
 
   const monthlyExpenses = dashboardData?.monthlyExpenses || 0;
-  const toBeSubmitted = Math.max(0, monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0));
+  const toBeSubmitted = monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50">
@@ -181,12 +181,12 @@ export default function RahbarDashboard() {
           </Select>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           <Card className="border-l-4 border-l-blue-500">
             <CardContent className="p-5">
               <div className="flex items-center gap-3 mb-2">
                 <Banknote className="w-5 h-5 text-blue-500" />
-                <p className="text-sm text-muted-foreground">Umumiy yig'im</p>
+                <p className="text-sm text-muted-foreground">Umumiy tushum</p>
               </div>
               <p className="text-2xl font-bold text-blue-600" data-testid="text-rahbar-total-income">
                 {monthlyIncome.toLocaleString()} UZS
@@ -194,16 +194,30 @@ export default function RahbarDashboard() {
               <p className="text-xs text-muted-foreground mt-1">Oylik tushum</p>
             </CardContent>
           </Card>
-          <Card className="border-l-4 border-l-red-500">
+          <Card className="border-l-4 border-l-red-400">
             <CardContent className="p-5">
               <div className="flex items-center gap-3 mb-2">
-                <HandCoins className="w-5 h-5 text-red-500" />
+                <XCircle className="w-5 h-5 text-red-400" />
+                <p className="text-sm text-muted-foreground">Xarajatlar</p>
+              </div>
+              <p className="text-2xl font-bold text-red-500" data-testid="text-rahbar-expenses">
+                {monthlyExpenses.toLocaleString()} UZS
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Oylik xarajat</p>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-red-600">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <HandCoins className="w-5 h-5 text-red-600" />
                 <p className="text-sm text-muted-foreground">Topshirilishi kerak</p>
               </div>
-              <p className="text-2xl font-bold text-red-600" data-testid="text-rahbar-remaining">
+              <p className={`text-2xl font-bold ${toBeSubmitted < 0 ? 'text-red-600' : 'text-orange-600'}`} data-testid="text-rahbar-remaining">
                 {toBeSubmitted.toLocaleString()} UZS
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Tushum - Xarajat - Tasdiqlangan</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {monthlyIncome.toLocaleString()} - {monthlyExpenses.toLocaleString()} - {(cashStats?.totalAccepted || 0).toLocaleString()}
+              </p>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-orange-500">

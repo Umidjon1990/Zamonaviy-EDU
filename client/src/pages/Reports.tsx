@@ -1013,23 +1013,41 @@ Zamonaviy-Edu
         </TabsContent>
 
         <TabsContent value="kassa" className="space-y-4 animate-slide-up">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             <Card className="card-modern border-l-4 border-l-blue-500">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Umumiy summa</p>
+                <p className="text-xs text-muted-foreground mb-1">Umumiy tushum</p>
                 <p className="text-xl font-bold text-blue-600" data-testid="text-kassa-total">
                   {monthlyIncome.toLocaleString()} UZS
                 </p>
                 <p className="text-xs text-muted-foreground">Oylik tushum</p>
               </CardContent>
             </Card>
+            <Card className="card-modern border-l-4 border-l-red-500">
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground mb-1">Xarajatlar</p>
+                <p className="text-xl font-bold text-red-600" data-testid="text-kassa-expenses">
+                  {monthlyExpenses.toLocaleString()} UZS
+                </p>
+                <p className="text-xs text-muted-foreground">Oylik xarajat</p>
+              </CardContent>
+            </Card>
             <Card className="card-modern border-l-4 border-l-orange-500">
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground mb-1">Topshirilishi kerak</p>
-                <p className="text-xl font-bold text-orange-600" data-testid="text-kassa-remaining">
-                  {Math.max(0, monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0)).toLocaleString()} UZS
-                </p>
-                <p className="text-xs text-muted-foreground">Tushum - Xarajat - Tasdiqlangan</p>
+                {(() => {
+                  const remaining = monthlyIncome - monthlyExpenses - (cashStats?.totalAccepted || 0);
+                  return (
+                    <>
+                      <p className={`text-xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-orange-600'}`} data-testid="text-kassa-remaining">
+                        {remaining.toLocaleString()} UZS
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {monthlyIncome.toLocaleString()} - {monthlyExpenses.toLocaleString()} - {(cashStats?.totalAccepted || 0).toLocaleString()}
+                      </p>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
             <Card className="card-modern border-l-4 border-l-yellow-500">
