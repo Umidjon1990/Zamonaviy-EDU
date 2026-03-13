@@ -1013,45 +1013,41 @@ Zamonaviy-Edu
         </TabsContent>
 
         <TabsContent value="kassa" className="space-y-4 animate-slide-up">
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-            <Card className="card-modern">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card className="card-modern border-l-4 border-l-blue-500">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Bugungi topshirilgan</p>
-                <p className="text-xl font-bold text-blue-600" data-testid="text-today-submitted">
-                  {(cashStats?.todaySubmitted || 0).toLocaleString()} UZS
+                <p className="text-xs text-muted-foreground mb-1">Umumiy summa</p>
+                <p className="text-xl font-bold text-blue-600" data-testid="text-kassa-total">
+                  {monthlyIncome.toLocaleString()} UZS
                 </p>
+                <p className="text-xs text-muted-foreground">Oylik tushum</p>
               </CardContent>
             </Card>
-            <Card className="card-modern">
+            <Card className="card-modern border-l-4 border-l-orange-500">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Bugungi tasdiqlangan</p>
-                <p className="text-xl font-bold text-emerald-600" data-testid="text-today-accepted">
-                  {(cashStats?.todayAccepted || 0).toLocaleString()} UZS
+                <p className="text-xs text-muted-foreground mb-1">Topshirilishi kerak</p>
+                <p className="text-xl font-bold text-orange-600" data-testid="text-kassa-remaining">
+                  {(monthlyIncome - (cashStats?.totalAccepted || 0)).toLocaleString()} UZS
                 </p>
+                <p className="text-xs text-muted-foreground">Umumiy - Tasdiqlangan</p>
               </CardContent>
             </Card>
-            <Card className="card-modern">
+            <Card className="card-modern border-l-4 border-l-yellow-500">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Kutilayotgan</p>
-                <p className="text-xl font-bold text-orange-600" data-testid="text-pending-count">
-                  {cashStats?.pendingCount || 0} ta ({(cashStats?.pendingAmount || 0).toLocaleString()} UZS)
+                <p className="text-xs text-muted-foreground mb-1">Topshirildi (kutilmoqda)</p>
+                <p className="text-xl font-bold text-yellow-600" data-testid="text-kassa-pending">
+                  {(cashStats?.pendingAmount || 0).toLocaleString()} UZS
                 </p>
+                <p className="text-xs text-muted-foreground">{cashStats?.pendingCount || 0} ta topshiriq</p>
               </CardContent>
             </Card>
-            <Card className="card-modern">
+            <Card className="card-modern border-l-4 border-l-emerald-500">
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Rad etilganlar</p>
-                <p className="text-xl font-bold text-red-600" data-testid="text-rejected-count">
-                  {cashStats?.rejectedCount || 0} ta
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="card-modern">
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">Jami tasdiqlangan</p>
-                <p className="text-xl font-bold text-emerald-700" data-testid="text-total-accepted">
+                <p className="text-xs text-muted-foreground mb-1">Tasdiqlangan</p>
+                <p className="text-xl font-bold text-emerald-600" data-testid="text-kassa-accepted">
                   {(cashStats?.totalAccepted || 0).toLocaleString()} UZS
                 </p>
+                <p className="text-xs text-muted-foreground">Rahbar tasdiqlagan</p>
               </CardContent>
             </Card>
           </div>
