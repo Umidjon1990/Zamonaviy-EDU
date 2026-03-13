@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { translations } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, AlertCircle, CheckCircle2, Image } from "lucide-react";
+import { MessageSquare, AlertCircle, CheckCircle2, Image, ShieldCheck, Plus, Trash2, Eye, EyeOff, Copy } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { convertGoogleDriveUrl } from "@/lib/utils";
 
 export default function Settings() {
@@ -34,6 +36,10 @@ export default function Settings() {
     receiptTitle: "",
     telegramChannel: "",
   });
+
+  const [rahbarDialogOpen, setRahbarDialogOpen] = useState(false);
+  const [rahbarForm, setRahbarForm] = useState({ firstName: "", lastName: "", phone: "", password: "" });
+  const [showRahbarPasswords, setShowRahbarPasswords] = useState<Record<string, boolean>>({});
 
   const { data: brandingData, isLoading: isBrandingLoading } = useQuery({
     queryKey: ["branding"],
@@ -95,6 +101,61 @@ export default function Settings() {
       const res = await fetch("/api/tenant-sms");
       if (!res.ok) return null;
       return res.json();
+    },
+  });
+
+  const { data: managers, isLoading: managersLoading } = useQuery({
+    queryKey: ["managers"],
+    queryFn: async () => {
+      const res = await fetch("/api/managers", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const createManagerMutation = useMutation({
+    mutationFn: async (data: { firstName: string; lastName: string; phone: string; password: string }) => {
+      const res = await fetch("/api/managers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["managers"] });
+      setRahbarDialogOpen(false);
+      setRahbarForm({ firstName: "", lastName: "", phone: "", password: "" });
+      toast({ title: "Muvaffaqiyat", description: "Rahbar yaratildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteManagerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/managers/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["managers"] });
+      toast({ title: "O'chirildi", description: "Rahbar o'chirildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
     },
   });
 
@@ -345,6 +406,164 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-6 h-6 text-emerald-600" />
+              <div>
+                <CardTitle>Rahbar boshqaruvi</CardTitle>
+                <CardDescription>Kassa tasdiqlash uchun rahbar yarating. Rahbar <code className="text-xs bg-muted px-1 py-0.5 rounded">/rahbar-login</code> sahifasidan kiradi.</CardDescription>
+              </div>
+            </div>
+            <Dialog open={rahbarDialogOpen} onOpenChange={setRahbarDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-add-rahbar">
+                  <Plus className="w-4 h-4 mr-2" /> Rahbar qo'shish
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Yangi rahbar yaratish</DialogTitle>
+                  <DialogDescription>Rahbar kassa topshiruvlarini tasdiqlash/rad etish uchun javobgar</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Ism</Label>
+                      <Input
+                        value={rahbarForm.firstName}
+                        onChange={(e) => setRahbarForm({ ...rahbarForm, firstName: e.target.value })}
+                        placeholder="Ism"
+                        data-testid="input-rahbar-firstname"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Familiya</Label>
+                      <Input
+                        value={rahbarForm.lastName}
+                        onChange={(e) => setRahbarForm({ ...rahbarForm, lastName: e.target.value })}
+                        placeholder="Familiya"
+                        data-testid="input-rahbar-lastname"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Telefon raqam</Label>
+                    <Input
+                      value={rahbarForm.phone}
+                      onChange={(e) => setRahbarForm({ ...rahbarForm, phone: e.target.value })}
+                      placeholder="+998901234567"
+                      data-testid="input-rahbar-phone-create"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Parol</Label>
+                    <Input
+                      value={rahbarForm.password}
+                      onChange={(e) => setRahbarForm({ ...rahbarForm, password: e.target.value })}
+                      placeholder="Parol kiriting"
+                      data-testid="input-rahbar-password-create"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setRahbarDialogOpen(false)}>Bekor qilish</Button>
+                  <Button
+                    onClick={() => {
+                      if (!rahbarForm.firstName || !rahbarForm.lastName || !rahbarForm.phone || !rahbarForm.password) {
+                        toast({ title: "Xatolik", description: "Barcha maydonlarni to'ldiring", variant: "destructive" });
+                        return;
+                      }
+                      createManagerMutation.mutate(rahbarForm);
+                    }}
+                    disabled={createManagerMutation.isPending}
+                    data-testid="button-create-rahbar-submit"
+                  >
+                    {createManagerMutation.isPending ? "Yaratilmoqda..." : "Yaratish"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {managersLoading ? (
+            <p className="text-muted-foreground text-sm">Yuklanmoqda...</p>
+          ) : (managers || []).length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ism</TableHead>
+                  <TableHead>Telefon</TableHead>
+                  <TableHead>Parol</TableHead>
+                  <TableHead>Yaratilgan</TableHead>
+                  <TableHead className="text-right">Amallar</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(managers || []).map((m: any) => (
+                  <TableRow key={m.id} data-testid={`row-manager-${m.id}`}>
+                    <TableCell className="font-medium">{m.firstName} {m.lastName}</TableCell>
+                    <TableCell>{m.phone}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">
+                          {showRahbarPasswords[m.id] ? (m.plainPassword || "***") : "********"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => setShowRahbarPasswords(prev => ({ ...prev, [m.id]: !prev[m.id] }))}
+                        >
+                          {showRahbarPasswords[m.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </Button>
+                        {m.plainPassword && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              navigator.clipboard.writeText(m.plainPassword);
+                              toast({ title: "Nusxalandi", description: "Parol nusxalandi" });
+                            }}
+                          >
+                            <Copy className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{new Date(m.createdAt).toLocaleDateString("uz-UZ")}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          if (confirm("Rahbarni o'chirishni xohlaysizmi?")) {
+                            deleteManagerMutation.mutate(m.id);
+                          }
+                        }}
+                        data-testid={`button-delete-manager-${m.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <ShieldCheck className="w-12 h-12 mx-auto mb-2 opacity-20" />
+              <p>Hali rahbar qo'shilmagan</p>
+              <p className="text-xs mt-1">Rahbar qo'shish tugmasini bosing</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

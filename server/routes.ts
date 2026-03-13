@@ -2717,6 +2717,90 @@ export async function registerRoutes(
     }
   });
 
+  // ===== RAHBAR (MANAGER) MANAGEMENT =====
+  app.get("/api/managers", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const managers = await storage.getManagers(tenantId);
+      res.json(managers.map(m => ({
+        id: m.id,
+        firstName: m.firstName,
+        lastName: m.lastName,
+        phone: m.phone,
+        plainPassword: m.plainPassword,
+        createdAt: m.createdAt,
+      })));
+    } catch (error) {
+      console.error("Managers fetch error:", error);
+      res.status(500).json({ error: "Rahbarlar ro'yxatini olishda xatolik" });
+    }
+  });
+
+  app.post("/api/managers", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const role = getUserRole(req);
+      if (role !== "markaz_admin") {
+        return res.status(403).json({ error: "Faqat admin rahbar yaratishi mumkin" });
+      }
+
+      const { firstName, lastName, phone, password } = req.body;
+      if (!firstName || !lastName || !phone || !password) {
+        return res.status(400).json({ error: "Barcha maydonlarni to'ldiring" });
+      }
+
+      const rawPassword = password;
+      const hashedPassword = await bcrypt.hash(rawPassword, 10);
+      const manager = await storage.createUser({
+        tenantId,
+        firstName,
+        lastName,
+        email: null,
+        password: hashedPassword,
+        plainPassword: rawPassword,
+        phone: phone.replace(/\D/g, ''),
+        role: "manager",
+        salaryPercent: 0,
+      });
+
+      res.status(201).json({
+        id: manager.id,
+        firstName: manager.firstName,
+        lastName: manager.lastName,
+        phone: manager.phone,
+        createdAt: manager.createdAt,
+      });
+    } catch (error) {
+      if (error instanceof DuplicatePhoneError) {
+        return res.status(409).json({ error: error.message });
+      }
+      console.error("Manager creation error:", error);
+      res.status(500).json({ error: "Rahbar yaratishda xatolik" });
+    }
+  });
+
+  app.delete("/api/managers/:id", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const role = getUserRole(req);
+      if (role !== "markaz_admin") {
+        return res.status(403).json({ error: "Faqat admin rahbarni o'chirishi mumkin" });
+      }
+
+      const managerId = req.params.id;
+      const user = await storage.getUser(managerId);
+      if (!user || user.tenantId !== tenantId || user.role !== "manager") {
+        return res.status(404).json({ error: "Rahbar topilmadi" });
+      }
+
+      await storage.deleteUser(managerId, tenantId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Manager delete error:", error);
+      res.status(500).json({ error: "Rahbarni o'chirishda xatolik" });
+    }
+  });
+
   // ===== CASH RECEIPTS =====
   app.use("/api/cash-receipts", requireTenantAuth);
 
