@@ -2649,6 +2649,249 @@ export async function registerRoutes(
     }
   });
 
+  // ===== FINANCE DASHBOARD =====
+  app.get("/api/finance/dashboard", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const month = parseInt(req.query.month as string) || (new Date().getMonth() + 1);
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const dashboard = await storage.getFinanceDashboard(tenantId, month, year);
+      res.json(dashboard);
+    } catch (error) {
+      console.error("Finance dashboard error:", error);
+      res.status(500).json({ error: "Failed to fetch finance dashboard" });
+    }
+  });
+
+  // ===== CASH RECEIPTS =====
+  app.use("/api/cash-receipts", requireTenantAuth);
+
+  app.post("/api/cash-receipts", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const userId = getUserId(req);
+      const { amount, note, paymentType } = req.body;
+
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ error: "Summa musbat bo'lishi kerak" });
+      }
+      if (!paymentType) {
+        return res.status(400).json({ error: "To'lov turi tanlanishi shart" });
+      }
+
+      const receipt = await storage.createCashReceipt({
+        tenantId,
+        amount: parseInt(amount),
+        submittedBy: userId,
+        note: note || null,
+        paymentType,
+        status: "pending",
+        submittedAt: new Date(),
+      });
+
+      await storage.createCashReceiptLog({
+        cashReceiptId: receipt.id,
+        action: "created",
+        oldStatus: null,
+        newStatus: "pending",
+        actedBy: userId,
+        note: "Pul topshirish yaratildi",
+      });
+
+      res.status(201).json(receipt);
+    } catch (error) {
+      console.error("Cash receipt creation error:", error);
+      res.status(500).json({ error: "Pul topshirish yaratishda xatolik" });
+    }
+  });
+
+  app.get("/api/cash-receipts", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const role = getUserRole(req);
+      const userId = getUserId(req);
+      const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      const status = req.query.status as string | undefined;
+
+      const filters: any = { month, year, status };
+
+      if (role === "teacher") {
+        filters.submittedBy = userId;
+      }
+
+      const receipts = await storage.getCashReceipts(tenantId, filters);
+
+      const userIds = [...new Set([
+        ...receipts.map(r => r.submittedBy),
+        ...receipts.filter(r => r.acceptedBy).map(r => r.acceptedBy!),
+        ...receipts.filter(r => r.rejectedBy).map(r => r.rejectedBy!),
+      ])];
+
+      const usersMap: Record<string, any> = {};
+      for (const uid of userIds) {
+        const user = await storage.getUser(uid);
+        if (user) {
+          usersMap[uid] = { id: user.id, firstName: user.firstName, lastName: user.lastName, role: user.role };
+        }
+      }
+
+      const enriched = receipts.map(r => ({
+        ...r,
+        submittedByUser: usersMap[r.submittedBy] || null,
+        acceptedByUser: r.acceptedBy ? usersMap[r.acceptedBy] || null : null,
+        rejectedByUser: r.rejectedBy ? usersMap[r.rejectedBy] || null : null,
+      }));
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("Cash receipts fetch error:", error);
+      res.status(500).json({ error: "Pul topshirishlar ro'yxatini olishda xatolik" });
+    }
+  });
+
+  app.get("/api/cash-receipts/stats/summary", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const month = req.query.month ? parseInt(req.query.month as string) : (new Date().getMonth() + 1);
+      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+
+      const allReceipts = await storage.getCashReceipts(tenantId, { month, year });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(today);
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const todayReceipts = allReceipts.filter(r => {
+        const d = new Date(r.submittedAt);
+        return d >= today && d <= todayEnd;
+      });
+
+      res.json({
+        todaySubmitted: todayReceipts.reduce((s, r) => s + r.amount, 0),
+        todayAccepted: todayReceipts.filter(r => r.status === "accepted").reduce((s, r) => s + r.amount, 0),
+        pendingCount: allReceipts.filter(r => r.status === "pending").length,
+        pendingAmount: allReceipts.filter(r => r.status === "pending").reduce((s, r) => s + r.amount, 0),
+        rejectedCount: allReceipts.filter(r => r.status === "rejected").length,
+        totalAccepted: allReceipts.filter(r => r.status === "accepted").reduce((s, r) => s + r.amount, 0),
+      });
+    } catch (error) {
+      console.error("Cash receipts stats error:", error);
+      res.status(500).json({ error: "Statistikani olishda xatolik" });
+    }
+  });
+
+  app.get("/api/cash-receipts/:id", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const id = parseInt(req.params.id);
+      const receipt = await storage.getCashReceipt(id, tenantId);
+      if (!receipt) {
+        return res.status(404).json({ error: "Topilmadi" });
+      }
+      res.json(receipt);
+    } catch (error) {
+      res.status(500).json({ error: "Xatolik" });
+    }
+  });
+
+  app.patch("/api/cash-receipts/:id/accept", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const userId = getUserId(req);
+      const role = getUserRole(req);
+      const id = parseInt(req.params.id);
+
+      if (role !== "markaz_admin" && role !== "manager") {
+        return res.status(403).json({ error: "Faqat rahbar qabul qilishi mumkin" });
+      }
+
+      const receipt = await storage.getCashReceipt(id, tenantId);
+      if (!receipt) {
+        return res.status(404).json({ error: "Topilmadi" });
+      }
+      if (receipt.status === "accepted") {
+        return res.status(400).json({ error: "Bu topshiriq allaqachon qabul qilingan" });
+      }
+
+      const oldStatus = receipt.status;
+      const updated = await storage.updateCashReceipt(id, tenantId, {
+        status: "accepted",
+        acceptedBy: userId,
+        acceptedAt: new Date(),
+      });
+
+      await storage.createCashReceiptLog({
+        cashReceiptId: id,
+        action: "accepted",
+        oldStatus,
+        newStatus: "accepted",
+        actedBy: userId,
+        note: req.body.note || "Qabul qilindi",
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Cash receipt accept error:", error);
+      res.status(500).json({ error: "Qabul qilishda xatolik" });
+    }
+  });
+
+  app.patch("/api/cash-receipts/:id/reject", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const userId = getUserId(req);
+      const role = getUserRole(req);
+      const id = parseInt(req.params.id);
+
+      if (role !== "markaz_admin" && role !== "manager") {
+        return res.status(403).json({ error: "Faqat rahbar rad etishi mumkin" });
+      }
+
+      const receipt = await storage.getCashReceipt(id, tenantId);
+      if (!receipt) {
+        return res.status(404).json({ error: "Topilmadi" });
+      }
+      if (receipt.status === "accepted") {
+        return res.status(400).json({ error: "Qabul qilingan topshiriqni rad etib bo'lmaydi" });
+      }
+
+      const { reason } = req.body;
+      const oldStatus = receipt.status;
+      const updated = await storage.updateCashReceipt(id, tenantId, {
+        status: "rejected",
+        rejectedBy: userId,
+        rejectedAt: new Date(),
+        rejectionReason: reason || null,
+      });
+
+      await storage.createCashReceiptLog({
+        cashReceiptId: id,
+        action: "rejected",
+        oldStatus,
+        newStatus: "rejected",
+        actedBy: userId,
+        note: reason || "Rad etildi",
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Cash receipt reject error:", error);
+      res.status(500).json({ error: "Rad etishda xatolik" });
+    }
+  });
+
+  app.get("/api/cash-receipts/:id/logs", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const logs = await storage.getCashReceiptLogs(id);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Tarixni olishda xatolik" });
+    }
+  });
+
   // ===== TENANT RESOLUTION (for multi-tenant) =====
   app.get("/api/tenant/:slug", async (req, res) => {
     try {

@@ -29,6 +29,10 @@ import {
   type InsertSubscriptionPlan,
   type TenantSubscription,
   type InsertTenantSubscription,
+  type CashReceipt,
+  type InsertCashReceipt,
+  type CashReceiptLog,
+  type InsertCashReceiptLog,
   users,
   tenants,
   leads,
@@ -42,6 +46,8 @@ import {
   expenses,
   subscriptionPlans,
   tenantSubscriptions,
+  cashReceipts,
+  cashReceiptLogs,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -169,6 +175,29 @@ export interface IStorage {
     activeGroups: number;
     newLeads: number;
     monthlyIncome: number;
+  }>;
+  
+  // Cash Receipts
+  getCashReceipts(tenantId: number, filters?: { month?: number; year?: number; status?: string; submittedBy?: string }): Promise<CashReceipt[]>;
+  getCashReceipt(id: number, tenantId: number): Promise<CashReceipt | undefined>;
+  createCashReceipt(receipt: InsertCashReceipt): Promise<CashReceipt>;
+  updateCashReceipt(id: number, tenantId: number, data: Partial<CashReceipt>): Promise<CashReceipt | undefined>;
+  createCashReceiptLog(log: InsertCashReceiptLog): Promise<CashReceiptLog>;
+  getCashReceiptLogs(cashReceiptId: number): Promise<CashReceiptLog[]>;
+
+  // Finance Dashboard
+  getFinanceDashboard(tenantId: number, month: number, year: number): Promise<{
+    monthlyIncome: number;
+    monthlyExpenses: number;
+    netProfit: number;
+    totalDebt: number;
+    debtorCount: number;
+    activeStudents: number;
+    totalStudents: number;
+    attendancePresent: number;
+    attendanceAbsent: number;
+    paymentCount: number;
+    expenseCount: number;
   }>;
   
   // Telegram
@@ -841,6 +870,126 @@ export class DatabaseStorage implements IStorage {
   async deleteExpense(id: number, tenantId: number): Promise<boolean> {
     const result = await db.delete(expenses).where(and(eq(expenses.id, id), eq(expenses.tenantId, tenantId))).returning();
     return result.length > 0;
+  }
+
+  // Cash Receipts
+  async getCashReceipts(tenantId: number, filters?: { month?: number; year?: number; status?: string; submittedBy?: string }): Promise<CashReceipt[]> {
+    const conditions = [eq(cashReceipts.tenantId, tenantId)];
+    if (filters?.status) {
+      conditions.push(eq(cashReceipts.status, filters.status));
+    }
+    if (filters?.submittedBy) {
+      conditions.push(eq(cashReceipts.submittedBy, filters.submittedBy));
+    }
+    if (filters?.month && filters?.year) {
+      const startDate = new Date(filters.year, filters.month - 1, 1);
+      const endDate = new Date(filters.year, filters.month, 0);
+      endDate.setHours(23, 59, 59, 999);
+      conditions.push(sql`${cashReceipts.submittedAt} >= ${startDate}`);
+      conditions.push(sql`${cashReceipts.submittedAt} <= ${endDate}`);
+    }
+    return await db.select().from(cashReceipts).where(and(...conditions)).orderBy(desc(cashReceipts.submittedAt));
+  }
+
+  async getCashReceipt(id: number, tenantId: number): Promise<CashReceipt | undefined> {
+    const result = await db.select().from(cashReceipts).where(and(eq(cashReceipts.id, id), eq(cashReceipts.tenantId, tenantId))).limit(1);
+    return result[0];
+  }
+
+  async createCashReceipt(receipt: InsertCashReceipt): Promise<CashReceipt> {
+    const result = await db.insert(cashReceipts).values(receipt).returning();
+    return result[0];
+  }
+
+  async updateCashReceipt(id: number, tenantId: number, data: Partial<CashReceipt>): Promise<CashReceipt | undefined> {
+    const result = await db.update(cashReceipts).set({ ...data, updatedAt: new Date() }).where(and(eq(cashReceipts.id, id), eq(cashReceipts.tenantId, tenantId))).returning();
+    return result[0];
+  }
+
+  async createCashReceiptLog(log: InsertCashReceiptLog): Promise<CashReceiptLog> {
+    const result = await db.insert(cashReceiptLogs).values(log).returning();
+    return result[0];
+  }
+
+  async getCashReceiptLogs(cashReceiptId: number): Promise<CashReceiptLog[]> {
+    return await db.select().from(cashReceiptLogs).where(eq(cashReceiptLogs.cashReceiptId, cashReceiptId)).orderBy(desc(cashReceiptLogs.createdAt));
+  }
+
+  // Finance Dashboard
+  async getFinanceDashboard(tenantId: number, month: number, year: number): Promise<{
+    monthlyIncome: number;
+    monthlyExpenses: number;
+    netProfit: number;
+    totalDebt: number;
+    debtorCount: number;
+    activeStudents: number;
+    totalStudents: number;
+    attendancePresent: number;
+    attendanceAbsent: number;
+    paymentCount: number;
+    expenseCount: number;
+  }> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    const incomeResult = await db.select({
+      total: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+      count: sql<number>`COUNT(*)::int`,
+    }).from(payments).where(and(
+      eq(payments.tenantId, tenantId),
+      eq(payments.status, 'completed'),
+      sql`${payments.createdAt} >= ${startDate}`,
+      sql`${payments.createdAt} <= ${endDate}`
+    ));
+
+    const expenseResult = await db.select({
+      total: sql<number>`COALESCE(SUM(${expenses.amount}), 0)::int`,
+      count: sql<number>`COUNT(*)::int`,
+    }).from(expenses).where(and(
+      eq(expenses.tenantId, tenantId),
+      sql`${expenses.date} >= ${startDate}`,
+      sql`${expenses.date} <= ${endDate}`
+    ));
+
+    const debtResult = await db.select({
+      totalDebt: sql<number>`COALESCE(SUM(ABS(${students.balance})), 0)::int`,
+      debtorCount: sql<number>`COUNT(*)::int`,
+    }).from(students).where(and(
+      eq(students.tenantId, tenantId),
+      sql`${students.balance} <= 0`
+    ));
+
+    const studentCounts = await db.select({
+      active: sql<number>`COUNT(*) FILTER (WHERE ${students.status} = 'active')::int`,
+      total: sql<number>`COUNT(*)::int`,
+    }).from(students).where(eq(students.tenantId, tenantId));
+
+    const attendResult = await db.select({
+      present: sql<number>`COUNT(*) FILTER (WHERE ${attendance.status} = 'present')::int`,
+      absent: sql<number>`COUNT(*) FILTER (WHERE ${attendance.status} = 'absent')::int`,
+    }).from(attendance).where(and(
+      eq(attendance.tenantId, tenantId),
+      sql`${attendance.date} >= ${startDate}`,
+      sql`${attendance.date} <= ${endDate}`
+    ));
+
+    const mi = Number(incomeResult[0]?.total || 0);
+    const me = Number(expenseResult[0]?.total || 0);
+
+    return {
+      monthlyIncome: mi,
+      monthlyExpenses: me,
+      netProfit: mi - me,
+      totalDebt: Number(debtResult[0]?.totalDebt || 0),
+      debtorCount: Number(debtResult[0]?.debtorCount || 0),
+      activeStudents: Number(studentCounts[0]?.active || 0),
+      totalStudents: Number(studentCounts[0]?.total || 0),
+      attendancePresent: Number(attendResult[0]?.present || 0),
+      attendanceAbsent: Number(attendResult[0]?.absent || 0),
+      paymentCount: Number(incomeResult[0]?.count || 0),
+      expenseCount: Number(expenseResult[0]?.count || 0),
+    };
   }
 }
 

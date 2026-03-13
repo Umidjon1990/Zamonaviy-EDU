@@ -275,3 +275,54 @@ export const insertExpenseSchema = createInsertSchema(expenses).omit({
 });
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expenses.$inferSelect;
+
+// Cash Receipts (Pul topshirish / Kassa)
+export const cashReceipts = pgTable("cash_receipts", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  amount: integer("amount").notNull(),
+  submittedBy: varchar("submitted_by").notNull(),
+  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+  note: text("note"),
+  paymentType: text("payment_type").notNull(), // cash, card, bank_transfer
+  status: text("status").notNull().default("pending"), // pending, accepted, rejected
+  acceptedBy: varchar("accepted_by"),
+  acceptedAt: timestamp("accepted_at"),
+  rejectedBy: varchar("rejected_by"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCashReceiptSchema = createInsertSchema(cashReceipts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  acceptedBy: true,
+  acceptedAt: true,
+  rejectedBy: true,
+  rejectedAt: true,
+  rejectionReason: true,
+});
+export type InsertCashReceipt = z.infer<typeof insertCashReceiptSchema>;
+export type CashReceipt = typeof cashReceipts.$inferSelect;
+
+// Cash Receipt Logs (Kassa tarixi)
+export const cashReceiptLogs = pgTable("cash_receipt_logs", {
+  id: serial("id").primaryKey(),
+  cashReceiptId: integer("cash_receipt_id").notNull(),
+  action: text("action").notNull(), // created, accepted, rejected
+  oldStatus: text("old_status"),
+  newStatus: text("new_status").notNull(),
+  actedBy: varchar("acted_by").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCashReceiptLogSchema = createInsertSchema(cashReceiptLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCashReceiptLog = z.infer<typeof insertCashReceiptLogSchema>;
+export type CashReceiptLog = typeof cashReceiptLogs.$inferSelect;

@@ -39,6 +39,41 @@ async function fixDatabaseSchema() {
 
     // Ensure student_name on payments table
     await client.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS student_name TEXT;`).catch(() => {});
+
+    // Create cash_receipts table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cash_receipts (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        submitted_by VARCHAR NOT NULL,
+        submitted_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        note TEXT,
+        payment_type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        accepted_by VARCHAR,
+        accepted_at TIMESTAMP,
+        rejected_by VARCHAR,
+        rejected_at TIMESTAMP,
+        rejection_reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `).catch(() => {});
+
+    // Create cash_receipt_logs table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cash_receipt_logs (
+        id SERIAL PRIMARY KEY,
+        cash_receipt_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        old_status TEXT,
+        new_status TEXT NOT NULL,
+        acted_by VARCHAR NOT NULL,
+        note TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `).catch(() => {});
     
     console.log("Database schema check completed");
   } catch (error) {

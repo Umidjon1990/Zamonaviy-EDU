@@ -7,13 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useStudents, usePayments, useGroups, useTeachers, useExpenses } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { 
   FileText, Download, Users, CreditCard, Calendar, AlertTriangle, 
   TrendingUp, FileDown, Wallet, Send, Printer, CheckCircle2, XCircle,
-  GraduationCap, Banknote
+  GraduationCap, Banknote, HandCoins, Clock, ThumbsUp, ThumbsDown, Plus, History
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import jsPDF from "jspdf";
@@ -43,6 +45,7 @@ export default function Reports() {
   const { data: groups } = useGroups();
   const { data: teachers } = useTeachers();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -54,16 +57,31 @@ export default function Reports() {
   const [cardTransfer, setCardTransfer] = useState(0);
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Kassa state
+  const [cashFormOpen, setCashFormOpen] = useState(false);
+  const [cashAmount, setCashAmount] = useState("");
+  const [cashNote, setCashNote] = useState("");
+  const [cashPaymentType, setCashPaymentType] = useState("cash");
+  const [cashStatusFilter, setCashStatusFilter] = useState("all");
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectReceiptId, setRejectReceiptId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const userRole = (() => {
+    try {
+      const stored = document.cookie.split(';').find(c => c.trim().startsWith('role='));
+      return stored ? stored.split('=')[1] : '';
+    } catch { return ''; }
+  })();
+
   const { data: expensesData } = useExpenses(parseInt(selectedMonth), parseInt(selectedYear));
 
-  const { data: attendanceData } = useQuery({
-    queryKey: ["attendance-report", selectedMonth, selectedYear, selectedGroup],
+  // Finance Dashboard from server (TASK 1 FIX)
+  const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
+    queryKey: ["finance-dashboard", selectedMonth, selectedYear],
     queryFn: async () => {
-      const url = selectedGroup === "all" 
-        ? `/api/attendance?month=${selectedMonth}&year=${selectedYear}`
-        : `/api/attendance?groupId=${selectedGroup}&month=${selectedMonth}&year=${selectedYear}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Davomat ma'lumotlarini olishda xatolik");
+      const res = await fetch(`/api/finance/dashboard?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Moliya ma'lumotlarini olishda xatolik");
       return res.json();
     },
   });
@@ -82,7 +100,108 @@ export default function Reports() {
     enabled: !!selectedTeacherId,
   });
 
-  if (studentsLoading || paymentsLoading) {
+  // Cash receipts data
+  const { data: cashReceipts, isLoading: cashLoading } = useQuery({
+    queryKey: ["cash-receipts", selectedMonth, selectedYear, cashStatusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams({ month: selectedMonth, year: selectedYear });
+      if (cashStatusFilter !== "all") params.append("status", cashStatusFilter);
+      const res = await fetch(`/api/cash-receipts?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Kassa ma'lumotlarini olishda xatolik");
+      return res.json();
+    },
+  });
+
+  const { data: cashStats } = useQuery({
+    queryKey: ["cash-receipts-stats", selectedMonth, selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/cash-receipts/stats/summary?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Kassa statistikasini olishda xatolik");
+      return res.json();
+    },
+  });
+
+  const createCashReceiptMutation = useMutation({
+    mutationFn: async (data: { amount: number; note: string; paymentType: string }) => {
+      const res = await fetch("/api/cash-receipts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cash-receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-receipts-stats"] });
+      setCashFormOpen(false);
+      setCashAmount("");
+      setCashNote("");
+      setCashPaymentType("cash");
+      toast({ title: "Muvaffaqiyatli", description: "Pul topshirish yaratildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const acceptMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/cash-receipts/${id}/accept`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cash-receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-receipts-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-dashboard"] });
+      toast({ title: "Qabul qilindi", description: "Pul topshirish tasdiqlandi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
+      const res = await fetch(`/api/cash-receipts/${id}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cash-receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["cash-receipts-stats"] });
+      setRejectDialogOpen(false);
+      setRejectReceiptId(null);
+      setRejectReason("");
+      toast({ title: "Rad etildi", description: "Pul topshirish rad etildi" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
+
+  if (studentsLoading || paymentsLoading || dashboardLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
@@ -94,8 +213,24 @@ export default function Reports() {
     );
   }
 
+  // Use server-computed dashboard data for cards
+  const monthlyIncome = dashboardData?.monthlyIncome || 0;
+  const monthlyExpenses = dashboardData?.monthlyExpenses || 0;
+  const netProfit = dashboardData?.netProfit || 0;
+  const totalDebt = dashboardData?.totalDebt || 0;
+  const debtorCount = dashboardData?.debtorCount || 0;
+  const activeStudents = dashboardData?.activeStudents || 0;
+  const totalStudents = dashboardData?.totalStudents || 0;
+  const attendancePresent = dashboardData?.attendancePresent || 0;
+  const attendanceAbsent = dashboardData?.attendanceAbsent || 0;
+  const paymentCount = dashboardData?.paymentCount || 0;
+  const expenseCount = dashboardData?.expenseCount || 0;
+  const attendanceRate = attendancePresent + attendanceAbsent > 0
+    ? Math.round((attendancePresent / (attendancePresent + attendanceAbsent)) * 100)
+    : 0;
+
+  // For debtors tab and payments tab, still use client data
   const debtors = (students || []).filter((s: any) => s.balance <= 0).sort((a: any, b: any) => a.balance - b.balance);
-  const totalDebt = debtors.reduce((sum: number, s: any) => sum + Math.abs(s.balance), 0);
 
   const monthlyPayments = (payments || []).filter((p: any) => {
     const paymentDate = new Date(p.createdAt);
@@ -103,21 +238,6 @@ export default function Reports() {
            paymentDate.getFullYear() === parseInt(selectedYear) &&
            p.status === "completed";
   });
-  const monthlyIncome = monthlyPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-
-  const monthlyExpenses = (expensesData || []).reduce((sum: number, e: any) => sum + e.amount, 0);
-  const netProfit = monthlyIncome - monthlyExpenses;
-
-  const activeStudents = (students || []).filter((s: any) => s.status === "active").length;
-  const totalStudents = (students || []).length;
-
-  const attendanceStats = {
-    present: (attendanceData || []).filter((a: any) => a.status === "present").length,
-    absent: (attendanceData || []).filter((a: any) => a.status === "absent").length,
-  };
-  const attendanceRate = attendanceStats.present + attendanceStats.absent > 0 
-    ? Math.round((attendanceStats.present / (attendanceStats.present + attendanceStats.absent)) * 100) 
-    : 0;
 
   const exportToCSV = (data: any[], filename: string) => {
     if (!data.length) return;
@@ -452,7 +572,7 @@ Zamonaviy-Edu
             <div className="text-2xl font-bold text-emerald-600" data-testid="text-monthly-income">
               {monthlyIncome.toLocaleString()} UZS
             </div>
-            <p className="text-xs text-muted-foreground">{monthlyPayments.length} ta to'lov</p>
+            <p className="text-xs text-muted-foreground">{paymentCount} ta to'lov</p>
           </CardContent>
         </Card>
 
@@ -466,7 +586,7 @@ Zamonaviy-Edu
             <div className="text-2xl font-bold text-red-600" data-testid="text-monthly-expenses">
               {monthlyExpenses.toLocaleString()} UZS
             </div>
-            <p className="text-xs text-muted-foreground">{(expensesData || []).length} ta xarajat</p>
+            <p className="text-xs text-muted-foreground">{expenseCount} ta xarajat</p>
           </CardContent>
         </Card>
 
@@ -494,7 +614,7 @@ Zamonaviy-Edu
             <div className="text-2xl font-bold text-red-600" data-testid="text-total-debt">
               {totalDebt.toLocaleString()} UZS
             </div>
-            <p className="text-xs text-muted-foreground">{debtors.length} ta qarzdor</p>
+            <p className="text-xs text-muted-foreground">{debtorCount} ta qarzdor</p>
           </CardContent>
         </Card>
 
@@ -525,7 +645,7 @@ Zamonaviy-Edu
               {attendanceRate}%
             </div>
             <p className="text-xs text-muted-foreground">
-              {attendanceStats.present} keldi / {attendanceStats.absent} kelmadi
+              {attendancePresent} keldi / {attendanceAbsent} kelmadi
             </p>
           </CardContent>
         </Card>
@@ -541,6 +661,9 @@ Zamonaviy-Edu
           </TabsTrigger>
           <TabsTrigger value="payments" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <CreditCard className="w-4 h-4" /> To'lovlar
+          </TabsTrigger>
+          <TabsTrigger value="kassa" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
+            <HandCoins className="w-4 h-4" /> Kassa
           </TabsTrigger>
         </TabsList>
 
@@ -887,6 +1010,255 @@ Zamonaviy-Edu
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="kassa" className="space-y-4 animate-slide-up">
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+            <Card className="card-modern">
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground mb-1">Bugungi topshirilgan</p>
+                <p className="text-xl font-bold text-blue-600" data-testid="text-today-submitted">
+                  {(cashStats?.todaySubmitted || 0).toLocaleString()} UZS
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="card-modern">
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground mb-1">Bugungi tasdiqlangan</p>
+                <p className="text-xl font-bold text-emerald-600" data-testid="text-today-accepted">
+                  {(cashStats?.todayAccepted || 0).toLocaleString()} UZS
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="card-modern">
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground mb-1">Kutilayotgan</p>
+                <p className="text-xl font-bold text-orange-600" data-testid="text-pending-count">
+                  {cashStats?.pendingCount || 0} ta ({(cashStats?.pendingAmount || 0).toLocaleString()} UZS)
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="card-modern">
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground mb-1">Rad etilganlar</p>
+                <p className="text-xl font-bold text-red-600" data-testid="text-rejected-count">
+                  {cashStats?.rejectedCount || 0} ta
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="card-modern">
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground mb-1">Jami tasdiqlangan</p>
+                <p className="text-xl font-bold text-emerald-700" data-testid="text-total-accepted">
+                  {(cashStats?.totalAccepted || 0).toLocaleString()} UZS
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <div className="flex gap-2 items-center">
+              <Select value={cashStatusFilter} onValueChange={setCashStatusFilter}>
+                <SelectTrigger className="w-[160px]" data-testid="select-cash-status-filter">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Barchasi</SelectItem>
+                  <SelectItem value="pending">Kutilayotgan</SelectItem>
+                  <SelectItem value="accepted">Tasdiqlangan</SelectItem>
+                  <SelectItem value="rejected">Rad etilgan</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Dialog open={cashFormOpen} onOpenChange={setCashFormOpen}>
+              <DialogTrigger asChild>
+                <Button className="gradient-primary hover-lift" data-testid="button-create-cash-receipt">
+                  <Plus className="w-4 h-4 mr-2" /> Pul topshirish
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Pul topshirish</DialogTitle>
+                  <DialogDescription>Yig'ilgan pulni topshirish uchun ma'lumotlarni kiriting</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Summa (UZS)</Label>
+                    <Input
+                      type="number"
+                      value={cashAmount}
+                      onChange={(e) => setCashAmount(e.target.value)}
+                      placeholder="0"
+                      min="1"
+                      data-testid="input-cash-amount"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>To'lov turi</Label>
+                    <Select value={cashPaymentType} onValueChange={setCashPaymentType}>
+                      <SelectTrigger data-testid="select-cash-payment-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Naqd</SelectItem>
+                        <SelectItem value="card">Karta</SelectItem>
+                        <SelectItem value="bank_transfer">Bank o'tkazmasi</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Izoh</Label>
+                    <Textarea
+                      value={cashNote}
+                      onChange={(e) => setCashNote(e.target.value)}
+                      placeholder="Qo'shimcha izoh..."
+                      data-testid="input-cash-note"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setCashFormOpen(false)}>Bekor qilish</Button>
+                  <Button
+                    onClick={() => {
+                      const amt = parseInt(cashAmount);
+                      if (!amt || amt <= 0) {
+                        toast({ title: "Xatolik", description: "Summa musbat bo'lishi kerak", variant: "destructive" });
+                        return;
+                      }
+                      createCashReceiptMutation.mutate({ amount: amt, note: cashNote, paymentType: cashPaymentType });
+                    }}
+                    disabled={createCashReceiptMutation.isPending}
+                    data-testid="button-submit-cash-receipt"
+                  >
+                    {createCashReceiptMutation.isPending ? "Yuborilmoqda..." : "Topshirish"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <Card className="card-modern">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Sana</TableHead>
+                    <TableHead>Summa</TableHead>
+                    <TableHead>Topshirgan</TableHead>
+                    <TableHead>To'lov turi</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Qabul qilgan</TableHead>
+                    <TableHead>Izoh</TableHead>
+                    <TableHead className="text-right">Amallar</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cashLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8">
+                        <Skeleton className="h-6 w-48 mx-auto" />
+                      </TableCell>
+                    </TableRow>
+                  ) : (cashReceipts || []).length > 0 ? (
+                    (cashReceipts || []).map((r: any) => (
+                      <TableRow key={r.id} data-testid={`row-cash-receipt-${r.id}`}>
+                        <TableCell className="font-mono text-sm">#{r.id}</TableCell>
+                        <TableCell>{new Date(r.submittedAt).toLocaleDateString("uz-UZ")}</TableCell>
+                        <TableCell className="font-bold">{r.amount.toLocaleString()} UZS</TableCell>
+                        <TableCell>
+                          {r.submittedByUser ? `${r.submittedByUser.firstName} ${r.submittedByUser.lastName}` : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {r.paymentType === "cash" ? "Naqd" : r.paymentType === "card" ? "Karta" : "Bank"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={r.status === "accepted" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}
+                            className={r.status === "accepted" ? "bg-emerald-100 text-emerald-800" : r.status === "pending" ? "bg-orange-100 text-orange-800" : ""}>
+                            {r.status === "pending" ? "Kutilmoqda" : r.status === "accepted" ? "Tasdiqlangan" : "Rad etilgan"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {r.acceptedByUser ? `${r.acceptedByUser.firstName} ${r.acceptedByUser.lastName}` : 
+                           r.rejectedByUser ? `${r.rejectedByUser.firstName} ${r.rejectedByUser.lastName}` : "-"}
+                        </TableCell>
+                        <TableCell className="max-w-[150px] truncate" title={r.note || r.rejectionReason || ""}>
+                          {r.rejectionReason || r.note || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {r.status === "pending" && (
+                            <div className="flex gap-1 justify-end">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300"
+                                onClick={() => acceptMutation.mutate(r.id)}
+                                disabled={acceptMutation.isPending}
+                                data-testid={`button-accept-${r.id}`}
+                              >
+                                <ThumbsUp className="w-3 h-3 mr-1" /> Qabul
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:bg-red-50 hover:border-red-300"
+                                onClick={() => { setRejectReceiptId(r.id); setRejectDialogOpen(true); }}
+                                data-testid={`button-reject-${r.id}`}
+                              >
+                                <ThumbsDown className="w-3 h-3 mr-1" /> Rad
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                        <HandCoins className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                        Pul topshirishlar topilmadi
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Rad etish</DialogTitle>
+                <DialogDescription>Rad etish sababini kiriting</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Sabab..."
+                  data-testid="input-reject-reason"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>Bekor qilish</Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (rejectReceiptId !== null) {
+                      rejectMutation.mutate({ id: rejectReceiptId, reason: rejectReason });
+                    }
+                  }}
+                  disabled={rejectMutation.isPending}
+                  data-testid="button-confirm-reject"
+                >
+                  {rejectMutation.isPending ? "Rad etilmoqda..." : "Rad etish"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
 

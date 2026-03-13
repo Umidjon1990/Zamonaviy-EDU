@@ -1,0 +1,268 @@
+Act as a senior full-stack engineer, CRM architect, and debugging specialist. I have an existing CRM platform built in Replit. The platform UI is in Uzbek, so keep all existing UI labels, section names, and visible text in Uzbek. Write code and implementation in a production-ready way, but do not rename Uzbek UI terms into English.
+
+I need you to solve 2 major problems in the existing "Moliya" page and implement a new cash handover workflow.
+
+-----------------------------------
+PROJECT CONTEXT
+-----------------------------------
+The CRM already has a "Moliya" section. In this section, there are top summary cards and finance-related tabs. The UI labels are in Uzbek, for example:
+
+- Oylik tushum
+- Xarajatlar
+- Sof foyda
+- Jami qarz
+- Faol o‘quvchilar
+- Davomat
+
+The platform already contains data, but the statistics on this page are showing incorrect zero values.
+
+Also, I need a new workflow where admin submits collected cash, and the manager/owner accepts or rejects it. Only accepted cash should be counted into the real finance totals.
+
+-----------------------------------
+TASK 1: FIX THE "Moliya" DASHBOARD CARDS
+-----------------------------------
+Problem:
+The top cards in "Moliya" are showing 0, even though the database already has real data.
+
+The cards currently include:
+- Oylik tushum
+- Xarajatlar
+- Sof foyda
+- Jami qarz
+- Faol o‘quvchilar
+- Davomat
+
+Required:
+Find the root cause and fix it properly, not just visually.
+
+You must investigate all possible causes, including:
+- broken frontend data fetching
+- incorrect backend API response
+- wrong database query
+- wrong aggregation logic
+- selected month/year filter not applied correctly
+- date filtering bugs
+- timezone issues
+- null/undefined handling
+- wrong field mapping between backend and frontend
+- stale state or cache issues
+
+Expected correct logic:
+- "Oylik tushum" must show the real total income for the selected month/year
+- "Xarajatlar" must show the real total expenses for the selected month/year
+- "Sof foyda" must be calculated correctly as income - expenses
+- "Jami qarz" must show the correct debt-related aggregate based on the current existing business logic
+- "Faol o‘quvchilar" must show the correct count of active students
+- "Davomat" must show the correct attendance percentage or value based on stored attendance data
+
+Important:
+If there is real data, the cards must not show 0.
+Only show 0 if there is truly no data for that selected period.
+
+Also make sure changing month/year updates the cards correctly.
+
+-----------------------------------
+TASK 2: ADD "Pul topshirish / Pul qabul qilish" WORKFLOW
+-----------------------------------
+I need a professional and convenient finance/cash workflow inside the CRM.
+
+Business flow:
+1. Admin or responsible staff enters the amount of collected money.
+2. That money should NOT immediately be added to the final finance total.
+3. It should first be saved with a pending/submitted status.
+4. The manager/owner can review submitted cash records.
+5. If the manager accepts it, the status becomes accepted/tasdiqlandi.
+6. Only after acceptance should that amount be added into the real "Oylik tushum" / finance totals.
+7. If the manager rejects it, it must remain rejected/tasdiqlanmagan and must not be counted in finance totals.
+8. Full history/log must be stored.
+
+-----------------------------------
+UI / UX REQUIREMENTS
+-----------------------------------
+Keep the design style consistent with the existing CRM and existing "Moliya" page.
+
+All visible labels in the UI must remain in Uzbek.
+
+Add a clean and professional new section/tab inside or connected to "Moliya", such as:
+- Kassa
+- Pul topshirish
+- Pul qabul qilish
+- Tarix
+
+Suggested UI areas:
+
+1. Top cards in "Moliya" should be fixed and show real values.
+
+2. Add a new tab/section for cash workflow.
+
+3. Add a "Pul topshirish" form with fields like:
+- Summa
+- Sana
+- Izoh
+- To‘lov turi
+- Filial (if the system supports branches)
+
+4. Add a manager review table with records showing:
+- ID
+- Sana
+- Summa
+- Topshirgan admin
+- To‘lov turi
+- Status
+- Qabul qilgan rahbar
+- Izoh
+- Action buttons
+
+5. Add actions:
+- Qabul qilish
+- Rad etish
+
+6. Add filters:
+- oy
+- yil
+- sana oralig‘i
+- status
+- admin
+- filial
+- to‘lov turi
+
+7. Add summary cards for the cash module:
+- Bugungi topshirilgan summa
+- Bugungi tasdiqlangan summa
+- Kutilayotgan topshiruvlar
+- Rad etilganlar
+- Jami tasdiqlangan tushum
+
+-----------------------------------
+BUSINESS RULES
+-----------------------------------
+1. A submitted cash record must not be counted twice.
+2. Only accepted records are included in finance totals.
+3. Rejected records must never be included in finance totals.
+4. Accepted records cannot be accepted again.
+5. Every important action must be logged in history.
+6. Role-based access must be enforced.
+
+Role rules:
+- Admin / Kassir:
+  - can create "Pul topshirish"
+  - can view their own submitted records
+- Rahbar:
+  - can see all submitted records
+  - can accept or reject them
+- Super admin:
+  - can view everything
+  - can correct or override if needed
+
+-----------------------------------
+DATA / HISTORY REQUIREMENTS
+-----------------------------------
+Store full history for each cash submission:
+- who submitted it
+- when it was submitted
+- amount
+- payment type
+- note
+- who accepted it
+- when it was accepted
+- who rejected it
+- when it was rejected
+- rejection reason
+- previous status
+- new status
+
+If needed, create tables such as:
+
+cash_receipts
+- id
+- amount
+- submitted_by
+- submitted_at
+- note
+- payment_type
+- branch_id
+- status
+- accepted_by
+- accepted_at
+- rejected_by
+- rejected_at
+- rejection_reason
+- created_at
+- updated_at
+
+cash_receipt_logs
+- id
+- cash_receipt_id
+- action
+- old_status
+- new_status
+- acted_by
+- note
+- created_at
+
+If a similar table already exists, extend the existing schema instead of duplicating logic unnecessarily.
+
+-----------------------------------
+API / BACKEND REQUIREMENTS
+-----------------------------------
+Implement or adapt endpoints/services for:
+- creating a cash submission
+- listing submissions
+- viewing one submission
+- accepting a submission
+- rejecting a submission
+- fetching summary stats
+- fetching history logs
+- fixing finance dashboard summary response
+
+Example API structure:
+- POST /api/cash-receipts
+- GET /api/cash-receipts
+- GET /api/cash-receipts/:id
+- PATCH /api/cash-receipts/:id/accept
+- PATCH /api/cash-receipts/:id/reject
+- GET /api/cash-receipts/stats/summary
+- GET /api/cash-receipts/:id/logs
+- GET /api/finance/dashboard?month=...&year=...
+
+-----------------------------------
+IMPLEMENTATION REQUIREMENTS
+-----------------------------------
+- First identify the real root cause of why "Moliya" cards show zero
+- Then fix it properly end-to-end
+- Then implement the new cash submission / acceptance workflow
+- Keep the current CRM architecture intact
+- Do not break existing modules
+- Keep the UI text in Uzbek
+- Use clean, scalable, maintainable code
+- Add proper validation
+- Prevent negative amounts
+- Prevent duplicate acceptance
+- Ensure professional UX
+- Make it production-ready
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+The work is complete only if all of the following are true:
+
+1. "Moliya" top cards show real data instead of false zero values
+2. Month/year filters update the cards correctly
+3. Admin can submit cash using "Pul topshirish"
+4. Submitted cash is stored with pending/submitted status
+5. Rahbar can review pending cash submissions
+6. Rahbar can accept a submission
+7. Accepted submission is included in finance totals
+8. Rahbar can reject a submission
+9. Rejected submission is not included in finance totals
+10. Full history is stored for every important action
+11. Role permissions work correctly
+12. Existing CRM functionality does not break
+13. UI remains Uzbek and consistent with the current platform
+
+-----------------------------------
+FINAL INSTRUCTION
+-----------------------------------
+Implement this directly in the existing Replit CRM project. Start by debugging the broken "Moliya" statistics, then add the full "Pul topshirish / Pul qabul qilish" workflow with history, permissions, and finance integration.
+
+Before coding, inspect the current architecture and reuse existing patterns where possible. Do not just mock the UI — connect everything to real backend logic and real database data.

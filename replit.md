@@ -2,7 +2,7 @@
 
 ## Overview
 
-Zamonaviy-Edu is a School CRM / Education Center Management Web Application developed for the Uzbekistan market. It provides a comprehensive system for managing education centers, including features for leads, students, groups, schedules, attendance, and payments. The UI is entirely in Uzbek (Latin alphabet), and the system is built as a single-tenant MVP with a multi-tenant architecture designed for future scalability.
+Zamonaviy-Edu is a School CRM / Education Center Management Web Application developed for the Uzbekistan market. It provides a comprehensive system for managing education centers, including features for leads, students, groups, schedules, attendance, payments, and cash management. The UI is entirely in Uzbek (Latin alphabet), and the system is built as a single-tenant MVP with a multi-tenant architecture designed for future scalability.
 
 ## User Preferences
 
@@ -74,3 +74,10 @@ The system manages entities such as Tenants, Users (with roles), Leads, Students
 ### Third-Party Integrations
 - **Telegram Bot API**: For notifications and teacher commands.
 - **Eskiz.uz**: SMS gateway for sending messages.
+
+### Cash Management (Kassa)
+- **Tables**: `cash_receipts` (pul topshirish), `cash_receipt_logs` (tarix)
+- **Workflow**: Admin topshiradi → Rahbar qabul/rad etadi → Faqat tasdiqlangan summalar moliyaga qo'shiladi
+- **API**: `/api/cash-receipts` (CRUD), `/api/cash-receipts/:id/accept`, `/api/cash-receipts/:id/reject`, `/api/cash-receipts/stats/summary`
+- **Finance Dashboard**: `/api/finance/dashboard?month=&year=` — server-side computed stats for Moliya cards
+- **UI**: Moliya sahifasida "Kassa" tab — Pul topshirish form, ko'rib chiqish jadvali, status filtri, summary kartalar
