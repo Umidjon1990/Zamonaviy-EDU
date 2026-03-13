@@ -1045,12 +1045,8 @@ Zamonaviy-Edu
                       </p>
                       <p className="text-xs text-muted-foreground">Tushum - Xarajat</p>
                       <hr className="my-2 border-dashed" />
-                      <p className="text-xs text-muted-foreground">Farq (qoldiq)</p>
                       <p className={`text-sm font-bold ${diff < 0 ? 'text-red-600' : diff > 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                        {diff.toLocaleString()} UZS
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {mustSubmit.toLocaleString()} - {(cashStats?.totalAccepted || 0).toLocaleString()}
+                        {diff > 0 ? `${diff.toLocaleString()} UZS kam topshirilgan` : diff < 0 ? `${Math.abs(diff).toLocaleString()} UZS ortiqcha topshirilgan` : "To'liq topshirilgan"}
                       </p>
                     </>
                   );
