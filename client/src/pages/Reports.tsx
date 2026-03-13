@@ -1151,7 +1151,7 @@ Zamonaviy-Edu
                     <TableHead>Status</TableHead>
                     <TableHead>Qabul qilgan</TableHead>
                     <TableHead>Izoh</TableHead>
-                    <TableHead className="text-right">Amallar</TableHead>
+                    <TableHead className="text-right">Holat</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1190,27 +1190,9 @@ Zamonaviy-Edu
                         </TableCell>
                         <TableCell className="text-right">
                           {r.status === "pending" && (
-                            <div className="flex gap-1 justify-end">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300"
-                                onClick={() => acceptMutation.mutate(r.id)}
-                                disabled={acceptMutation.isPending}
-                                data-testid={`button-accept-${r.id}`}
-                              >
-                                <ThumbsUp className="w-3 h-3 mr-1" /> Qabul
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-red-600 hover:bg-red-50 hover:border-red-300"
-                                onClick={() => { setRejectReceiptId(r.id); setRejectDialogOpen(true); }}
-                                data-testid={`button-reject-${r.id}`}
-                              >
-                                <ThumbsDown className="w-3 h-3 mr-1" /> Rad
-                              </Button>
-                            </div>
+                            <Badge variant="secondary" className="bg-orange-50 text-orange-600">
+                              <Clock className="w-3 h-3 mr-1" /> Rahbar kutmoqda
+                            </Badge>
                           )}
                         </TableCell>
                       </TableRow>

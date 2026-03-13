@@ -141,6 +141,60 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/auth/rahbar-login", async (req, res) => {
+    try {
+      const { phone, password } = req.body;
+      if (!phone || !password) {
+        return res.status(400).json({ error: "Telefon va parol kiritilishi shart" });
+      }
+
+      const cleanPhone = phone.replace(/\D/g, '');
+      const user = await storage.getUserByPhone(cleanPhone);
+      if (!user) {
+        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
+      }
+
+      if (user.role !== "manager") {
+        return res.status(403).json({ error: "Faqat rahbar kirishi mumkin" });
+      }
+
+      const passwordMatch = await bcrypt.compare(password, user.password);
+      if (!passwordMatch) {
+        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
+      }
+
+      const tenant = await storage.getTenant(user.tenantId);
+      if (!tenant) {
+        return res.status(401).json({ error: "Markaz topilmadi" });
+      }
+      if (tenant.status === "suspended") {
+        return res.status(403).json({ error: "Markaz obunasi to'xtatilgan. Admin bilan bog'laning." });
+      }
+
+      req.session.userId = user.id;
+      req.session.tenantId = user.tenantId;
+      req.session.role = user.role;
+
+      res.json({
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          phone: user.phone,
+        },
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+        },
+      });
+    } catch (error) {
+      console.error("Rahbar login error:", error);
+      res.status(500).json({ error: "Tizim xatosi" });
+    }
+  });
+
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) {
@@ -2803,7 +2857,7 @@ export async function registerRoutes(
       const role = getUserRole(req);
       const id = parseInt(req.params.id);
 
-      if (role !== "markaz_admin" && role !== "manager") {
+      if (role !== "manager") {
         return res.status(403).json({ error: "Faqat rahbar qabul qilishi mumkin" });
       }
 
@@ -2845,7 +2899,7 @@ export async function registerRoutes(
       const role = getUserRole(req);
       const id = parseInt(req.params.id);
 
-      if (role !== "markaz_admin" && role !== "manager") {
+      if (role !== "manager") {
         return res.status(403).json({ error: "Faqat rahbar rad etishi mumkin" });
       }
 

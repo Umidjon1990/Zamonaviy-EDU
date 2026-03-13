@@ -9,7 +9,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 // Rollar uchun ruxsat berilgan yo'llar
 const roleRouteAccess: Record<string, string[]> = {
   markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/expenses", "/reports", "/settings"],
-  manager: ["/", "/leads", "/students", "/groups", "/schedule", "/payments", "/expenses", "/reports"],
   teacher: ["/attendance", "/students", "/groups", "/schedule", "/teacher-salary"],
 };
 
@@ -31,6 +30,8 @@ const TeacherLogin = lazy(() => import("@/pages/TeacherLogin"));
 const TeacherDashboard = lazy(() => import("@/pages/TeacherDashboard"));
 const SuperAdmin = lazy(() => import("@/pages/SuperAdmin"));
 const SuperAdminLogin = lazy(() => import("@/pages/SuperAdminLogin"));
+const RahbarLogin = lazy(() => import("@/pages/RahbarLogin"));
+const RahbarDashboard = lazy(() => import("@/pages/RahbarDashboard"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function PageLoader() {
@@ -69,9 +70,11 @@ function AdminRoutes() {
   const userRole = user.role || "";
   const allowedPaths = roleRouteAccess[userRole];
   
-  // Noma'lum rol - login sahifasiga yo'naltirish
+  if (userRole === "manager") {
+    return <Redirect to="/rahbar" />;
+  }
+
   if (!allowedPaths || allowedPaths.length === 0) {
-    // Session ni tozalash va login sahifasiga yo'naltirish
     fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     return <Redirect to="/login" />;
   }
@@ -121,6 +124,8 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/teacher-login" component={TeacherLogin} />
         <Route path="/teacher-dashboard" component={TeacherDashboard} />
+        <Route path="/rahbar-login" component={RahbarLogin} />
+        <Route path="/rahbar" component={RahbarDashboard} />
         <Route component={AdminRoutes} />
       </Switch>
     </Suspense>

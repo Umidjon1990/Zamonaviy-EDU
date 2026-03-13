@@ -43,6 +43,7 @@ The system manages entities such as Tenants, Users (with roles), Leads, Students
 ### Authentication System
 - **Tenant User Auth**: Session-based login with phone and password, logout, and session validation.
 - **Super Admin Auth**: Token-based login with username and password.
+- **Rahbar Auth**: Separate login at `/rahbar-login` for `manager` role users only, redirects to `/rahbar` cabinet.
 
 ## External Dependencies
 
@@ -77,7 +78,10 @@ The system manages entities such as Tenants, Users (with roles), Leads, Students
 
 ### Cash Management (Kassa)
 - **Tables**: `cash_receipts` (pul topshirish), `cash_receipt_logs` (tarix)
-- **Workflow**: Admin topshiradi → Rahbar qabul/rad etadi → Faqat tasdiqlangan summalar moliyaga qo'shiladi
-- **API**: `/api/cash-receipts` (CRUD), `/api/cash-receipts/:id/accept`, `/api/cash-receipts/:id/reject`, `/api/cash-receipts/stats/summary`
+- **Workflow**: Admin topshiradi → Rahbar alohida kabinetdan qabul/rad etadi → Faqat tasdiqlangan summalar moliyaga qo'shiladi
+- **API**: `/api/cash-receipts` (CRUD), `/api/cash-receipts/:id/accept` (manager only), `/api/cash-receipts/:id/reject` (manager only), `/api/cash-receipts/stats/summary`
+- **Auth**: `/api/auth/rahbar-login` — faqat `manager` roli bilan login
 - **Finance Dashboard**: `/api/finance/dashboard?month=&year=` — server-side computed stats for Moliya cards
-- **UI**: Moliya sahifasida "Kassa" tab — Pul topshirish form, ko'rib chiqish jadvali, status filtri, summary kartalar
+- **Admin UI**: Moliya sahifasida "Kassa" tab — faqat pul topshirish formasi va ro'yxat (qabul/rad tugmalari yo'q)
+- **Rahbar UI**: `/rahbar` sahifasi — alohida kabinet: kassa tasdiqlash, rad etish, statistika kartalari (Umumiy yig'ilgan, Kutilayotgan, Tasdiqlangan)
+- **Pages**: `client/src/pages/RahbarLogin.tsx`, `client/src/pages/RahbarDashboard.tsx`
