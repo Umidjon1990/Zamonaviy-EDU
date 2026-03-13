@@ -66,6 +66,17 @@ export default function RahbarDashboard() {
     },
   });
 
+  const { data: dashboardData } = useQuery({
+    queryKey: ["finance-dashboard", selectedMonth, selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/finance/dashboard?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Moliya ma'lumotlarini olishda xatolik");
+      return res.json();
+    },
+  });
+
+  const monthlyIncome = dashboardData?.monthlyIncome || 0;
+
   const acceptMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/cash-receipts/${id}/accept`, {
@@ -126,9 +137,7 @@ export default function RahbarDashboard() {
     }
   };
 
-  const totalCollected = cashStats
-    ? (cashStats.todaySubmitted || 0) + (cashStats.pendingAmount || 0) + (cashStats.totalAccepted || 0)
-    : 0;
+  const toBeSubmitted = Math.max(0, monthlyIncome - (cashStats?.totalAccepted || 0));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-emerald-50">
@@ -171,16 +180,29 @@ export default function RahbarDashboard() {
           </Select>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="border-l-4 border-l-blue-500">
             <CardContent className="p-5">
               <div className="flex items-center gap-3 mb-2">
                 <Banknote className="w-5 h-5 text-blue-500" />
-                <p className="text-sm text-muted-foreground">Umumiy yig'ilgan</p>
+                <p className="text-sm text-muted-foreground">Umumiy yig'im</p>
               </div>
-              <p className="text-2xl font-bold text-blue-600" data-testid="text-rahbar-total">
-                {totalCollected.toLocaleString()} UZS
+              <p className="text-2xl font-bold text-blue-600" data-testid="text-rahbar-total-income">
+                {monthlyIncome.toLocaleString()} UZS
               </p>
+              <p className="text-xs text-muted-foreground mt-1">Oylik tushum</p>
+            </CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-red-500">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <HandCoins className="w-5 h-5 text-red-500" />
+                <p className="text-sm text-muted-foreground">Topshirilishi kerak</p>
+              </div>
+              <p className="text-2xl font-bold text-red-600" data-testid="text-rahbar-remaining">
+                {toBeSubmitted.toLocaleString()} UZS
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Umumiy - Tasdiqlangan</p>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-orange-500">

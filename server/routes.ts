@@ -2727,7 +2727,6 @@ export async function registerRoutes(
         firstName: m.firstName,
         lastName: m.lastName,
         phone: m.phone,
-        plainPassword: m.plainPassword,
         createdAt: m.createdAt,
       })));
     } catch (error) {

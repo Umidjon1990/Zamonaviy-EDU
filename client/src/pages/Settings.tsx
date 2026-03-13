@@ -39,7 +39,7 @@ export default function Settings() {
 
   const [rahbarDialogOpen, setRahbarDialogOpen] = useState(false);
   const [rahbarForm, setRahbarForm] = useState({ firstName: "", lastName: "", phone: "", password: "" });
-  const [showRahbarPasswords, setShowRahbarPasswords] = useState<Record<string, boolean>>({});
+  const [createdRahbarPassword, setCreatedRahbarPassword] = useState<string | null>(null);
 
   const { data: brandingData, isLoading: isBrandingLoading } = useQuery({
     queryKey: ["branding"],
@@ -127,9 +127,9 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["managers"] });
-      setRahbarDialogOpen(false);
+      setCreatedRahbarPassword(variables.password);
       setRahbarForm({ firstName: "", lastName: "", phone: "", password: "" });
       toast({ title: "Muvaffaqiyat", description: "Rahbar yaratildi" });
     },
@@ -417,73 +417,104 @@ export default function Settings() {
                 <CardDescription>Kassa tasdiqlash uchun rahbar yarating. Rahbar <code className="text-xs bg-muted px-1 py-0.5 rounded">/rahbar-login</code> sahifasidan kiradi.</CardDescription>
               </div>
             </div>
-            <Dialog open={rahbarDialogOpen} onOpenChange={setRahbarDialogOpen}>
+            <Dialog open={rahbarDialogOpen} onOpenChange={(open) => { setRahbarDialogOpen(open); if (!open) setCreatedRahbarPassword(null); }}>
               <DialogTrigger asChild>
                 <Button size="sm" data-testid="button-add-rahbar">
                   <Plus className="w-4 h-4 mr-2" /> Rahbar qo'shish
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Yangi rahbar yaratish</DialogTitle>
-                  <DialogDescription>Rahbar kassa topshiruvlarini tasdiqlash/rad etish uchun javobgar</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Ism</Label>
-                      <Input
-                        value={rahbarForm.firstName}
-                        onChange={(e) => setRahbarForm({ ...rahbarForm, firstName: e.target.value })}
-                        placeholder="Ism"
-                        data-testid="input-rahbar-firstname"
-                      />
+                {createdRahbarPassword ? (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle>Rahbar yaratildi</DialogTitle>
+                      <DialogDescription>Parolni nusxalab oling. Dialog yopilgandan keyin parolni qayta ko'rib bo'lmaydi!</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
+                        <p className="text-xs text-amber-600 mb-2">Parol (faqat bir marta ko'rsatiladi)</p>
+                        <p className="text-2xl font-mono font-bold text-amber-800" data-testid="text-created-password">{createdRahbarPassword}</p>
+                      </div>
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(createdRahbarPassword);
+                          toast({ title: "Nusxalandi", description: "Parol nusxalandi" });
+                        }}
+                        data-testid="button-copy-rahbar-password"
+                      >
+                        <Copy className="w-4 h-4 mr-2" /> Parolni nusxalash
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Familiya</Label>
-                      <Input
-                        value={rahbarForm.lastName}
-                        onChange={(e) => setRahbarForm({ ...rahbarForm, lastName: e.target.value })}
-                        placeholder="Familiya"
-                        data-testid="input-rahbar-lastname"
-                      />
+                    <DialogFooter>
+                      <Button onClick={() => { setRahbarDialogOpen(false); setCreatedRahbarPassword(null); }}>Yopish</Button>
+                    </DialogFooter>
+                  </>
+                ) : (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle>Yangi rahbar yaratish</DialogTitle>
+                      <DialogDescription>Rahbar kassa topshiruvlarini tasdiqlash/rad etish uchun javobgar</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Ism</Label>
+                          <Input
+                            value={rahbarForm.firstName}
+                            onChange={(e) => setRahbarForm({ ...rahbarForm, firstName: e.target.value })}
+                            placeholder="Ism"
+                            data-testid="input-rahbar-firstname"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Familiya</Label>
+                          <Input
+                            value={rahbarForm.lastName}
+                            onChange={(e) => setRahbarForm({ ...rahbarForm, lastName: e.target.value })}
+                            placeholder="Familiya"
+                            data-testid="input-rahbar-lastname"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Telefon raqam</Label>
+                        <Input
+                          value={rahbarForm.phone}
+                          onChange={(e) => setRahbarForm({ ...rahbarForm, phone: e.target.value })}
+                          placeholder="+998901234567"
+                          data-testid="input-rahbar-phone-create"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Parol</Label>
+                        <Input
+                          value={rahbarForm.password}
+                          onChange={(e) => setRahbarForm({ ...rahbarForm, password: e.target.value })}
+                          placeholder="Parol kiriting"
+                          data-testid="input-rahbar-password-create"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Telefon raqam</Label>
-                    <Input
-                      value={rahbarForm.phone}
-                      onChange={(e) => setRahbarForm({ ...rahbarForm, phone: e.target.value })}
-                      placeholder="+998901234567"
-                      data-testid="input-rahbar-phone-create"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Parol</Label>
-                    <Input
-                      value={rahbarForm.password}
-                      onChange={(e) => setRahbarForm({ ...rahbarForm, password: e.target.value })}
-                      placeholder="Parol kiriting"
-                      data-testid="input-rahbar-password-create"
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setRahbarDialogOpen(false)}>Bekor qilish</Button>
-                  <Button
-                    onClick={() => {
-                      if (!rahbarForm.firstName || !rahbarForm.lastName || !rahbarForm.phone || !rahbarForm.password) {
-                        toast({ title: "Xatolik", description: "Barcha maydonlarni to'ldiring", variant: "destructive" });
-                        return;
-                      }
-                      createManagerMutation.mutate(rahbarForm);
-                    }}
-                    disabled={createManagerMutation.isPending}
-                    data-testid="button-create-rahbar-submit"
-                  >
-                    {createManagerMutation.isPending ? "Yaratilmoqda..." : "Yaratish"}
-                  </Button>
-                </DialogFooter>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setRahbarDialogOpen(false)}>Bekor qilish</Button>
+                      <Button
+                        onClick={() => {
+                          if (!rahbarForm.firstName || !rahbarForm.lastName || !rahbarForm.phone || !rahbarForm.password) {
+                            toast({ title: "Xatolik", description: "Barcha maydonlarni to'ldiring", variant: "destructive" });
+                            return;
+                          }
+                          createManagerMutation.mutate(rahbarForm);
+                        }}
+                        disabled={createManagerMutation.isPending}
+                        data-testid="button-create-rahbar-submit"
+                      >
+                        {createManagerMutation.isPending ? "Yaratilmoqda..." : "Yaratish"}
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
               </DialogContent>
             </Dialog>
           </div>
@@ -497,7 +528,6 @@ export default function Settings() {
                 <TableRow>
                   <TableHead>Ism</TableHead>
                   <TableHead>Telefon</TableHead>
-                  <TableHead>Parol</TableHead>
                   <TableHead>Yaratilgan</TableHead>
                   <TableHead className="text-right">Amallar</TableHead>
                 </TableRow>
@@ -507,34 +537,6 @@ export default function Settings() {
                   <TableRow key={m.id} data-testid={`row-manager-${m.id}`}>
                     <TableCell className="font-medium">{m.firstName} {m.lastName}</TableCell>
                     <TableCell>{m.phone}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm">
-                          {showRahbarPasswords[m.id] ? (m.plainPassword || "***") : "********"}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => setShowRahbarPasswords(prev => ({ ...prev, [m.id]: !prev[m.id] }))}
-                        >
-                          {showRahbarPasswords[m.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        </Button>
-                        {m.plainPassword && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              navigator.clipboard.writeText(m.plainPassword);
-                              toast({ title: "Nusxalandi", description: "Parol nusxalandi" });
-                            }}
-                          >
-                            <Copy className="w-3 h-3" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
                     <TableCell>{new Date(m.createdAt).toLocaleDateString("uz-UZ")}</TableCell>
                     <TableCell className="text-right">
                       <Button
