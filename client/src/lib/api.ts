@@ -5,6 +5,7 @@ const API_BASE = "/api";
 // Utility function for API calls
 async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
@@ -13,6 +14,14 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
+    // Session muddati tugagan bo'lsa login sahifasiga yo'naltirish
+    if (response.status === 401) {
+      const currentPath = window.location.pathname;
+      if (!currentPath.includes("/login") && !currentPath.includes("/rahbar-login")) {
+        window.location.href = "/login";
+        throw new Error("Sessiya muddati tugadi. Qayta kiring.");
+      }
+    }
     // API dan aniq xato xabarini olish
     let errorMessage = response.statusText;
     try {
