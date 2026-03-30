@@ -612,6 +612,59 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {(attendancePeriod === 'week' || attendancePeriod === 'month') && (() => {
+                  const missedTeachers = summaryList
+                    .filter((t: any) => t.totalMissedSessions > 0)
+                    .sort((a: any, b: any) => b.totalMissedSessions - a.totalMissedSessions);
+
+                  if (missedTeachers.length === 0) return null;
+
+                  return (
+                    <div className="pt-3 border-t">
+                      <p className="text-xs font-semibold text-red-600 mb-2 flex items-center gap-1.5">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Davomat olmagan o'qituvchilar ({missedTeachers.length})
+                      </p>
+                      <div className="space-y-2">
+                        {missedTeachers.map((t: any) => {
+                          const initials = t.teacherName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2);
+                          const missedGroups = (t.groupDetails || []).filter((g: any) => g.missedSessions > 0);
+                          return (
+                            <div key={t.teacherId} className="rounded-xl bg-red-50 border border-red-100 p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center text-red-700 text-xs font-bold flex-shrink-0">
+                                    {initials}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-semibold text-red-800">{t.teacherName}</p>
+                                    <p className="text-xs text-red-500">
+                                      {attendancePeriod === 'week' ? `${t.totalMissedSessions} kun davomat olinmagan` : `${t.totalMissedSessions} marta olinmagan`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                                  {t.totalMissedSessions} ta
+                                </span>
+                              </div>
+                              {missedGroups.length > 0 && (
+                                <div className="space-y-1 pl-10">
+                                  {missedGroups.map((g: any) => (
+                                    <div key={g.id} className="flex items-center justify-between text-xs text-red-600">
+                                      <span className="font-medium">{g.name}</span>
+                                      <span>{g.missedSessions} ta dars</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {groupRows.length === 0 && (
                   <div className="text-center py-6 text-muted-foreground">
                     <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-50" />

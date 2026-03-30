@@ -1556,10 +1556,36 @@ export async function registerRoutes(
           ? teacherGroups.filter((g: any) => g.days && g.days.some((d: string) => weekDayNames.includes(d)))
           : teacherGroups;
 
+        const currentMinutes = nowUz.getHours() * 60 + nowUz.getMinutes();
+        const todayStr = nowUz.toISOString().split('T')[0];
+
         const groupDetails = relevantGroups.map((g: any) => {
           const gAttendance = filtered.filter((a: any) => a.groupId === g.id);
           const gPresent = gAttendance.filter((a: any) => a.status === 'present').length;
           const gAbsent = gAttendance.filter((a: any) => a.status === 'absent').length;
+
+          const groupDays: string[] = g.days || [];
+          const expectedDates: string[] = [];
+          if (period === 'week' || period === 'month') {
+            const cur = new Date(startDate);
+            while (cur <= endDate) {
+              const curStr = cur.toISOString().split('T')[0];
+              if (curStr > todayStr) { cur.setDate(cur.getDate() + 1); continue; }
+              const dayName = dayNamesMap[cur.toLocaleDateString('en-US', { weekday: 'long' })];
+              if (dayName && groupDays.includes(dayName)) {
+                expectedDates.push(curStr);
+              }
+              cur.setDate(cur.getDate() + 1);
+            }
+          }
+          const takenDates = [...new Set(gAttendance.map((a: any) => new Date(a.date).toISOString().split('T')[0]))] as string[];
+          const missedDates = expectedDates.filter((d: string) => !takenDates.includes(d));
+
+          const timeStr = (formatGroupTime(g) || '09:00').split('-')[0];
+          const [h2, m2] = timeStr.split(':').map(Number);
+          const groupStartMin = (h2 || 9) * 60 + (m2 || 0);
+          const started = period === 'day' ? currentMinutes >= groupStartMin : true;
+
           return {
             id: g.id,
             name: g.name,
@@ -1569,20 +1595,18 @@ export async function registerRoutes(
             present: gPresent,
             absent: gAbsent,
             total: gAttendance.length,
+            expectedSessions: expectedDates.length,
+            takenSessions: takenDates.length,
+            missedSessions: missedDates.length,
+            missedDates,
+            classStarted: started,
           };
         });
 
-        const currentMinutes = nowUz.getHours() * 60 + nowUz.getMinutes();
-
-        const groupDetailsWithStatus = groupDetails.map((g: any) => {
-          const timeStr = (g.time || '09:00').split('-')[0];
-          const [h, m] = timeStr.split(':').map(Number);
-          const groupStartMin = (h || 9) * 60 + (m || 0);
-          const started = period === 'day' ? currentMinutes >= groupStartMin : true;
-          return { ...g, classStarted: started };
-        });
+        const groupDetailsWithStatus = groupDetails;
 
         const anyClassStarted = period === 'day' ? groupDetailsWithStatus.some((g: any) => g.classStarted) : true;
+        const totalMissedSessions = groupDetailsWithStatus.reduce((sum: number, g: any) => sum + (g.missedSessions || 0), 0);
 
         return {
           teacherId: teacher.id,
@@ -1598,6 +1622,7 @@ export async function registerRoutes(
           classStarted: anyClassStarted,
           todayGroups: periodGroups,
           groupDetails: groupDetailsWithStatus,
+          totalMissedSessions,
         };
       });
 
