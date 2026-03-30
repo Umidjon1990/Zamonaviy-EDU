@@ -33,6 +33,12 @@ async function fixDatabaseSchema() {
     await client.query(`ALTER TABLE expenses ADD COLUMN IF NOT EXISTS staff_id TEXT;`).catch(() => {});
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS teacher_id TEXT;`).catch(() => {});
 
+    // Ensure level column in groups table
+    await client.query(`ALTER TABLE groups ADD COLUMN IF NOT EXISTS level TEXT DEFAULT 'Beginner';`).catch(() => {});
+
+    // Ensure teacher_earning in payments table
+    await client.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS teacher_earning INTEGER DEFAULT 0;`).catch(() => {});
+
     // Ensure telegram_chat_id on students table
     await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;`).catch(() => {});
 

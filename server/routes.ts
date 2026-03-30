@@ -1379,6 +1379,78 @@ export async function registerRoutes(
     }
   });
 
+  // Absent students report - haftalik/oylik
+  app.get("/api/attendance/absent-report", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const period = (req.query.period as string) || 'week'; // 'week' | 'month'
+      const month = req.query.month ? parseInt(req.query.month as string) : new Date().getMonth() + 1;
+      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+
+      let startDate: Date;
+      let endDate: Date;
+
+      if (period === 'week') {
+        const nowUz = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }));
+        const dayOfWeek = nowUz.getDay();
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        startDate = new Date(nowUz.getFullYear(), nowUz.getMonth(), nowUz.getDate() + mondayOffset);
+        endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 6, 23, 59, 59, 999);
+      } else {
+        startDate = new Date(year, month - 1, 1);
+        endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      }
+
+      const allStudents = await storage.getStudents(tenantId);
+      const allGroups = await storage.getGroups(tenantId);
+      const allAttendance = await storage.getAttendance(tenantId);
+
+      const filtered = allAttendance.filter((a: any) => {
+        const d = new Date(a.date);
+        return d >= startDate && d <= endDate;
+      });
+
+      // Count absents per student
+      const absentCounts = new Map<number, number>();
+      const totalCounts = new Map<number, number>();
+      filtered.forEach((a: any) => {
+        const prev = totalCounts.get(a.studentId) || 0;
+        totalCounts.set(a.studentId, prev + 1);
+        if (a.status === 'absent') {
+          const prevA = absentCounts.get(a.studentId) || 0;
+          absentCounts.set(a.studentId, prevA + 1);
+        }
+      });
+
+      // Build report
+      const report = allStudents
+        .filter((s: any) => (absentCounts.get(s.id) || 0) > 0)
+        .map((s: any) => {
+          const absent = absentCounts.get(s.id) || 0;
+          const total = totalCounts.get(s.id) || 0;
+          return {
+            id: s.id,
+            name: `${s.firstName} ${s.lastName}`,
+            phone: s.phone,
+            absentCount: absent,
+            totalLessons: total,
+            rate: total > 0 ? Math.round((absent / total) * 100) : 0,
+          };
+        })
+        .sort((a: any, b: any) => b.absentCount - a.absentCount);
+
+      res.json({
+        period,
+        startDate,
+        endDate,
+        students: report,
+        totalAbsent: report.length,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch absent report" });
+    }
+  });
+
   app.get("/api/attendance/teacher-summary", requireTenantAuth, async (req, res) => {
     try {
       const tenantId = getTenantId(req);

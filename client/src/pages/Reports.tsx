@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   FileText, Download, Users, CreditCard, Calendar, AlertTriangle, 
   TrendingUp, FileDown, Wallet, Send, Printer, CheckCircle2, XCircle,
-  GraduationCap, Banknote, HandCoins, Clock, ThumbsUp, ThumbsDown, Plus, History
+  GraduationCap, Banknote, HandCoins, Clock, ThumbsUp, ThumbsDown, Plus, History, UserX
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import jsPDF from "jspdf";
@@ -56,6 +56,25 @@ export default function Reports() {
   const [salaryYear, setSalaryYear] = useState(currentYear);
   const [cardTransfer, setCardTransfer] = useState(0);
   const printRef = useRef<HTMLDivElement>(null);
+
+  // Davomat olmagan state
+  const [absentPeriod, setAbsentPeriod] = useState<"week" | "month">("week");
+  const [absentMonth, setAbsentMonth] = useState(currentMonth);
+  const [absentYear, setAbsentYear] = useState(currentYear);
+
+  const { data: absentReport, isLoading: absentLoading } = useQuery({
+    queryKey: ["absent-report", absentPeriod, absentMonth, absentYear],
+    queryFn: async () => {
+      const params = new URLSearchParams({ period: absentPeriod });
+      if (absentPeriod === 'month') {
+        params.append("month", absentMonth);
+        params.append("year", absentYear);
+      }
+      const res = await fetch(`/api/attendance/absent-report?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Ma'lumot olishda xatolik");
+      return res.json();
+    },
+  });
 
   // Kassa state
   const [cashFormOpen, setCashFormOpen] = useState(false);
@@ -664,6 +683,9 @@ Zamonaviy-Edu
           </TabsTrigger>
           <TabsTrigger value="kassa" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
             <HandCoins className="w-4 h-4" /> Kassa
+          </TabsTrigger>
+          <TabsTrigger value="davomat" className="flex items-center gap-2 text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg px-4 py-2">
+            <UserX className="w-4 h-4" /> Davomat
           </TabsTrigger>
         </TabsList>
 
@@ -1302,6 +1324,132 @@ Zamonaviy-Edu
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* Davomat olmagan o'quvchilar */}
+        <TabsContent value="davomat" className="space-y-4 animate-slide-up">
+          <Card className="card-modern">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserX className="w-5 h-5 text-red-500" />
+                Davomat olmagan o'quvchilar
+              </CardTitle>
+              <CardDescription>
+                Haftalik yoki oylik davomat olmagan o'quvchilar ro'yxati
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="space-y-1">
+                  <Label>Davr</Label>
+                  <Select value={absentPeriod} onValueChange={(v) => setAbsentPeriod(v as "week" | "month")}>
+                    <SelectTrigger className="w-36" data-testid="select-absent-period">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="week">Haftalik (joriy)</SelectItem>
+                      <SelectItem value="month">Oylik</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {absentPeriod === 'month' && (
+                  <>
+                    <div className="space-y-1">
+                      <Label>Oy</Label>
+                      <Select value={absentMonth} onValueChange={setAbsentMonth}>
+                        <SelectTrigger className="w-32" data-testid="select-absent-month">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {months.map((m) => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Yil</Label>
+                      <Select value={absentYear} onValueChange={setAbsentYear}>
+                        <SelectTrigger className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                          <SelectItem value="2026">2026</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {absentLoading ? (
+                <div className="space-y-2">
+                  {[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+                </div>
+              ) : absentReport ? (
+                <>
+                  <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <UserX className="w-5 h-5 text-red-500 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                        {absentPeriod === 'week' ? 'Joriy hafta' : `${months.find(m => m.value === absentMonth)?.label} ${absentYear}`} davomida{' '}
+                        <span className="font-bold">{absentReport.totalAbsent}</span> ta o'quvchi davomat olmagan
+                      </p>
+                      <p className="text-xs text-red-500">
+                        {new Date(absentReport.startDate).toLocaleDateString("uz-UZ")} — {new Date(absentReport.endDate).toLocaleDateString("uz-UZ")}
+                      </p>
+                    </div>
+                  </div>
+
+                  {absentReport.students.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-2" />
+                      <p>Bu davrda hamma o'quvchi darsga kelgan!</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>#</TableHead>
+                            <TableHead>O'quvchi</TableHead>
+                            <TableHead>Telefon</TableHead>
+                            <TableHead className="text-center">Kelmagan</TableHead>
+                            <TableHead className="text-center">Jami dars</TableHead>
+                            <TableHead className="text-center">Foiz</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {absentReport.students.map((s: any, idx: number) => (
+                            <TableRow key={s.id} data-testid={`row-absent-student-${s.id}`}>
+                              <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                              <TableCell className="font-medium">{s.name}</TableCell>
+                              <TableCell className="text-muted-foreground text-sm">{s.phone}</TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant="destructive">{s.absentCount} ta</Badge>
+                              </TableCell>
+                              <TableCell className="text-center text-muted-foreground">{s.totalLessons}</TableCell>
+                              <TableCell className="text-center">
+                                <span className={`font-bold text-sm ${s.rate >= 50 ? 'text-red-600' : s.rate >= 25 ? 'text-orange-500' : 'text-yellow-600'}`}>
+                                  {s.rate}%
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                  <p>Ma'lumot yuklanmoqda...</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
