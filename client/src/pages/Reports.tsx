@@ -55,6 +55,7 @@ export default function Reports() {
   const [salaryToMonth, setSalaryToMonth] = useState(currentMonth);
   const [salaryYear, setSalaryYear] = useState(currentYear);
   const [cardTransfer, setCardTransfer] = useState(0);
+  const [printMode, setPrintMode] = useState<'report_only' | 'with_students'>('report_only');
   const printRef = useRef<HTMLDivElement>(null);
 
   // Kassa state
@@ -846,7 +847,7 @@ Zamonaviy-Edu
                     </Card>
                   </div>
 
-                  {salaryStudents.length > 0 && (
+                  {salaryStudents.length > 0 && printMode === 'with_students' && (
                     <Card className="card-modern">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2">
@@ -884,19 +885,34 @@ Zamonaviy-Edu
                     </Card>
                   )}
 
-                  <div className="flex flex-wrap gap-3">
-                    <Button onClick={() => generateSalaryPDF(false)} className="gradient-primary hover-lift" data-testid="button-download-salary-pdf">
-                      <FileDown className="w-4 h-4 mr-2" /> PDF yuklash
-                    </Button>
-                    <Button onClick={() => generateSalaryPDF(true)} variant="outline" className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300" data-testid="button-download-salary-pdf-students">
-                      <FileDown className="w-4 h-4 mr-2" /> PDF + O'quvchilar
-                    </Button>
-                    <Button onClick={shareToTelegram} variant="outline" className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300" data-testid="button-share-telegram">
-                      <Send className="w-4 h-4 mr-2" /> Telegram'ga ulashish
-                    </Button>
-                    <Button onClick={handlePrint} variant="outline" data-testid="button-print-salary">
-                      <Printer className="w-4 h-4 mr-2" /> Chop etish
-                    </Button>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1 bg-muted rounded-lg p-1 w-fit">
+                      <button
+                        onClick={() => setPrintMode('report_only')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${printMode === 'report_only' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        data-testid="btn-print-mode-report-only"
+                      >
+                        Faqat hisobot
+                      </button>
+                      <button
+                        onClick={() => setPrintMode('with_students')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${printMode === 'with_students' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                        data-testid="btn-print-mode-with-students"
+                      >
+                        Hisobot + O'quvchilar
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <Button onClick={() => generateSalaryPDF(printMode === 'with_students')} className="gradient-primary hover-lift" data-testid="button-download-salary-pdf">
+                        <FileDown className="w-4 h-4 mr-2" /> PDF yuklash
+                      </Button>
+                      <Button onClick={shareToTelegram} variant="outline" className="hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300" data-testid="button-share-telegram">
+                        <Send className="w-4 h-4 mr-2" /> Telegram'ga ulashish
+                      </Button>
+                      <Button onClick={handlePrint} variant="outline" data-testid="button-print-salary">
+                        <Printer className="w-4 h-4 mr-2" /> Chop etish
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
