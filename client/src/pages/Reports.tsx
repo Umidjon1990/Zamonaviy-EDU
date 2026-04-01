@@ -1405,7 +1405,7 @@ Zamonaviy-Edu
               )}
             </div>
 
-            {salaryStudents.length > 0 && (
+            {salaryStudents.length > 0 && printMode === 'with_students' && (
               <div style={{ marginBottom: "20px" }}>
                 <h3 style={{ fontSize: "16px", marginBottom: "10px" }}>O'quvchilar ({salaryStudents.length} ta)</h3>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
