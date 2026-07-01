@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { translations } from "@/lib/i18n";
 import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent, useBulkDeleteStudents, useGroups, useTeachers, useAddStudentToGroup, useUnassignedStudents } from "@/lib/api";
-import { Plus, Search, Trash2, Pencil, Download, Upload, FileSpreadsheet, Eye, FileText } from "lucide-react";
+import { Plus, Search, Trash2, Pencil, Download, Upload, FileSpreadsheet, Eye, FileText, History, UserPlus, UserMinus, ArrowRightLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -70,6 +70,18 @@ export default function Students() {
   const [bulkAddText, setBulkAddText] = useState("");
   const [bulkAddGroupId, setBulkAddGroupId] = useState("");
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+
+  const { data: activityLogsData } = useQuery({
+    queryKey: ["/api/student-activity-logs"],
+    queryFn: async () => {
+      const res = await fetch("/api/student-activity-logs?limit=100", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !isTeacher,
+  });
+  const activityLogs = (activityLogsData || []) as any[];
 
   const handleShowTemplate = async () => {
     try {
@@ -859,6 +871,87 @@ export default function Students() {
           </Table>
         </CardContent>
       </Card>
+
+      {!isTeacher && (
+        <div className="mt-4">
+          <button
+            onClick={() => setShowActivityLog((v) => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-3"
+            data-testid="button-toggle-activity-log"
+          >
+            <History className="h-4 w-4" />
+            Faoliyat tarixi (so'nggi {activityLogs.length} ta voqea)
+            {showActivityLog ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {showActivityLog && (
+            <Card className="shadow-sm">
+              <CardContent className="p-0">
+                {activityLogs.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground text-sm">Hali hech qanday faoliyat yo'q</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-36">Vaqt</TableHead>
+                        <TableHead>Amal</TableHead>
+                        <TableHead>O'quvchi</TableHead>
+                        <TableHead>Guruh</TableHead>
+                        <TableHead>Kim tomonidan</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activityLogs.map((log: any) => {
+                        const date = new Date(log.createdAt);
+                        const formattedDate = `${date.toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${date.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+                        const roleLabel: Record<string, string> = {
+                          markaz_admin: "Admin",
+                          manager: "Rahbar",
+                          teacher: "O'qituvchi",
+                          super_admin: "Super Admin",
+                        };
+                        return (
+                          <TableRow key={log.id} data-testid={`row-activity-log-${log.id}`}>
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formattedDate}</TableCell>
+                            <TableCell>
+                              {log.action === "added" && (
+                                <Badge variant="outline" className="gap-1 text-green-700 border-green-300 bg-green-50">
+                                  <UserPlus className="h-3 w-3" /> Qo'shildi
+                                </Badge>
+                              )}
+                              {log.action === "removed" && (
+                                <Badge variant="outline" className="gap-1 text-red-700 border-red-300 bg-red-50">
+                                  <UserMinus className="h-3 w-3" /> Chiqarildi
+                                </Badge>
+                              )}
+                              {log.action === "moved" && (
+                                <Badge variant="outline" className="gap-1 text-blue-700 border-blue-300 bg-blue-50">
+                                  <ArrowRightLeft className="h-3 w-3" /> Ko'chirildi
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">{log.studentName}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {log.action === "moved" ? (
+                                <span>{log.fromGroupName} → {log.toGroupName}</span>
+                              ) : (
+                                <span>{log.groupName}</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <span className="font-medium">{log.actorName}</span>
+                              <span className="text-muted-foreground ml-1 text-xs">({roleLabel[log.actorRole] || log.actorRole})</span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }

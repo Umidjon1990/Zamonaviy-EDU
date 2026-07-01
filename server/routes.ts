@@ -1236,6 +1236,25 @@ export async function registerRoutes(
       }
       const data = insertStudentGroupSchema.parse({ ...req.body, studentId });
       const studentGroup = await storage.addStudentToGroup(data);
+
+      // Activity log: o'quvchi guruhga qo'shildi
+      try {
+        const actorId = getUserId(req);
+        const actorRole = getRole(req);
+        const actor = await storage.getUser(actorId);
+        await storage.createStudentActivityLog({
+          tenantId,
+          action: "added",
+          studentId,
+          studentName: `${student.firstName} ${student.lastName}`,
+          groupId: group.id,
+          groupName: group.name,
+          actorId,
+          actorName: actor ? `${actor.firstName} ${actor.lastName}` : actorId,
+          actorRole,
+        });
+      } catch (_) {}
+
       res.status(201).json(studentGroup);
     } catch (error) {
       res.status(400).json({ error: "Failed to add student to group" });
@@ -1257,10 +1276,30 @@ export async function registerRoutes(
       if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
+      const group = await storage.getGroup(groupId, tenantId);
       const deleted = await storage.removeStudentFromGroup(studentId, groupId);
       if (!deleted) {
         return res.status(404).json({ error: "Student-Group relation not found" });
       }
+
+      // Activity log: o'quvchi guruhdan chiqarildi
+      try {
+        const actorId = getUserId(req);
+        const actorRole = getRole(req);
+        const actor = await storage.getUser(actorId);
+        await storage.createStudentActivityLog({
+          tenantId,
+          action: "removed",
+          studentId,
+          studentName: `${student.firstName} ${student.lastName}`,
+          groupId,
+          groupName: group?.name,
+          actorId,
+          actorName: actor ? `${actor.firstName} ${actor.lastName}` : actorId,
+          actorRole,
+        });
+      } catch (_) {}
+
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to remove student from group" });
@@ -2275,12 +2314,10 @@ export async function registerRoutes(
     try {
       const { studentId, fromGroupId, toGroupId } = req.body;
       const tenantId = getTenantId(req);
-      // Verify student belongs to this tenant
       const student = await storage.getStudent(studentId, tenantId);
       if (!student) {
         return res.status(404).json({ error: "Student not found" });
       }
-      // Verify both groups belong to this tenant
       const fromGroup = await storage.getGroup(fromGroupId, tenantId);
       const toGroup = await storage.getGroup(toGroupId, tenantId);
       if (!fromGroup || !toGroup) {
@@ -2288,9 +2325,41 @@ export async function registerRoutes(
       }
       await storage.removeStudentFromGroup(studentId, fromGroupId);
       await storage.addStudentToGroup({ studentId, groupId: toGroupId });
+
+      // Activity log: o'qituvchi o'quvchini ko'chirdi
+      try {
+        const actorId = getUserId(req);
+        const actor = await storage.getUser(actorId);
+        await storage.createStudentActivityLog({
+          tenantId,
+          action: "moved",
+          studentId,
+          studentName: `${student.firstName} ${student.lastName}`,
+          fromGroupId,
+          fromGroupName: fromGroup.name,
+          toGroupId,
+          toGroupName: toGroup.name,
+          actorId,
+          actorName: actor ? `${actor.firstName} ${actor.lastName}` : actorId,
+          actorRole: "teacher",
+        });
+      } catch (_) {}
+
       res.json({ success: true });
     } catch (error) {
       res.status(400).json({ error: "Failed to move student" });
+    }
+  });
+
+  // Student activity logs — admin uchun
+  app.get("/api/student-activity-logs", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      const logs = await storage.getStudentActivityLogs(tenantId, limit);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch activity logs" });
     }
   });
 

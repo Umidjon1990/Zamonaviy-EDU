@@ -33,6 +33,8 @@ import {
   type InsertCashReceipt,
   type CashReceiptLog,
   type InsertCashReceiptLog,
+  type StudentActivityLog,
+  type InsertStudentActivityLog,
   users,
   tenants,
   leads,
@@ -48,6 +50,7 @@ import {
   tenantSubscriptions,
   cashReceipts,
   cashReceiptLogs,
+  studentActivityLogs,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -189,6 +192,10 @@ export interface IStorage {
   updateCashReceipt(id: number, tenantId: number, data: Partial<CashReceipt>): Promise<CashReceipt | undefined>;
   createCashReceiptLog(log: InsertCashReceiptLog): Promise<CashReceiptLog>;
   getCashReceiptLogs(cashReceiptId: number): Promise<CashReceiptLog[]>;
+
+  // Student Activity Logs
+  createStudentActivityLog(log: InsertStudentActivityLog): Promise<StudentActivityLog>;
+  getStudentActivityLogs(tenantId: number, limit?: number): Promise<StudentActivityLog[]>;
 
   // Finance Dashboard
   getFinanceDashboard(tenantId: number, month: number, year: number): Promise<{
@@ -941,6 +948,21 @@ export class DatabaseStorage implements IStorage {
 
   async getCashReceiptLogs(cashReceiptId: number): Promise<CashReceiptLog[]> {
     return await db.select().from(cashReceiptLogs).where(eq(cashReceiptLogs.cashReceiptId, cashReceiptId)).orderBy(desc(cashReceiptLogs.createdAt));
+  }
+
+  // Student Activity Logs
+  async createStudentActivityLog(log: InsertStudentActivityLog): Promise<StudentActivityLog> {
+    const result = await db.insert(studentActivityLogs).values(log).returning();
+    return result[0];
+  }
+
+  async getStudentActivityLogs(tenantId: number, limit = 100): Promise<StudentActivityLog[]> {
+    return await db
+      .select()
+      .from(studentActivityLogs)
+      .where(eq(studentActivityLogs.tenantId, tenantId))
+      .orderBy(desc(studentActivityLogs.createdAt))
+      .limit(limit);
   }
 
   // Finance Dashboard

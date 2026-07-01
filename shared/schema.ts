@@ -278,6 +278,32 @@ export const insertExpenseSchema = createInsertSchema(expenses).omit({
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
 export type Expense = typeof expenses.$inferSelect;
 
+// Student Activity Logs (O'quvchi harakatlari tarixi)
+export const studentActivityLogs = pgTable("student_activity_logs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  action: text("action").notNull(), // "added", "removed", "moved"
+  studentId: integer("student_id").notNull(),
+  studentName: text("student_name").notNull(),
+  groupId: integer("group_id"),
+  groupName: text("group_name"),
+  fromGroupId: integer("from_group_id"),
+  fromGroupName: text("from_group_name"),
+  toGroupId: integer("to_group_id"),
+  toGroupName: text("to_group_name"),
+  actorId: text("actor_id").notNull(),
+  actorName: text("actor_name").notNull(),
+  actorRole: text("actor_role").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertStudentActivityLogSchema = createInsertSchema(studentActivityLogs).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertStudentActivityLog = z.infer<typeof insertStudentActivityLogSchema>;
+export type StudentActivityLog = typeof studentActivityLogs.$inferSelect;
+
 // Cash Receipts (Pul topshirish / Kassa)
 export const cashReceipts = pgTable("cash_receipts", {
   id: serial("id").primaryKey(),

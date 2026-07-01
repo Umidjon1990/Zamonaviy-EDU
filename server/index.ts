@@ -82,6 +82,27 @@ async function fixDatabaseSchema() {
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
     `).catch(() => {});
+
+    // Create student_activity_logs table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS student_activity_logs (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        student_id INTEGER NOT NULL,
+        student_name TEXT NOT NULL,
+        group_id INTEGER,
+        group_name TEXT,
+        from_group_id INTEGER,
+        from_group_name TEXT,
+        to_group_id INTEGER,
+        to_group_name TEXT,
+        actor_id TEXT NOT NULL,
+        actor_name TEXT NOT NULL,
+        actor_role TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `).catch(() => {});
     
     console.log("Database schema check completed");
   } catch (error) {
