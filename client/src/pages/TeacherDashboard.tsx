@@ -143,21 +143,25 @@ export default function TeacherDashboard() {
     queryKey: ["teacher-stats-attendance", statsGroupId, statsMonth, statsYear],
     queryFn: async () => {
       const res = await fetch(`/api/attendance?groupId=${statsGroupId}&month=${statsMonth}&year=${statsYear}`);
-      return res.json();
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!statsGroupId,
   });
-  const statsAttendance = (statsAttendanceRaw || []) as any[];
+  const statsAttendance = (Array.isArray(statsAttendanceRaw) ? statsAttendanceRaw : []) as any[];
 
   const { data: statsStudentsRaw } = useQuery({
     queryKey: ["stats-group-students", statsGroupId],
     queryFn: async () => {
       const res = await fetch(`/api/groups/${statsGroupId}/students`);
-      return res.json();
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!statsGroupId,
   });
-  const statsStudents = (statsStudentsRaw || []) as any[];
+  const statsStudents = (Array.isArray(statsStudentsRaw) ? statsStudentsRaw : []) as any[];
 
   // Tanlangan guruh o'quvchilarining to'lov holati
   const { data: paymentStatusData } = useQuery({
