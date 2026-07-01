@@ -336,15 +336,20 @@ export default function Reports() {
     : [];
 
   const salaryTeacher = salaryData?.teacher;
-  const teacherSalary = salaryData?.salary || 0;
   const teacherIncome = salaryData?.totalPayments || 0;
   const salaryPercent = salaryData?.teacher?.salaryPercent || 0;
   const salaryStudents = salaryData?.students || [];
   const paidStudentsList = salaryStudents.filter((s: any) => s.balance > 0);
   const debtorStudentsList = salaryStudents.filter((s: any) => s.balance <= 0);
   const totalAdvance = salaryData?.totalAdvance || 0;
-  const calculatedSalary = salaryData?.calculatedSalary || 0;
   const advanceExpenses = salaryData?.advanceExpenses || [];
+
+  // notEntered avval umumiy daromadga qo'shiladi, keyin foiz hisoblanadi
+  const adjustedIncome = teacherIncome + notEntered;
+  const calculatedSalary = salaryPercent > 0
+    ? Math.round(adjustedIncome * salaryPercent / 100)
+    : (salaryData?.calculatedSalary || 0);
+  const teacherSalary = calculatedSalary - totalAdvance;
   const cashInHand = teacherSalary - cardTransfer - notEntered;
 
   const getPeriodLabel = () => {
@@ -401,7 +406,7 @@ export default function Reports() {
     const financeInfo = [
       ["To'lov qilganlar:", `${paidStudentsList.length} ta`],
       ["Qarzdorlar:", `${debtorStudentsList.length} ta`],
-      ["Umumiy tushum:", `${teacherIncome.toLocaleString()} UZS`],
+      ["Umumiy tushum:", `${adjustedIncome.toLocaleString()} UZS${notEntered > 0 ? ` (${teacherIncome.toLocaleString()} + ${notEntered.toLocaleString()})` : ''}`],
       ["Oylik foizi:", `${salaryPercent}%`],
       ["Hisoblangan oylik:", `${calculatedSalary.toLocaleString()} UZS`],
     ];
@@ -528,7 +533,7 @@ Ma'lumotlar:
 - Qarzdorlar: ${debtorStudentsList.length} ta
 
 Moliya:
-- Umumiy tushum: ${teacherIncome.toLocaleString()} UZS
+- Umumiy tushum: ${adjustedIncome.toLocaleString()} UZS${notEntered > 0 ? ` (${teacherIncome.toLocaleString()} + ${notEntered.toLocaleString()} kiritilmagan)` : ''}
 - Oylik foizi: ${salaryPercent}%
 - Hisoblangan oylik: ${calculatedSalary.toLocaleString()} UZS${advanceText}
 - Yakuniy oylik: ${teacherSalary.toLocaleString()} UZS${cardText}${notEnteredText}
@@ -799,13 +804,19 @@ Zamonaviy-Edu
                     <Card className="card-modern border-l-4 border-l-blue-500">
                       <CardContent className="p-4">
                         <p className="text-sm text-muted-foreground mb-1">Umumiy tushum</p>
-                        <p className="text-2xl font-bold text-blue-600" data-testid="text-teacher-income">{teacherIncome.toLocaleString()} UZS</p>
+                        <p className="text-2xl font-bold text-blue-600" data-testid="text-teacher-income">{adjustedIncome.toLocaleString()} UZS</p>
+                        {notEntered > 0 && (
+                          <p className="text-xs text-muted-foreground">{teacherIncome.toLocaleString()} + {notEntered.toLocaleString()} kiritilmagan</p>
+                        )}
                       </CardContent>
                     </Card>
                     <Card className="card-modern border-l-4 border-l-purple-500">
                       <CardContent className="p-4">
                         <p className="text-sm text-muted-foreground mb-1">Hisoblangan oylik ({salaryPercent}%)</p>
                         <p className="text-2xl font-bold text-purple-600" data-testid="text-calculated-salary">{calculatedSalary.toLocaleString()} UZS</p>
+                        {notEntered > 0 && (
+                          <p className="text-xs text-muted-foreground">{adjustedIncome.toLocaleString()} × {salaryPercent}%</p>
+                        )}
                       </CardContent>
                     </Card>
                     <Card className="card-modern border-l-4 border-l-orange-500">
@@ -1397,7 +1408,10 @@ Zamonaviy-Edu
                   </tr>
                   <tr>
                     <td style={{ padding: "6px 0", color: "#888" }}>Umumiy tushum:</td>
-                    <td style={{ padding: "6px 0", fontWeight: "bold" }}>{teacherIncome.toLocaleString()} UZS</td>
+                    <td style={{ padding: "6px 0", fontWeight: "bold" }}>
+                      {adjustedIncome.toLocaleString()} UZS
+                      {notEntered > 0 && <span style={{ fontSize: "10px", color: "#888", marginLeft: "4px" }}>({teacherIncome.toLocaleString()} + {notEntered.toLocaleString()})</span>}
+                    </td>
                   </tr>
                   <tr>
                     <td style={{ padding: "6px 0", color: "#888" }}>Oylik foizi:</td>
