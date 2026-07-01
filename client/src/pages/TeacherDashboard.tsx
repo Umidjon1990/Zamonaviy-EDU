@@ -16,7 +16,7 @@ import {
   GraduationCap, Users, Calendar, LogOut, Plus, Check, X, Clock, 
   UserPlus, Edit, ArrowRightLeft, BookOpen, TrendingUp, Sparkles,
   CheckCircle2, XCircle, AlertCircle, ChevronRight, BarChart2, FileDown,
-  Banknote, SendHorizonal, CreditCard, AlertTriangle, BadgeCheck
+  Banknote, SendHorizonal, CreditCard, AlertTriangle, BadgeCheck, Trash2
 } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -64,6 +64,8 @@ export default function TeacherDashboard() {
   const [transferStudent, setTransferStudent] = useState<any>(null);
   const [transferFromGroup, setTransferFromGroup] = useState("");
   const [transferToGroup, setTransferToGroup] = useState("");
+  const [deleteGroupId, setDeleteGroupId] = useState<number | null>(null);
+  const [isDeleteGroupOpen, setIsDeleteGroupOpen] = useState(false);
 
   // To'lov yig'ish
   const [paymentForm, setPaymentForm] = useState({
@@ -260,6 +262,26 @@ export default function TeacherDashboard() {
       setIsGroupOpen(false);
       setGroupForm({ name: "", level: "Beginner", days: [], time: "14:00 - 15:30", room: "", maxStudents: 15 });
       toast({ title: "Muvaffaqiyat", description: "Guruh yaratildi" });
+    },
+  });
+
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (groupId: number) => {
+      const res = await fetch(`/api/groups/${groupId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "O'chirishda xatolik");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teacher-groups"] });
+      if (selectedGroup === deleteGroupId) setSelectedGroup(null);
+      setIsDeleteGroupOpen(false);
+      setDeleteGroupId(null);
+      toast({ title: "O'chirildi", description: "Guruh muvaffaqiyatli o'chirildi" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
     },
   });
 
@@ -623,23 +645,79 @@ export default function TeacherDashboard() {
               </Dialog>
             </div>
 
+            {/* Guruhni o'chirish tasdiqlash dialogi */}
+            <Dialog open={isDeleteGroupOpen} onOpenChange={(v) => { setIsDeleteGroupOpen(v); if (!v) setDeleteGroupId(null); }}>
+              <DialogContent className="glass-card border-0 max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-600">
+                    <Trash2 className="w-5 h-5" /> Guruhni o'chirish
+                  </DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">
+                    {groups.find((g: any) => g.id === deleteGroupId)?.name}
+                  </span>{" "}
+                  guruhini o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.
+                </p>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => { setIsDeleteGroupOpen(false); setDeleteGroupId(null); }}
+                  >
+                    Bekor qilish
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    disabled={deleteGroupMutation.isPending}
+                    onClick={() => deleteGroupId && deleteGroupMutation.mutate(deleteGroupId)}
+                  >
+                    {deleteGroupMutation.isPending ? "O'chirilmoqda..." : "Ha, o'chirish"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             {groups.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {groups.map((group: any, index: number) => (
                   <Card 
                     key={group.id} 
-                    className={`card-modern cursor-pointer hover-lift border-l-4 border-l-primary animate-slide-up`}
+                    className={`card-modern hover-lift border-l-4 border-l-primary animate-slide-up`}
                     style={{ animationDelay: `${index * 100}ms` }}
-                    onClick={() => setSelectedGroup(group.id)}
                     data-testid={`card-group-${group.id}`}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">{group.name}</CardTitle>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                        <CardTitle
+                          className="text-lg cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => setSelectedGroup(group.id)}
+                        >
+                          {group.name}
+                        </CardTitle>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteGroupId(group.id);
+                              setIsDeleteGroupOpen(true);
+                            }}
+                            data-testid={`button-delete-group-${group.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          <ChevronRight
+                            className="w-5 h-5 text-muted-foreground cursor-pointer"
+                            onClick={() => setSelectedGroup(group.id)}
+                          />
+                        </div>
                       </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="cursor-pointer" onClick={() => setSelectedGroup(group.id)}>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
                         <Clock className="w-4 h-4 text-primary" />
                         <span>{group.time}</span>
