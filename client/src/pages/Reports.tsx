@@ -350,7 +350,7 @@ export default function Reports() {
     ? Math.round(adjustedIncome * salaryPercent / 100)
     : (salaryData?.calculatedSalary || 0);
   const teacherSalary = calculatedSalary - totalAdvance;
-  const cashInHand = teacherSalary - cardTransfer - notEntered;
+  const cashInHand = teacherSalary - cardTransfer;
 
   const getPeriodLabel = () => {
     const from = months.find(m => m.value === salaryFromMonth)?.label || "";
@@ -421,7 +421,7 @@ export default function Reports() {
       financeInfo.push(["Kartaga tushgan:", `-${cardTransfer.toLocaleString()} UZS`]);
     }
     if (notEntered > 0) {
-      financeInfo.push(["CRM ga kiritilmagan:", `-${notEntered.toLocaleString()} UZS`]);
+      financeInfo.push(["CRM kiritilmagan (info):", `${notEntered.toLocaleString()} UZS`]);
     }
 
     financeInfo.forEach(([label, value]) => {
@@ -444,7 +444,7 @@ export default function Reports() {
     doc.line(14, y + 3, 196, y + 3);
     
     doc.setFillColor(240, 253, 244);
-    const hasDeductions = cardTransfer > 0 || notEntered > 0;
+    const hasDeductions = cardTransfer > 0;
     const boxHeight = hasDeductions ? 35 : 25;
     doc.roundedRect(14, y + 8, 182, boxHeight, 3, 3, 'F');
     doc.setFontSize(12);
@@ -517,7 +517,7 @@ export default function Reports() {
       ? `\n- Kartaga tushgan: -${cardTransfer.toLocaleString()} UZS`
       : "";
     const notEnteredText = notEntered > 0
-      ? `\n- CRM ga kiritilmagan: -${notEntered.toLocaleString()} UZS`
+      ? `\n- CRM kiritilmagan (info): ${notEntered.toLocaleString()} UZS`
       : "";
     const message = `
 OYLIK CHEKI
@@ -879,11 +879,9 @@ Zamonaviy-Edu
                       <CardContent className="p-4">
                         <p className="text-sm text-muted-foreground mb-1">Qo'lga tegishi</p>
                         <p className="text-2xl font-bold text-green-700" data-testid="text-cash-in-hand">{cashInHand.toLocaleString()} UZS</p>
-                        {(cardTransfer > 0 || notEntered > 0) && (
+                        {cardTransfer > 0 && (
                           <p className="text-xs text-muted-foreground">
-                            {teacherSalary.toLocaleString()}
-                            {cardTransfer > 0 && ` - ${cardTransfer.toLocaleString()} karta`}
-                            {notEntered > 0 && ` - ${notEntered.toLocaleString()} kiritilmagan`}
+                            {teacherSalary.toLocaleString()} - {cardTransfer.toLocaleString()} karta
                           </p>
                         )}
                       </CardContent>
@@ -1439,8 +1437,8 @@ Zamonaviy-Edu
                   )}
                   {notEntered > 0 && (
                     <tr>
-                      <td style={{ padding: "6px 0", color: "#d97706" }}>CRM ga kiritilmagan:</td>
-                      <td style={{ padding: "6px 0", fontWeight: "bold", color: "#d97706" }}>-{notEntered.toLocaleString()} UZS</td>
+                      <td style={{ padding: "6px 0", color: "#888" }}>CRM kiritilmagan (info):</td>
+                      <td style={{ padding: "6px 0", fontWeight: "bold", color: "#6b7280" }}>{notEntered.toLocaleString()} UZS</td>
                     </tr>
                   )}
                 </tbody>
@@ -1450,11 +1448,9 @@ Zamonaviy-Edu
             <div style={{ background: "#f0fdf4", border: "2px solid #22c55e", borderRadius: "8px", padding: "15px", textAlign: "center", marginBottom: "20px" }}>
               <p style={{ color: "#888", margin: "0 0 5px", fontSize: "14px" }}>Qo'lga tegishi</p>
               <p style={{ fontSize: "28px", fontWeight: "bold", color: "#16a34a", margin: 0 }}>{cashInHand.toLocaleString()} UZS</p>
-              {(cardTransfer > 0 || notEntered > 0) && (
+              {cardTransfer > 0 && (
                 <p style={{ color: "#888", margin: "5px 0 0", fontSize: "12px" }}>
-                  {teacherSalary.toLocaleString()} oylik
-                  {cardTransfer > 0 && ` - ${cardTransfer.toLocaleString()} karta`}
-                  {notEntered > 0 && ` - ${notEntered.toLocaleString()} kiritilmagan`}
+                  {teacherSalary.toLocaleString()} oylik - {cardTransfer.toLocaleString()} karta
                 </p>
               )}
             </div>
