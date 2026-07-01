@@ -146,10 +146,10 @@ export default function Statistics() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 items-end flex-wrap">
-        <div className="space-y-2">
+        <div className="space-y-2 w-full sm:w-auto">
           <Label className="text-muted-foreground text-sm">Guruh</Label>
           <Select value={statsGroupId?.toString() || ""} onValueChange={(v) => setStatsGroupId(parseInt(v))}>
-            <SelectTrigger className="w-[200px]" data-testid="select-stats-group">
+            <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-stats-group">
               <SelectValue placeholder="Guruhni tanlang" />
             </SelectTrigger>
             <SelectContent>
@@ -159,10 +159,10 @@ export default function Statistics() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 w-full sm:w-auto">
           <Label className="text-muted-foreground text-sm">Oy</Label>
           <Select value={statsMonth.toString()} onValueChange={(v) => setStatsMonth(parseInt(v))}>
-            <SelectTrigger className="w-[150px]" data-testid="select-stats-month">
+            <SelectTrigger className="w-full sm:w-[150px]" data-testid="select-stats-month">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -172,10 +172,10 @@ export default function Statistics() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 w-full sm:w-auto">
           <Label className="text-muted-foreground text-sm">Yil</Label>
           <Select value={statsYear.toString()} onValueChange={(v) => setStatsYear(parseInt(v))}>
-            <SelectTrigger className="w-[110px]" data-testid="select-stats-year">
+            <SelectTrigger className="w-full sm:w-[110px]" data-testid="select-stats-year">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -185,10 +185,10 @@ export default function Statistics() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 w-full sm:w-auto">
           <Label className="text-muted-foreground text-sm">Saralash</Label>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as "absent" | "best" | "name")}>
-            <SelectTrigger className="w-[190px]" data-testid="select-stats-sort">
+            <SelectTrigger className="w-full sm:w-[190px]" data-testid="select-stats-sort">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -199,7 +199,7 @@ export default function Statistics() {
           </Select>
         </div>
         {statsGroupId && statsStudents.length > 0 && (
-          <Button onClick={generateAttendancePDF} data-testid="button-download-pdf">
+          <Button onClick={generateAttendancePDF} className="w-full sm:w-auto" data-testid="button-download-pdf">
             <FileDown className="w-4 h-4 mr-2" /> PDF yuklab olish
           </Button>
         )}
