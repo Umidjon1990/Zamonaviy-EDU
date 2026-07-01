@@ -1333,6 +1333,107 @@ export default function TeacherDashboard() {
                       </Table>
                     </CardContent>
                   </Card>
+                  {/* Kunlik davomat grid */}
+                  {(() => {
+                    // Oyda bo'lgan barcha noyob kunlar
+                    const uniqueDates = [...new Set(
+                      statsAttendance.map((a: any) => a.date?.toString().slice(0, 10))
+                    )].filter(Boolean).sort() as string[];
+
+                    if (uniqueDates.length === 0) return null;
+
+                    const shortDay = (dateStr: string) => {
+                      const d = new Date(dateStr + "T00:00:00");
+                      return d.getDate().toString();
+                    };
+                    const weekLetter = (dateStr: string) => {
+                      const d = new Date(dateStr + "T00:00:00");
+                      return ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"][d.getDay()];
+                    };
+                    const cellStatus = (studentId: number, dateStr: string) => {
+                      const rec = statsAttendance.find(
+                        (a: any) => a.studentId === studentId && a.date?.toString().slice(0, 10) === dateStr
+                      );
+                      return rec?.status || null;
+                    };
+
+                    return (
+                      <Card className="card-modern overflow-hidden">
+                        <CardHeader className="border-b bg-muted/30">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-primary" />
+                            Kunlik davomat jadvali — {monthNames[statsMonth - 1]} {statsYear}
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground">
+                            Jami {uniqueDates.length} ta dars kuni qayd etilgan
+                          </p>
+                        </CardHeader>
+                        <CardContent className="p-0 overflow-x-auto">
+                          <table className="w-full text-sm border-collapse min-w-max">
+                            <thead>
+                              <tr className="bg-muted/40">
+                                <th className="text-left px-4 py-2 font-semibold sticky left-0 bg-muted/40 z-10 min-w-[160px] border-r border-border/40">
+                                  O'quvchi
+                                </th>
+                                {uniqueDates.map((d) => (
+                                  <th key={d} className="px-2 py-2 text-center font-medium text-muted-foreground min-w-[44px]">
+                                    <div className="text-xs text-muted-foreground/70">{weekLetter(d)}</div>
+                                    <div className="text-sm font-semibold">{shortDay(d)}</div>
+                                  </th>
+                                ))}
+                                <th className="px-3 py-2 text-center font-semibold border-l border-border/40 min-w-[60px]">%</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {statsStudents.map((student: any, idx: number) => {
+                                const st = getStudentStats(student.id);
+                                return (
+                                  <tr key={student.id} className={idx % 2 === 0 ? "bg-white" : "bg-muted/10"}>
+                                    <td className={`px-4 py-2.5 sticky left-0 z-10 border-r border-border/40 ${idx % 2 === 0 ? "bg-white" : "bg-muted/10"}`}>
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-7 h-7 rounded-full gradient-purple flex items-center justify-center text-white text-xs font-medium shrink-0">
+                                          {student.firstName?.[0]}{student.lastName?.[0]}
+                                        </div>
+                                        <span className="font-medium truncate max-w-[110px]">{student.firstName} {student.lastName}</span>
+                                      </div>
+                                    </td>
+                                    {uniqueDates.map((d) => {
+                                      const status = cellStatus(student.id, d);
+                                      return (
+                                        <td key={d} className="px-2 py-2 text-center">
+                                          {status === "present" ? (
+                                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700 text-xs font-bold" title="Bor">✓</span>
+                                          ) : status === "absent" ? (
+                                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-600 text-xs font-bold" title="Yo'q">✗</span>
+                                          ) : status === "late" ? (
+                                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-100 text-amber-600 text-xs font-bold" title="Kech">⏰</span>
+                                          ) : (
+                                            <span className="inline-flex items-center justify-center w-7 h-7 text-muted-foreground/30 text-xs">—</span>
+                                          )}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="px-3 py-2 text-center border-l border-border/40">
+                                      <span className={`text-xs font-bold ${st.rate >= 80 ? "text-green-600" : st.rate >= 60 ? "text-amber-600" : "text-red-600"}`}>
+                                        {st.rate}%
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          {/* Izoh */}
+                          <div className="flex items-center gap-4 px-4 py-3 border-t bg-muted/20 text-xs text-muted-foreground flex-wrap">
+                            <div className="flex items-center gap-1.5"><span className="w-5 h-5 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold text-xs">✓</span> Bor</div>
+                            <div className="flex items-center gap-1.5"><span className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xs">✗</span> Yo'q</div>
+                            <div className="flex items-center gap-1.5"><span className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center font-bold text-xs">⏰</span> Kech qoldi</div>
+                            <div className="flex items-center gap-1.5"><span className="text-muted-foreground/40">—</span> Qayd etilmagan</div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
                 </div>
               ) : (
                 <Card className="card-modern">
