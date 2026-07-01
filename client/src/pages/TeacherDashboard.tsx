@@ -15,8 +15,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   GraduationCap, Users, Calendar, LogOut, Plus, Check, X, Clock, 
   UserPlus, Edit, ArrowRightLeft, BookOpen, TrendingUp, Sparkles,
-  CheckCircle2, XCircle, AlertCircle, ChevronRight
+  CheckCircle2, XCircle, AlertCircle, ChevronRight, BarChart2, FileDown
 } from "lucide-react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 export default function TeacherDashboard() {
   const [, setLocation] = useLocation();
@@ -50,6 +52,17 @@ export default function TeacherDashboard() {
   });
 
   const [moveToGroupId, setMoveToGroupId] = useState("");
+
+  // Statistika uchun
+  const [statsMonth, setStatsMonth] = useState(new Date().getMonth() + 1);
+  const [statsYear, setStatsYear] = useState(new Date().getFullYear());
+  const [statsGroupId, setStatsGroupId] = useState<number | null>(null);
+
+  // Ko'chirish (barcha o'quvchilar orasida)
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [transferStudent, setTransferStudent] = useState<any>(null);
+  const [transferFromGroup, setTransferFromGroup] = useState("");
+  const [transferToGroup, setTransferToGroup] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("teacherToken");
@@ -113,6 +126,37 @@ export default function TeacherDashboard() {
     enabled: !!selectedGroup,
   });
   const attendance = (attendanceData || []) as any[];
+
+  const { data: statsAttendanceRaw } = useQuery({
+    queryKey: ["teacher-stats-attendance", statsGroupId, statsMonth, statsYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/attendance?groupId=${statsGroupId}&month=${statsMonth}&year=${statsYear}`);
+      return res.json();
+    },
+    enabled: !!statsGroupId,
+  });
+  const statsAttendance = (statsAttendanceRaw || []) as any[];
+
+  const { data: statsStudentsRaw } = useQuery({
+    queryKey: ["stats-group-students", statsGroupId],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${statsGroupId}/students`);
+      return res.json();
+    },
+    enabled: !!statsGroupId,
+  });
+  const statsStudents = (statsStudentsRaw || []) as any[];
+
+  // Transfer student (barcha guruhdan)
+  const { data: transferGroupStudentsRaw } = useQuery({
+    queryKey: ["transfer-group-students", transferFromGroup],
+    queryFn: async () => {
+      const res = await fetch(`/api/groups/${transferFromGroup}/students`);
+      return res.json();
+    },
+    enabled: !!transferFromGroup,
+  });
+  const transferGroupStudents = (transferGroupStudentsRaw || []) as any[];
 
   const createGroupMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -266,6 +310,81 @@ export default function TeacherDashboard() {
     setIsMoveStudentOpen(true);
   };
 
+  const handleTransfer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (transferStudent && transferFromGroup && transferToGroup) {
+      moveStudentMutation.mutate({
+        studentId: transferStudent.id,
+        fromGroupId: parseInt(transferFromGroup),
+        toGroupId: parseInt(transferToGroup),
+      });
+      setIsTransferOpen(false);
+      setTransferStudent(null);
+      setTransferFromGroup("");
+      setTransferToGroup("");
+    }
+  };
+
+  const getStudentStats = (studentId: number) => {
+    const records = statsAttendance.filter((a: any) => a.studentId === studentId);
+    const present = records.filter((a: any) => a.status === "present").length;
+    const absent = records.filter((a: any) => a.status === "absent").length;
+    const late = records.filter((a: any) => a.status === "late").length;
+    const total = records.length;
+    const rate = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
+    return { present, absent, late, total, rate };
+  };
+
+  const monthNames = [
+    "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
+    "Iyul", "Avgust", "Sentabr", "Oktyabr", "Noyabr", "Dekabr"
+  ];
+
+  const generateAttendancePDF = () => {
+    const doc = new jsPDF();
+    const selectedGroupObj = groups.find((g: any) => g.id === statsGroupId);
+    const monthLabel = monthNames[statsMonth - 1];
+
+    doc.setFontSize(18);
+    doc.text("DAVOMAT HISOBOTI", 14, 20);
+    doc.setFontSize(12);
+    doc.text(`Guruh: ${selectedGroupObj?.name || ""}`, 14, 32);
+    doc.text(`O'qituvchi: ${teacherName}`, 14, 40);
+    doc.text(`Oy: ${monthLabel} ${statsYear}`, 14, 48);
+
+    const tableData = statsStudents.map((s: any, i: number) => {
+      const st = getStudentStats(s.id);
+      return [
+        i + 1,
+        `${s.firstName} ${s.lastName}`,
+        st.present,
+        st.absent,
+        st.late,
+        st.total,
+        `${st.rate}%`,
+      ];
+    });
+
+    (doc as any).autoTable({
+      startY: 56,
+      head: [["#", "O'quvchi", "Bor", "Yo'q", "Kech", "Jami", "%"]],
+      body: tableData,
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [102, 126, 234] },
+      alternateRowStyles: { fillColor: [245, 247, 255] },
+    });
+
+    // Umumiy statistika qo'shish
+    const totalPresent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).present, 0);
+    const totalAbsent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).absent, 0);
+    const totalLate = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).late, 0);
+    const finalY = (doc as any).lastAutoTable?.finalY || 60;
+    doc.setFontSize(11);
+    doc.text(`Jami: Bor - ${totalPresent}, Yo'q - ${totalAbsent}, Kech - ${totalLate}`, 14, finalY + 10);
+
+    doc.save(`davomat_${selectedGroupObj?.name}_${monthLabel}_${statsYear}.pdf`);
+  };
+
   const getAttendanceStatus = (studentId: number) => {
     const record = attendance.find((a: any) => a.studentId === studentId);
     return record?.status || null;
@@ -332,7 +451,7 @@ export default function TeacherDashboard() {
 
         {/* Modern Tabs */}
         <Tabs defaultValue="attendance" className="space-y-6">
-          <TabsList className="glass-card p-1 h-auto">
+          <TabsList className="glass-card p-1 h-auto flex-wrap">
             <TabsTrigger value="groups" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2.5 transition-all">
               <Users className="w-4 h-4" /> Guruhlarim
             </TabsTrigger>
@@ -341,6 +460,9 @@ export default function TeacherDashboard() {
             </TabsTrigger>
             <TabsTrigger value="attendance" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2.5 transition-all">
               <Calendar className="w-4 h-4" /> Davomat
+            </TabsTrigger>
+            <TabsTrigger value="statistics" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2.5 transition-all">
+              <BarChart2 className="w-4 h-4" /> Statistika
             </TabsTrigger>
           </TabsList>
 
@@ -470,7 +592,16 @@ export default function TeacherDashboard() {
                   </SelectContent>
                 </Select>
               </div>
-              <Dialog open={isStudentOpen} onOpenChange={setIsStudentOpen}>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 shadow-sm"
+                  onClick={() => setIsTransferOpen(true)}
+                  data-testid="button-transfer-student"
+                >
+                  <ArrowRightLeft className="w-4 h-4 mr-2" /> Ko'chirish
+                </Button>
+                <Dialog open={isStudentOpen} onOpenChange={setIsStudentOpen}>
                 <DialogTrigger asChild>
                   <Button className="gradient-primary shadow-lg shadow-primary/25 hover-lift" data-testid="button-add-student">
                     <UserPlus className="w-4 h-4 mr-2" /> O'quvchi qo'shish
@@ -538,6 +669,7 @@ export default function TeacherDashboard() {
                   </form>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
 
             {selectedGroup ? (
@@ -784,7 +916,242 @@ export default function TeacherDashboard() {
               </Card>
             )}
           </TabsContent>
+
+          {/* Statistika Tab */}
+          <TabsContent value="statistics" className="space-y-4 animate-slide-up">
+            <div className="flex flex-col sm:flex-row gap-4 items-end flex-wrap">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm">Guruh</Label>
+                <Select value={statsGroupId?.toString() || ""} onValueChange={(v) => setStatsGroupId(parseInt(v))}>
+                  <SelectTrigger className="w-[200px] bg-white/80" data-testid="select-stats-group">
+                    <SelectValue placeholder="Guruhni tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((g: any) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm">Oy</Label>
+                <Select value={statsMonth.toString()} onValueChange={(v) => setStatsMonth(parseInt(v))}>
+                  <SelectTrigger className="w-[150px] bg-white/80" data-testid="select-stats-month">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthNames.map((m, i) => (
+                      <SelectItem key={i + 1} value={(i + 1).toString()}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm">Yil</Label>
+                <Select value={statsYear.toString()} onValueChange={(v) => setStatsYear(parseInt(v))}>
+                  <SelectTrigger className="w-[110px] bg-white/80" data-testid="select-stats-year">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2023, 2024, 2025, 2026, 2027].map((y) => (
+                      <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {statsGroupId && statsStudents.length > 0 && (
+                <Button onClick={generateAttendancePDF} className="gradient-primary shadow-lg shadow-primary/25 hover-lift" data-testid="button-download-pdf">
+                  <FileDown className="w-4 h-4 mr-2" /> PDF yuklab olish
+                </Button>
+              )}
+            </div>
+
+            {statsGroupId ? (
+              statsStudents.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Umumiy kartalar */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {(() => {
+                      const totalPresent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).present, 0);
+                      const totalAbsent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).absent, 0);
+                      const totalLate = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).late, 0);
+                      return (
+                        <>
+                          <Card className="card-modern border-l-4 border-l-green-500">
+                            <CardContent className="p-4 text-center">
+                              <p className="text-3xl font-bold text-green-600">{totalPresent}</p>
+                              <p className="text-xs text-muted-foreground mt-1">Bor</p>
+                            </CardContent>
+                          </Card>
+                          <Card className="card-modern border-l-4 border-l-red-500">
+                            <CardContent className="p-4 text-center">
+                              <p className="text-3xl font-bold text-red-600">{totalAbsent}</p>
+                              <p className="text-xs text-muted-foreground mt-1">Yo'q</p>
+                            </CardContent>
+                          </Card>
+                          <Card className="card-modern border-l-4 border-l-amber-500">
+                            <CardContent className="p-4 text-center">
+                              <p className="text-3xl font-bold text-amber-600">{totalLate}</p>
+                              <p className="text-xs text-muted-foreground mt-1">Kech</p>
+                            </CardContent>
+                          </Card>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* O'quvchilar jadvali */}
+                  <Card className="card-modern overflow-hidden">
+                    <CardHeader className="border-b bg-muted/30">
+                      <CardTitle className="text-lg">
+                        {groups.find((g: any) => g.id === statsGroupId)?.name} — {monthNames[statsMonth - 1]} {statsYear}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30">
+                            <TableHead className="font-semibold">#</TableHead>
+                            <TableHead className="font-semibold">O'quvchi</TableHead>
+                            <TableHead className="text-center font-semibold text-green-700">Bor</TableHead>
+                            <TableHead className="text-center font-semibold text-red-700">Yo'q</TableHead>
+                            <TableHead className="text-center font-semibold text-amber-700">Kech</TableHead>
+                            <TableHead className="text-center font-semibold">Jami</TableHead>
+                            <TableHead className="text-center font-semibold">%</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {statsStudents.map((student: any, index: number) => {
+                            const st = getStudentStats(student.id);
+                            return (
+                              <TableRow key={student.id} className="hover:bg-primary/5 transition-colors" data-testid={`row-stats-${student.id}`}>
+                                <TableCell className="text-muted-foreground">{index + 1}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full gradient-purple flex items-center justify-center text-white text-xs font-medium">
+                                      {student.firstName?.[0]}{student.lastName?.[0]}
+                                    </div>
+                                    <span className="font-medium">{student.firstName} {student.lastName}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{st.present}</Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className="bg-red-100 text-red-700 hover:bg-red-100">{st.absent}</Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">{st.late}</Badge>
+                                </TableCell>
+                                <TableCell className="text-center text-muted-foreground">{st.total}</TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex items-center gap-2 justify-center">
+                                    <Progress value={st.rate} className="w-12 h-2" />
+                                    <span className={`text-sm font-semibold ${st.rate >= 80 ? "text-green-600" : st.rate >= 60 ? "text-amber-600" : "text-red-600"}`}>
+                                      {st.rate}%
+                                    </span>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                <Card className="card-modern">
+                  <CardContent className="p-12 text-center">
+                    <BarChart2 className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" />
+                    <p className="text-muted-foreground">Bu guruhda o'quvchilar yoki davomat ma'lumotlari yo'q</p>
+                  </CardContent>
+                </Card>
+              )
+            ) : (
+              <Card className="card-modern">
+                <CardContent className="p-12 text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+                    <BarChart2 className="w-8 h-8 text-primary" />
+                  </div>
+                  <p className="text-muted-foreground">Statistikani ko'rish uchun guruh tanlang</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
         </Tabs>
+
+        {/* Ko'chirish (Transfer) dialogi — global */}
+        <Dialog open={isTransferOpen} onOpenChange={(o) => { setIsTransferOpen(o); if (!o) { setTransferStudent(null); setTransferFromGroup(""); setTransferToGroup(""); } }}>
+          <DialogContent className="glass-card border-0">
+            <DialogHeader>
+              <DialogTitle>O'quvchini guruhdan guruhga ko'chirish</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleTransfer} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Qaysi guruhdan</Label>
+                <Select value={transferFromGroup} onValueChange={(v) => { setTransferFromGroup(v); setTransferStudent(null); setTransferToGroup(""); }} data-testid="select-transfer-from">
+                  <SelectTrigger className="bg-white/50">
+                    <SelectValue placeholder="Guruhni tanlang" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((g: any) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {transferFromGroup && (
+                <div className="space-y-2">
+                  <Label>O'quvchi</Label>
+                  <Select value={transferStudent?.id?.toString() || ""} onValueChange={(v) => setTransferStudent(transferGroupStudents.find((s: any) => s.id === parseInt(v)))} data-testid="select-transfer-student">
+                    <SelectTrigger className="bg-white/50">
+                      <SelectValue placeholder="O'quvchini tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {transferGroupStudents.map((s: any) => (
+                        <SelectItem key={s.id} value={s.id.toString()}>{s.firstName} {s.lastName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {transferStudent && (
+                <div className="space-y-2">
+                  <Label>Yangi guruh</Label>
+                  <Select value={transferToGroup} onValueChange={setTransferToGroup} data-testid="select-transfer-to">
+                    <SelectTrigger className="bg-white/50">
+                      <SelectValue placeholder="Yangi guruhni tanlang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups.filter((g: any) => g.id.toString() !== transferFromGroup).map((g: any) => (
+                        <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {transferStudent && transferToGroup && (
+                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm">
+                  <span className="font-medium text-amber-800">{transferStudent.firstName} {transferStudent.lastName}</span>
+                  <span className="text-amber-600"> — {groups.find((g: any) => g.id.toString() === transferFromGroup)?.name} → {groups.find((g: any) => g.id.toString() === transferToGroup)?.name}</span>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full gradient-warning text-white"
+                disabled={!transferStudent || !transferToGroup || moveStudentMutation.isPending}
+                data-testid="button-confirm-transfer"
+              >
+                {moveStudentMutation.isPending ? "Ko'chirilmoqda..." : "Ko'chirish"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
