@@ -451,46 +451,114 @@ export default function TeacherDashboard() {
   ];
 
   const generateAttendancePDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: "landscape" });
     const selectedGroupObj = groups.find((g: any) => g.id === statsGroupId);
     const monthLabel = monthNames[statsMonth - 1];
 
-    doc.setFontSize(18);
-    doc.text("DAVOMAT HISOBOTI", 14, 20);
-    doc.setFontSize(12);
-    doc.text(`Guruh: ${selectedGroupObj?.name || ""}`, 14, 32);
-    doc.text(`O'qituvchi: ${teacherName}`, 14, 40);
-    doc.text(`Oy: ${monthLabel} ${statsYear}`, 14, 48);
+    // --- Sarlavha ---
+    doc.setFontSize(16);
+    doc.text("DAVOMAT HISOBOTI", 14, 16);
+    doc.setFontSize(10);
+    doc.text(`Guruh: ${selectedGroupObj?.name || ""}`, 14, 24);
+    doc.text(`O'qituvchi: ${teacherName}`, 14, 30);
+    doc.text(`Oy: ${monthLabel} ${statsYear}`, 14, 36);
 
-    const tableData = statsStudents.map((s: any, i: number) => {
+    // --- 1-jadval: Umumiy hisobot ---
+    const summaryData = statsStudents.map((s: any, i: number) => {
       const st = getStudentStats(s.id);
-      return [
-        i + 1,
-        `${s.firstName} ${s.lastName}`,
-        st.present,
-        st.absent,
-        st.late,
-        st.total,
-        `${st.rate}%`,
-      ];
+      return [i + 1, `${s.firstName} ${s.lastName}`, st.present, st.absent, st.late, st.total, `${st.rate}%`];
     });
 
     (doc as any).autoTable({
-      startY: 56,
+      startY: 42,
       head: [["#", "O'quvchi", "Bor", "Yo'q", "Kech", "Jami", "%"]],
-      body: tableData,
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [102, 126, 234] },
+      body: summaryData,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [102, 126, 234], textColor: 255 },
       alternateRowStyles: { fillColor: [245, 247, 255] },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 60 },
+        2: { cellWidth: 18, halign: "center" },
+        3: { cellWidth: 18, halign: "center" },
+        4: { cellWidth: 18, halign: "center" },
+        5: { cellWidth: 18, halign: "center" },
+        6: { cellWidth: 18, halign: "center" },
+      },
     });
 
-    // Umumiy statistika qo'shish
     const totalPresent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).present, 0);
     const totalAbsent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).absent, 0);
     const totalLate = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).late, 0);
-    const finalY = (doc as any).lastAutoTable?.finalY || 60;
-    doc.setFontSize(11);
-    doc.text(`Jami: Bor - ${totalPresent}, Yo'q - ${totalAbsent}, Kech - ${totalLate}`, 14, finalY + 10);
+    const afterSummary = (doc as any).lastAutoTable?.finalY || 60;
+    doc.setFontSize(9);
+    doc.text(`Jami: Bor — ${totalPresent}, Yo'q — ${totalAbsent}, Kech — ${totalLate}`, 14, afterSummary + 7);
+
+    // --- 2-jadval: Kunlik davomat grid ---
+    const uniqueDates = [...new Set(
+      statsAttendance.map((a: any) => a.date?.toString().slice(0, 10))
+    )].filter(Boolean).sort() as string[];
+
+    if (uniqueDates.length > 0) {
+      const weekLetters = ["Ya", "Du", "Se", "Ch", "Pa", "Ju", "Sh"];
+      const dateHeaders = uniqueDates.map((d) => {
+        const dt = new Date(d + "T00:00:00");
+        return `${weekLetters[dt.getDay()]}\n${dt.getDate()}`;
+      });
+
+      const gridHead = [["#", "O'quvchi", ...dateHeaders, "%"]];
+      const gridBody = statsStudents.map((s: any, i: number) => {
+        const st = getStudentStats(s.id);
+        const cells = uniqueDates.map((d) => {
+          const rec = statsAttendance.find(
+            (a: any) => a.studentId === s.id && a.date?.toString().slice(0, 10) === d
+          );
+          if (!rec) return "—";
+          if (rec.status === "present") return "B";
+          if (rec.status === "absent") return "Y";
+          if (rec.status === "late") return "K";
+          return "—";
+        });
+        return [i + 1, `${s.firstName} ${s.lastName}`, ...cells, `${st.rate}%`];
+      });
+
+      const startGridY = afterSummary + 14;
+      // Har bir kun ustunining kengligi (agar ko'p bo'lsa kichraytirish)
+      const dateCellWidth = Math.max(7, Math.min(12, Math.floor(210 / (uniqueDates.length + 3))));
+
+      (doc as any).autoTable({
+        startY: startGridY,
+        head: gridHead,
+        body: gridBody,
+        styles: { fontSize: 8, halign: "center" as const, cellPadding: 2 },
+        headStyles: { fillColor: [80, 100, 200], textColor: 255, fontSize: 7, halign: "center" as const },
+        alternateRowStyles: { fillColor: [245, 247, 255] },
+        columnStyles: {
+          0: { cellWidth: 8 },
+          1: { cellWidth: 45, halign: "left" as const },
+          ...Object.fromEntries(
+            uniqueDates.map((_, i) => [i + 2, { cellWidth: dateCellWidth, halign: "center" as const }])
+          ),
+          [uniqueDates.length + 2]: { cellWidth: 14, halign: "center" as const },
+        },
+        didParseCell: (data: any) => {
+          if (data.section === "body" && data.column.index >= 2 && data.column.index < uniqueDates.length + 2) {
+            const val = data.cell.text?.[0];
+            if (val === "B") data.cell.styles.textColor = [22, 163, 74];
+            else if (val === "Y") data.cell.styles.textColor = [220, 38, 38];
+            else if (val === "K") data.cell.styles.textColor = [217, 119, 6];
+            else data.cell.styles.textColor = [180, 180, 180];
+          }
+        },
+      });
+
+      // Izoh
+      const afterGrid = (doc as any).lastAutoTable?.finalY || startGridY + 10;
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      doc.text("B = Bor   Y = Yo'q   K = Kech qoldi   — = Qayd etilmagan", 14, afterGrid + 6);
+      doc.setTextColor(0);
+    }
 
     doc.save(`davomat_${selectedGroupObj?.name}_${monthLabel}_${statsYear}.pdf`);
   };
