@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart2, Calendar, FileDown } from "lucide-react";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 const monthNames = [
   "Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun",
@@ -20,6 +20,7 @@ export default function Statistics() {
   const [statsGroupId, setStatsGroupId] = useState<number | null>(null);
   const [statsMonth, setStatsMonth] = useState(new Date().getMonth() + 1);
   const [statsYear, setStatsYear] = useState(new Date().getFullYear());
+  const [sortBy, setSortBy] = useState<"absent" | "best" | "name">("absent");
 
   const { data: groupsData } = useQuery({
     queryKey: ["groups"],
@@ -66,6 +67,18 @@ export default function Statistics() {
     return { present, absent, late, total, rate };
   };
 
+  const rankedStudents = [...statsStudents]
+    .map((s: any) => ({ ...s, _stats: getStudentStats(s.id) }))
+    .sort((a: any, b: any) => {
+      if (sortBy === "absent") {
+        return b._stats.absent - a._stats.absent || a._stats.rate - b._stats.rate;
+      }
+      if (sortBy === "best") {
+        return b._stats.rate - a._stats.rate || a._stats.absent - b._stats.absent;
+      }
+      return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+    });
+
   const selectedGroupObj = groups.find((g: any) => g.id === statsGroupId);
 
   const generateAttendancePDF = () => {
@@ -78,12 +91,12 @@ export default function Statistics() {
     doc.text(`Guruh: ${selectedGroupObj?.name || ""}`, 14, 24);
     doc.text(`Oy: ${monthLabel} ${statsYear}`, 14, 30);
 
-    const summaryData = statsStudents.map((s: any, i: number) => {
-      const st = getStudentStats(s.id);
+    const summaryData = rankedStudents.map((s: any, i: number) => {
+      const st = s._stats;
       return [i + 1, `${s.firstName} ${s.lastName}`, st.present, st.absent, st.late, st.total, `${st.rate}%`];
     });
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 36,
       head: [["#", "O'quvchi", "Bor", "Yo'q", "Kech", "Jami", "%"]],
       body: summaryData,
@@ -107,12 +120,12 @@ export default function Statistics() {
         return "-";
       };
       const dayHeaders = uniqueDates.map((d) => new Date(d + "T00:00:00").getDate().toString());
-      const gridData = statsStudents.map((s: any) => [
+      const gridData = rankedStudents.map((s: any) => [
         `${s.firstName} ${s.lastName}`,
         ...uniqueDates.map((d) => cellStatus(s.id, d)),
       ]);
 
-      (doc as any).autoTable({
+      autoTable(doc, {
         startY: (doc as any).lastAutoTable.finalY + 8,
         head: [["O'quvchi", ...dayHeaders]],
         body: gridData,
@@ -172,6 +185,19 @@ export default function Statistics() {
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-2">
+          <Label className="text-muted-foreground text-sm">Saralash</Label>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as "absent" | "best" | "name")}>
+            <SelectTrigger className="w-[190px]" data-testid="select-stats-sort">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="absent">Eng ko'p qoldirganlar</SelectItem>
+              <SelectItem value="best">Eng yaxshi davomat</SelectItem>
+              <SelectItem value="name">Ism bo'yicha</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {statsGroupId && statsStudents.length > 0 && (
           <Button onClick={generateAttendancePDF} data-testid="button-download-pdf">
             <FileDown className="w-4 h-4 mr-2" /> PDF yuklab olish
@@ -184,9 +210,9 @@ export default function Statistics() {
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               {(() => {
-                const totalPresent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).present, 0);
-                const totalAbsent = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).absent, 0);
-                const totalLate = statsStudents.reduce((acc: number, s: any) => acc + getStudentStats(s.id).late, 0);
+                const totalPresent = rankedStudents.reduce((acc: number, s: any) => acc + s._stats.present, 0);
+                const totalAbsent = rankedStudents.reduce((acc: number, s: any) => acc + s._stats.absent, 0);
+                const totalLate = rankedStudents.reduce((acc: number, s: any) => acc + s._stats.late, 0);
                 return (
                   <>
                     <Card className="border-l-4 border-l-green-500">
@@ -217,6 +243,13 @@ export default function Statistics() {
                 <CardTitle className="text-lg">
                   {selectedGroupObj?.name} — {monthNames[statsMonth - 1]} {statsYear}
                 </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  {sortBy === "absent"
+                    ? "Eng ko'p dars qoldirganlar yuqorida"
+                    : sortBy === "best"
+                    ? "Eng yaxshi davomat yuqorida"
+                    : "Ism bo'yicha tartiblangan"}
+                </p>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -232,11 +265,16 @@ export default function Statistics() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {statsStudents.map((student: any, index: number) => {
-                      const st = getStudentStats(student.id);
+                    {rankedStudents.map((student: any, index: number) => {
+                      const st = student._stats;
+                      const rankColor = sortBy === "absent" && st.absent > 0
+                        ? (index === 0 ? "bg-red-500 text-white" : index < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground")
+                        : "bg-muted text-muted-foreground";
                       return (
                         <TableRow key={student.id} className="hover:bg-primary/5 transition-colors" data-testid={`row-stats-${student.id}`}>
-                          <TableCell className="text-muted-foreground">{index + 1}</TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${rankColor}`}>{index + 1}</span>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <div className="w-8 h-8 rounded-full bg-primary/80 flex items-center justify-center text-white text-xs font-medium">
@@ -316,8 +354,8 @@ export default function Statistics() {
                         </tr>
                       </thead>
                       <tbody>
-                        {statsStudents.map((student: any, idx: number) => {
-                          const st = getStudentStats(student.id);
+                        {rankedStudents.map((student: any, idx: number) => {
+                          const st = student._stats;
                           return (
                             <tr key={student.id} className={idx % 2 === 0 ? "bg-white" : "bg-muted/10"}>
                               <td className={`px-4 py-2.5 sticky left-0 z-10 border-r border-border/40 ${idx % 2 === 0 ? "bg-white" : "bg-muted/10"}`}>
