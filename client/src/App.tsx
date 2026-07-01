@@ -10,7 +10,7 @@ import { PWAInstallBanner } from "@/components/PWAInstallButton";
 // Rollar uchun ruxsat berilgan yo'llar
 const roleRouteAccess: Record<string, string[]> = {
   markaz_admin: ["/", "/leads", "/students", "/teachers", "/groups", "/subjects", "/schedule", "/payments", "/expenses", "/reports", "/settings"],
-  teacher: ["/attendance", "/students", "/groups", "/schedule", "/teacher-salary"],
+  teacher: ["/attendance", "/students", "/groups", "/schedule", "/statistics", "/teacher-salary"],
 };
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
@@ -21,6 +21,7 @@ const Groups = lazy(() => import("@/pages/Groups"));
 const Subjects = lazy(() => import("@/pages/Subjects"));
 const Schedule = lazy(() => import("@/pages/Schedule"));
 const Attendance = lazy(() => import("@/pages/Attendance"));
+const Statistics = lazy(() => import("@/pages/Statistics"));
 const Payments = lazy(() => import("@/pages/Payments"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const Expenses = lazy(() => import("@/pages/Expenses"));
@@ -103,6 +104,7 @@ function AdminRoutes() {
             <Route path="/subjects" component={Subjects} />
             <Route path="/schedule" component={Schedule} />
             <Route path="/attendance" component={Attendance} />
+            <Route path="/statistics" component={Statistics} />
             <Route path="/payments" component={Payments} />
             <Route path="/expenses" component={Expenses} />
             <Route path="/reports" component={Reports} />

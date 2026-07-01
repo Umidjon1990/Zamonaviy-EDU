@@ -13,7 +13,8 @@ import {
   UserCheck,
   FileText,
   BookOpen,
-  Receipt
+  Receipt,
+  BarChart2
 } from "lucide-react";
 import { cn, convertGoogleDriveUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ const allNavItems = [
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin"] },
   { icon: Receipt, label: "Xarajatlar", href: "/expenses", roles: ["markaz_admin"] },
   { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin"] },
+  { icon: BarChart2, label: "Statistika", href: "/statistics", roles: ["teacher"] },
   { icon: FileText, label: "Oylik", href: "/teacher-salary", roles: ["teacher"] },
   { icon: Settings, label: translations.nav.settings, href: "/settings", roles: ["markaz_admin"] },
 ];
