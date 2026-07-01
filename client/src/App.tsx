@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { lazy, Suspense } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { PWAInstallBanner } from "@/components/PWAInstallButton";
 
 // Rollar uchun ruxsat berilgan yo'llar
 const roleRouteAccess: Record<string, string[]> = {
@@ -139,6 +140,7 @@ function App() {
         <Router />
       </ErrorBoundary>
       <Toaster />
+      <PWAInstallBanner />
     </QueryClientProvider>
   );
 }

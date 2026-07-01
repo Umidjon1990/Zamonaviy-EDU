@@ -1,23 +1,60 @@
 {
-  "name": "Zamonaviy Ta'lim",
-  "short_name": "Zamonaviy Ta'lim",
-  "description": "O'quv markaz boshqaruv tizimi - Educational CRM",
+  "id": "/",
+  "name": "Zamonaviy-Edu",
+  "short_name": "Z-Edu",
+  "description": "O'quv markaz boshqaruv tizimi — Educational CRM",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
-  "orientation": "portrait-primary",
+  "orientation": "any",
+  "lang": "uz",
+  "dir": "ltr",
+  "categories": ["education", "business", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/pwa-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/pwa-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Boshqaruv paneli",
+      "short_name": "Dashboard",
+      "description": "Asosiy boshqaruv paneli",
+      "url": "/",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "O'quvchilar",
+      "short_name": "O'quvchilar",
+      "description": "O'quvchilar ro'yxati",
+      "url": "/students",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "O'qituvchi portali",
+      "short_name": "O'qituvchi",
+      "description": "O'qituvchi kabineti",
+      "url": "/teacher-login",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

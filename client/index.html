@@ -2,23 +2,64 @@
 <html lang="uz">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Zamonaviy Ta'lim</title>
 
-    <meta property="og:title" content="Zamonaviy-Edu - O‘quv markaz tizimi" />
-    <meta property="og:description" content="O‘quv markazlari uchun zamonaviy boshqaruv tizimi" />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Zamonaviy-Edu - O‘quv markaz tizimi" />
-    <meta name="twitter:description" content="O‘quv markazlari uchun zamonaviy boshqaruv tizimi" />
-
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
+
+    <!-- Theme -->
     <meta name="theme-color" content="#3b82f6" />
-    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="application-name" content="Zamonaviy-Edu" />
+
+    <!-- ===== iPhone / iPad Safari ===== -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Z-Edu" />
+
+    <!-- Apple touch icons (Safari uchun turli o'lchamlar) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="114x114" href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="76x76"  href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon" sizes="72x72"  href="/pwa-192x192.png" />
+    <link rel="apple-touch-icon"               href="/pwa-192x192.png" />
+
+    <!-- iPhone splash screens (iOS 12+) -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- ===== Android / Chrome ===== -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- ===== Windows Tile ===== -->
+    <meta name="msapplication-TileColor" content="#3b82f6" />
+    <meta name="msapplication-TileImage" content="/pwa-192x192.png" />
+    <meta name="msapplication-config" content="none" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
+    <link rel="shortcut icon" href="/favicon.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Zamonaviy-Edu - O'quv markaz tizimi" />
+    <meta property="og:description" content="O'quv markazlari uchun zamonaviy boshqaruv tizimi" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/opengraph.jpg" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Zamonaviy-Edu - O'quv markaz tizimi" />
+    <meta name="twitter:description" content="O'quv markazlari uchun zamonaviy boshqaruv tizimi" />
+    <meta name="twitter:image" content="/opengraph.jpg" />
+    <meta name="twitter:site" content="@replit" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>
