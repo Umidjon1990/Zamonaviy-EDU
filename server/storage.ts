@@ -35,6 +35,8 @@ import {
   type InsertCashReceiptLog,
   type StudentActivityLog,
   type InsertStudentActivityLog,
+  type TeacherCollectedPayment,
+  type InsertTeacherCollectedPayment,
   users,
   tenants,
   leads,
@@ -51,6 +53,7 @@ import {
   cashReceipts,
   cashReceiptLogs,
   studentActivityLogs,
+  teacherCollectedPayments,
 } from "@shared/schema";
 
 const pool = new Pool({
@@ -196,6 +199,10 @@ export interface IStorage {
   // Student Activity Logs
   createStudentActivityLog(log: InsertStudentActivityLog): Promise<StudentActivityLog>;
   getStudentActivityLogs(tenantId: number, limit?: number): Promise<StudentActivityLog[]>;
+  createTeacherCollectedPayment(data: InsertTeacherCollectedPayment): Promise<TeacherCollectedPayment>;
+  getTeacherCollectedPayments(tenantId: number, status?: string): Promise<TeacherCollectedPayment[]>;
+  getTeacherCollectedPaymentsByTeacher(tenantId: number, teacherId: string): Promise<TeacherCollectedPayment[]>;
+  updateTeacherCollectedPaymentStatus(id: number, tenantId: number, status: string, actorId: string, reason?: string): Promise<TeacherCollectedPayment | undefined>;
 
   // Finance Dashboard
   getFinanceDashboard(tenantId: number, month: number, year: number): Promise<{
@@ -963,6 +970,49 @@ export class DatabaseStorage implements IStorage {
       .where(eq(studentActivityLogs.tenantId, tenantId))
       .orderBy(desc(studentActivityLogs.createdAt))
       .limit(limit);
+  }
+
+  // Teacher Collected Payments
+  async createTeacherCollectedPayment(data: InsertTeacherCollectedPayment): Promise<TeacherCollectedPayment> {
+    const result = await db.insert(teacherCollectedPayments).values(data).returning();
+    return result[0];
+  }
+
+  async getTeacherCollectedPayments(tenantId: number, status?: string): Promise<TeacherCollectedPayment[]> {
+    const conditions = [eq(teacherCollectedPayments.tenantId, tenantId)];
+    if (status) conditions.push(eq(teacherCollectedPayments.status, status));
+    return await db
+      .select()
+      .from(teacherCollectedPayments)
+      .where(and(...conditions))
+      .orderBy(desc(teacherCollectedPayments.createdAt));
+  }
+
+  async getTeacherCollectedPaymentsByTeacher(tenantId: number, teacherId: string): Promise<TeacherCollectedPayment[]> {
+    return await db
+      .select()
+      .from(teacherCollectedPayments)
+      .where(and(eq(teacherCollectedPayments.tenantId, tenantId), eq(teacherCollectedPayments.teacherId, teacherId)))
+      .orderBy(desc(teacherCollectedPayments.createdAt));
+  }
+
+  async updateTeacherCollectedPaymentStatus(id: number, tenantId: number, status: string, actorId: string, reason?: string): Promise<TeacherCollectedPayment | undefined> {
+    const now = new Date();
+    const updates: any = { status };
+    if (status === "confirmed") {
+      updates.confirmedBy = actorId;
+      updates.confirmedAt = now;
+    } else if (status === "rejected") {
+      updates.rejectedBy = actorId;
+      updates.rejectedAt = now;
+      if (reason) updates.rejectionReason = reason;
+    }
+    const result = await db
+      .update(teacherCollectedPayments)
+      .set(updates)
+      .where(and(eq(teacherCollectedPayments.id, id), eq(teacherCollectedPayments.tenantId, tenantId)))
+      .returning();
+    return result[0];
   }
 
   // Finance Dashboard

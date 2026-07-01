@@ -15,7 +15,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   GraduationCap, Users, Calendar, LogOut, Plus, Check, X, Clock, 
   UserPlus, Edit, ArrowRightLeft, BookOpen, TrendingUp, Sparkles,
-  CheckCircle2, XCircle, AlertCircle, ChevronRight, BarChart2, FileDown
+  CheckCircle2, XCircle, AlertCircle, ChevronRight, BarChart2, FileDown,
+  Banknote, SendHorizonal
 } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -63,6 +64,15 @@ export default function TeacherDashboard() {
   const [transferStudent, setTransferStudent] = useState<any>(null);
   const [transferFromGroup, setTransferFromGroup] = useState("");
   const [transferToGroup, setTransferToGroup] = useState("");
+
+  // To'lov yig'ish
+  const [paymentForm, setPaymentForm] = useState({
+    studentId: "",
+    groupId: "",
+    amount: "",
+    paymentType: "cash",
+    notes: "",
+  });
 
   useEffect(() => {
     const token = localStorage.getItem("teacherToken");
@@ -146,6 +156,41 @@ export default function TeacherDashboard() {
     enabled: !!statsGroupId,
   });
   const statsStudents = (statsStudentsRaw || []) as any[];
+
+  // O'qituvchi yig'gan to'lovlar tarixi
+  const { data: collectedPaymentsData, refetch: refetchCollectedPayments } = useQuery({
+    queryKey: ["teacher-collected-payments", teacherId],
+    queryFn: async () => {
+      const res = await fetch("/api/teacher/collected-payments");
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!teacherId,
+  });
+  const collectedPayments = (collectedPaymentsData || []) as any[];
+
+  const submitPaymentMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/teacher/collected-payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Xatolik");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchCollectedPayments();
+      setPaymentForm({ studentId: "", groupId: "", amount: "", paymentType: "cash", notes: "" });
+      toast({ title: "Muvaffaqiyat", description: "To'lov adminga yuborildi. Tasdiq kutilmoqda." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Xatolik", description: err.message, variant: "destructive" });
+    },
+  });
 
   // Transfer student (barcha guruhdan)
   const { data: transferGroupStudentsRaw } = useQuery({
@@ -463,6 +508,9 @@ export default function TeacherDashboard() {
             </TabsTrigger>
             <TabsTrigger value="statistics" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2.5 transition-all">
               <BarChart2 className="w-4 h-4" /> Statistika
+            </TabsTrigger>
+            <TabsTrigger value="payment" className="flex items-center gap-2 data-[state=active]:gradient-primary data-[state=active]:text-white rounded-lg px-4 py-2.5 transition-all" data-testid="tab-payment">
+              <Banknote className="w-4 h-4" /> To'lov
             </TabsTrigger>
           </TabsList>
 
@@ -1078,6 +1126,173 @@ export default function TeacherDashboard() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* To'lov Tab */}
+          <TabsContent value="payment" className="space-y-4 animate-slide-up">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* To'lov yig'ish formasi */}
+              <Card className="card-modern">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Banknote className="w-5 h-5 text-primary" /> To'lov qabul qilish
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!paymentForm.studentId || !paymentForm.amount) return;
+                      submitPaymentMutation.mutate({
+                        studentId: parseInt(paymentForm.studentId),
+                        groupId: paymentForm.groupId ? parseInt(paymentForm.groupId) : undefined,
+                        amount: parseInt(paymentForm.amount),
+                        paymentType: paymentForm.paymentType,
+                        notes: paymentForm.notes || undefined,
+                      });
+                    }}
+                    className="space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <Label>Guruh (ixtiyoriy)</Label>
+                      <Select
+                        value={paymentForm.groupId}
+                        onValueChange={(v) => setPaymentForm({ ...paymentForm, groupId: v, studentId: "" })}
+                      >
+                        <SelectTrigger className="bg-white/50" data-testid="select-payment-group">
+                          <SelectValue placeholder="Guruhni tanlang" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— Barcha o'quvchilar —</SelectItem>
+                          {groups.map((g: any) => (
+                            <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>O'quvchi *</Label>
+                      <Select
+                        value={paymentForm.studentId}
+                        onValueChange={(v) => setPaymentForm({ ...paymentForm, studentId: v })}
+                      >
+                        <SelectTrigger className="bg-white/50" data-testid="select-payment-student">
+                          <SelectValue placeholder="O'quvchini tanlang" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(paymentForm.groupId
+                            ? allStudents.filter((s: any) => s.groupIds?.includes(parseInt(paymentForm.groupId)))
+                            : allStudents
+                          ).map((s: any) => (
+                            <SelectItem key={s.id} value={s.id.toString()}>
+                              {s.firstName} {s.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Summa (so'm) *</Label>
+                      <Input
+                        type="number"
+                        placeholder="500000"
+                        value={paymentForm.amount}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                        className="bg-white/50"
+                        min={1}
+                        required
+                        data-testid="input-payment-amount"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>To'lov turi</Label>
+                      <Select
+                        value={paymentForm.paymentType}
+                        onValueChange={(v) => setPaymentForm({ ...paymentForm, paymentType: v })}
+                      >
+                        <SelectTrigger className="bg-white/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Naqd pul</SelectItem>
+                          <SelectItem value="card">Plastik karta</SelectItem>
+                          <SelectItem value="bank_transfer">Bank o'tkazma</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Izoh (ixtiyoriy)</Label>
+                      <Input
+                        placeholder="Oylik to'lov..."
+                        value={paymentForm.notes}
+                        onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                        className="bg-white/50"
+                        data-testid="input-payment-notes"
+                      />
+                    </div>
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                      To'lov admin tomonidan tasdiqlanganidan so'ng rasman qabul qilinadi.
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full gradient-primary"
+                      disabled={!paymentForm.studentId || !paymentForm.amount || submitPaymentMutation.isPending}
+                      data-testid="button-submit-payment"
+                    >
+                      <SendHorizonal className="w-4 h-4 mr-2" />
+                      {submitPaymentMutation.isPending ? "Yuborilmoqda..." : "Adminga yuborish"}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* Yuborilgan to'lovlar tarixi */}
+              <Card className="card-modern">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-primary" /> Yuborilgan to'lovlar
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {collectedPayments.length === 0 ? (
+                    <div className="py-8 text-center text-muted-foreground text-sm">
+                      Hali yuborilgan to'lovlar yo'q
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {collectedPayments.slice(0, 20).map((p: any) => {
+                        const date = new Date(p.createdAt);
+                        const statusMap: Record<string, { label: string; color: string }> = {
+                          pending: { label: "Kutilmoqda", color: "text-amber-600 bg-amber-50 border-amber-200" },
+                          confirmed: { label: "Tasdiqlandi", color: "text-green-700 bg-green-50 border-green-200" },
+                          rejected: { label: "Rad etildi", color: "text-red-600 bg-red-50 border-red-200" },
+                        };
+                        const st = statusMap[p.status] || statusMap.pending;
+                        return (
+                          <div key={p.id} className="p-4 flex items-start justify-between gap-2" data-testid={`row-collected-payment-${p.id}`}>
+                            <div>
+                              <p className="font-medium text-sm">{p.studentName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {(p.amount).toLocaleString("uz-UZ")} so'm · {p.paymentType === "cash" ? "Naqd" : p.paymentType === "card" ? "Karta" : "Bank"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {date.toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "2-digit" })} {date.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                              {p.rejectionReason && (
+                                <p className="text-xs text-red-500 mt-1">Sabab: {p.rejectionReason}</p>
+                              )}
+                            </div>
+                            <Badge variant="outline" className={`text-xs shrink-0 ${st.color}`}>
+                              {st.label}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
 

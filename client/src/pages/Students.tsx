@@ -16,7 +16,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import * as XLSX from "xlsx";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function Students() {
   const { data: currentUser } = useQuery({
@@ -71,6 +71,10 @@ export default function Students() {
   const [bulkAddGroupId, setBulkAddGroupId] = useState("");
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
+  const [showPendingPayments, setShowPendingPayments] = useState(true);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const queryClient = useQueryClient();
 
   const { data: activityLogsData } = useQuery({
     queryKey: ["/api/student-activity-logs"],
@@ -82,6 +86,55 @@ export default function Students() {
     enabled: !isTeacher,
   });
   const activityLogs = (activityLogsData || []) as any[];
+
+  const { data: teacherPaymentsData } = useQuery({
+    queryKey: ["/api/teacher-collected-payments"],
+    queryFn: async () => {
+      const res = await fetch("/api/teacher-collected-payments", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !isTeacher,
+    refetchInterval: 30000,
+  });
+  const teacherPayments = (teacherPaymentsData || []) as any[];
+  const pendingTeacherPayments = teacherPayments.filter((p: any) => p.status === "pending");
+
+  const confirmPaymentMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/teacher-collected-payments/${id}/confirm`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/teacher-collected-payments"] });
+      toast({ title: "Muvaffaqiyat", description: "To'lov tasdiqlandi va baytlandi" });
+    },
+    onError: (e: any) => toast({ title: "Xatolik", description: e.message, variant: "destructive" }),
+  });
+
+  const rejectPaymentMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
+      const res = await fetch(`/api/teacher-collected-payments/${id}/reject`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/teacher-collected-payments"] });
+      setRejectingId(null);
+      setRejectReason("");
+      toast({ title: "Rad etildi", description: "To'lov rad etildi" });
+    },
+    onError: (e: any) => toast({ title: "Xatolik", description: e.message, variant: "destructive" }),
+  });
 
   const handleShowTemplate = async () => {
     try {
@@ -873,7 +926,130 @@ export default function Students() {
       </Card>
 
       {!isTeacher && (
-        <div className="mt-4">
+        <div className="mt-4 space-y-4">
+
+          {/* O'qituvchi to'lovlari — tasdiqlanishi kutilmoqda */}
+          <div>
+            <button
+              onClick={() => setShowPendingPayments((v) => !v)}
+              className="flex items-center gap-2 text-sm font-medium hover:text-foreground transition-colors mb-3"
+              data-testid="button-toggle-pending-payments"
+            >
+              <span className="flex items-center gap-1.5">
+                <span className="relative flex h-3 w-3">
+                  {pendingTeacherPayments.length > 0 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />}
+                  <span className={`inline-flex rounded-full h-3 w-3 ${pendingTeacherPayments.length > 0 ? "bg-amber-500" : "bg-muted-foreground/40"}`} />
+                </span>
+                O'qituvchi to'lovlari
+                {pendingTeacherPayments.length > 0 && (
+                  <Badge className="ml-1 bg-amber-500 text-white text-xs px-1.5 py-0">{pendingTeacherPayments.length}</Badge>
+                )}
+              </span>
+              {showPendingPayments ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+
+            {showPendingPayments && (
+              <Card className="shadow-sm">
+                <CardContent className="p-0">
+                  {teacherPayments.length === 0 ? (
+                    <div className="py-8 text-center text-muted-foreground text-sm">Hali hech qanday to'lov yuborilmagan</div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-32">Vaqt</TableHead>
+                          <TableHead>O'qituvchi</TableHead>
+                          <TableHead>O'quvchi</TableHead>
+                          <TableHead>Summa</TableHead>
+                          <TableHead>Holat</TableHead>
+                          <TableHead className="text-right">Amal</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {teacherPayments.slice(0, 50).map((p: any) => {
+                          const date = new Date(p.createdAt);
+                          const fmtDate = `${date.toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${date.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}`;
+                          return (
+                            <TableRow key={p.id} data-testid={`row-teacher-payment-${p.id}`}>
+                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{fmtDate}</TableCell>
+                              <TableCell className="text-sm font-medium">{p.teacherName}</TableCell>
+                              <TableCell className="text-sm">
+                                <div>{p.studentName}</div>
+                                {p.groupName && <div className="text-xs text-muted-foreground">{p.groupName}</div>}
+                              </TableCell>
+                              <TableCell className="text-sm font-semibold">{(p.amount).toLocaleString("uz-UZ")} so'm</TableCell>
+                              <TableCell>
+                                {p.status === "pending" && <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 text-xs">Kutilmoqda</Badge>}
+                                {p.status === "confirmed" && <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50 text-xs">Tasdiqlandi</Badge>}
+                                {p.status === "rejected" && (
+                                  <div>
+                                    <Badge variant="outline" className="text-red-600 border-red-300 bg-red-50 text-xs">Rad etildi</Badge>
+                                    {p.rejectionReason && <div className="text-xs text-muted-foreground mt-0.5">{p.rejectionReason}</div>}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {p.status === "pending" && (
+                                  <div className="flex items-center justify-end gap-1">
+                                    {rejectingId === p.id ? (
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="text"
+                                          placeholder="Sabab..."
+                                          className="h-7 text-xs border rounded px-2 w-28"
+                                          value={rejectReason}
+                                          onChange={(e) => setRejectReason(e.target.value)}
+                                          data-testid={`input-reject-reason-${p.id}`}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          className="h-7 text-xs px-2"
+                                          onClick={() => rejectPaymentMutation.mutate({ id: p.id, reason: rejectReason })}
+                                          disabled={rejectPaymentMutation.isPending}
+                                          data-testid={`button-reject-confirm-${p.id}`}
+                                        >Rad</Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-7 text-xs px-2"
+                                          onClick={() => { setRejectingId(null); setRejectReason(""); }}
+                                        >Bekor</Button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700 text-white"
+                                          onClick={() => confirmPaymentMutation.mutate(p.id)}
+                                          disabled={confirmPaymentMutation.isPending}
+                                          data-testid={`button-confirm-payment-${p.id}`}
+                                        >Tasdiqlash</Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 text-xs px-2 text-red-600 border-red-300 hover:bg-red-50"
+                                          onClick={() => setRejectingId(p.id)}
+                                          data-testid={`button-reject-payment-${p.id}`}
+                                        >Rad</Button>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Faoliyat tarixi bo'limi */}
+          <div>
           <button
             onClick={() => setShowActivityLog((v) => !v)}
             className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-3"
@@ -950,6 +1126,7 @@ export default function Students() {
               </CardContent>
             </Card>
           )}
+          </div>
         </div>
       )}
     </div>

@@ -2363,6 +2363,124 @@ export async function registerRoutes(
     }
   });
 
+  // Teacher Collected Payments — o'qituvchi to'lov yig'adi
+  app.post("/api/teacher/collected-payments", requireTenantAuth, requireTeacherPermission('accept_payment'), async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const teacherUserId = getUserId(req);
+      const teacher = await storage.getUser(teacherUserId);
+      const { studentId, groupId, amount, paymentType, notes } = req.body;
+      if (!studentId || !amount) {
+        return res.status(400).json({ error: "O'quvchi va summa kiritilishi kerak" });
+      }
+      const student = await storage.getStudent(parseInt(studentId), tenantId);
+      if (!student) return res.status(404).json({ error: "O'quvchi topilmadi" });
+      let groupName: string | undefined;
+      if (groupId) {
+        const group = await storage.getGroup(parseInt(groupId), tenantId);
+        groupName = group?.name;
+      }
+      const payment = await storage.createTeacherCollectedPayment({
+        tenantId,
+        teacherId: teacherUserId,
+        teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : teacherUserId,
+        studentId: parseInt(studentId),
+        studentName: `${student.firstName} ${student.lastName}`,
+        groupId: groupId ? parseInt(groupId) : undefined,
+        groupName,
+        amount: parseInt(amount),
+        paymentType: paymentType || "cash",
+        notes: notes || null,
+        status: "pending",
+      });
+      res.status(201).json(payment);
+    } catch (error) {
+      res.status(500).json({ error: "To'lovni saqlashda xatolik" });
+    }
+  });
+
+  // O'qituvchi o'zining yig'gan to'lovlarini ko'radi
+  app.get("/api/teacher/collected-payments", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const teacherUserId = getUserId(req);
+      const payments = await storage.getTeacherCollectedPaymentsByTeacher(tenantId, teacherUserId);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ error: "To'lovlarni olishda xatolik" });
+    }
+  });
+
+  // Admin barcha kutayotgan to'lovlarni ko'radi
+  app.get("/api/teacher-collected-payments", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const status = req.query.status as string | undefined;
+      const payments = await storage.getTeacherCollectedPayments(tenantId, status);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ error: "To'lovlarni olishda xatolik" });
+    }
+  });
+
+  // Admin tasdiqlaydi — rasmiy to'lov yaratiladi va student balansi yangilanadi
+  app.post("/api/teacher-collected-payments/:id/confirm", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const id = parseInt(req.params.id);
+      const actorId = getUserId(req);
+      const payments = await storage.getTeacherCollectedPayments(tenantId);
+      const tcp = payments.find(p => p.id === id);
+      if (!tcp) return res.status(404).json({ error: "To'lov topilmadi" });
+      if (tcp.status !== "pending") return res.status(400).json({ error: "Bu to'lov allaqachon ko'rib chiqilgan" });
+
+      // Rasmiy to'lov yaratish
+      const actor = await storage.getUser(actorId);
+      const actorName = actor ? `${actor.firstName} ${actor.lastName}` : actorId;
+      const payment = await storage.createPayment({
+        tenantId,
+        studentId: tcp.studentId,
+        teacherId: null,
+        amount: tcp.amount,
+        teacherEarning: 0,
+        paymentType: tcp.paymentType as any,
+        status: "completed",
+        notes: `O'qituvchi ${tcp.teacherName} yig'gan. Admin ${actorName} tasdiqladi.${tcp.notes ? " " + tcp.notes : ""}`,
+        studentName: tcp.studentName,
+      });
+
+      // Student balansini yangilash
+      const student = await storage.getStudent(tcp.studentId, tenantId);
+      if (student) {
+        await storage.updateStudent(tcp.studentId, tenantId, { balance: student.balance + tcp.amount });
+      }
+
+      // Statusni yangilash
+      await storage.updateTeacherCollectedPaymentStatus(id, tenantId, "confirmed", actorId);
+      res.json({ success: true, paymentId: payment.id });
+    } catch (error) {
+      res.status(500).json({ error: "Tasdiqlashda xatolik" });
+    }
+  });
+
+  // Admin rad etadi
+  app.post("/api/teacher-collected-payments/:id/reject", async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const id = parseInt(req.params.id);
+      const actorId = getUserId(req);
+      const { reason } = req.body;
+      const payments = await storage.getTeacherCollectedPayments(tenantId);
+      const tcp = payments.find(p => p.id === id);
+      if (!tcp) return res.status(404).json({ error: "To'lov topilmadi" });
+      if (tcp.status !== "pending") return res.status(400).json({ error: "Bu to'lov allaqachon ko'rib chiqilgan" });
+      await storage.updateTeacherCollectedPaymentStatus(id, tenantId, "rejected", actorId, reason);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Rad etishda xatolik" });
+    }
+  });
+
   app.delete("/api/teachers/:id", async (req, res) => {
     try {
       const id = req.params.id;

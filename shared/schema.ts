@@ -304,6 +304,40 @@ export const insertStudentActivityLogSchema = createInsertSchema(studentActivity
 export type InsertStudentActivityLog = z.infer<typeof insertStudentActivityLogSchema>;
 export type StudentActivityLog = typeof studentActivityLogs.$inferSelect;
 
+// Teacher Collected Payments (O'qituvchi yig'gan to'lovlar)
+export const teacherCollectedPayments = pgTable("teacher_collected_payments", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull(),
+  teacherId: text("teacher_id").notNull(),
+  teacherName: text("teacher_name").notNull(),
+  studentId: integer("student_id").notNull(),
+  studentName: text("student_name").notNull(),
+  groupId: integer("group_id"),
+  groupName: text("group_name"),
+  amount: integer("amount").notNull(),
+  paymentType: text("payment_type").notNull().default("cash"),
+  notes: text("notes"),
+  status: text("status").notNull().default("pending"), // pending, confirmed, rejected
+  confirmedBy: text("confirmed_by"),
+  confirmedAt: timestamp("confirmed_at"),
+  rejectedBy: text("rejected_by"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTeacherCollectedPaymentSchema = createInsertSchema(teacherCollectedPayments).omit({
+  id: true,
+  createdAt: true,
+  confirmedBy: true,
+  confirmedAt: true,
+  rejectedBy: true,
+  rejectedAt: true,
+  rejectionReason: true,
+});
+export type InsertTeacherCollectedPayment = z.infer<typeof insertTeacherCollectedPaymentSchema>;
+export type TeacherCollectedPayment = typeof teacherCollectedPayments.$inferSelect;
+
 // Cash Receipts (Pul topshirish / Kassa)
 export const cashReceipts = pgTable("cash_receipts", {
   id: serial("id").primaryKey(),

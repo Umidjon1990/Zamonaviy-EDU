@@ -83,6 +83,30 @@ async function fixDatabaseSchema() {
       );
     `).catch(() => {});
 
+    // Create teacher_collected_payments table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS teacher_collected_payments (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL,
+        teacher_id TEXT NOT NULL,
+        teacher_name TEXT NOT NULL,
+        student_id INTEGER NOT NULL,
+        student_name TEXT NOT NULL,
+        group_id INTEGER,
+        group_name TEXT,
+        amount INTEGER NOT NULL,
+        payment_type TEXT NOT NULL DEFAULT 'cash',
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        confirmed_by TEXT,
+        confirmed_at TIMESTAMP,
+        rejected_by TEXT,
+        rejected_at TIMESTAMP,
+        rejection_reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `).catch(() => {});
+
     // Create student_activity_logs table
     await client.query(`
       CREATE TABLE IF NOT EXISTS student_activity_logs (
