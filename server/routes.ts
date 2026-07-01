@@ -2399,6 +2399,69 @@ export async function registerRoutes(
     }
   });
 
+  // O'qituvchi uchun guruh o'quvchilarining to'lov holati
+  app.get("/api/teacher/group/:groupId/payment-status", requireTenantAuth, async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const tenantId = getTenantId(req);
+      const groupStudents = await storage.getStudentsByGroup(groupId, tenantId);
+      const now = new Date();
+      const result = await Promise.all(
+        groupStudents.map(async (student) => {
+          const studentPayments = await storage.getPayments(tenantId, student.id);
+          const completedPayments = studentPayments.filter((p) => p.status === "completed");
+          const lastPayment = completedPayments[0] || null;
+          const lastPaymentDate = lastPayment ? new Date(lastPayment.createdAt) : null;
+          const daysSince = lastPaymentDate
+            ? Math.floor((now.getTime() - lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+          return {
+            studentId: student.id,
+            studentName: `${student.firstName} ${student.lastName}`,
+            balance: student.balance,
+            lastPaymentDate: lastPaymentDate ? lastPaymentDate.toISOString() : null,
+            lastPaymentAmount: lastPayment?.amount || null,
+            daysSinceLastPayment: daysSince,
+            isOverdue: daysSince === null || daysSince > 30,
+            totalPayments: completedPayments.length,
+          };
+        })
+      );
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "To'lov holatini olishda xatolik" });
+    }
+  });
+
+  // O'qituvchi guruhlarining bugungi davomat holati
+  app.get("/api/teacher/today-attendance-status", requireTenantAuth, async (req, res) => {
+    try {
+      const tenantId = getTenantId(req);
+      const teacherUserId = getUserId(req);
+      const teacherGroups = await storage.getGroupsByTeacher(teacherUserId, tenantId);
+      const today = new Date().toISOString().split("T")[0];
+      const result = await Promise.all(
+        teacherGroups.map(async (group) => {
+          const students = await storage.getStudentsByGroup(group.id, tenantId);
+          if (students.length === 0) return null;
+          const att = await storage.getAttendance(tenantId, group.id, new Date(today));
+          return {
+            groupId: group.id,
+            groupName: group.name,
+            days: group.days,
+            time: group.time,
+            studentCount: students.length,
+            markedCount: att.length,
+            hasAttendanceToday: att.length > 0,
+          };
+        })
+      );
+      res.json(result.filter(Boolean));
+    } catch (error) {
+      res.status(500).json({ error: "Davomat holatini olishda xatolik" });
+    }
+  });
+
   // O'qituvchi o'zining yig'gan to'lovlarini ko'radi
   app.get("/api/teacher/collected-payments", requireTenantAuth, async (req, res) => {
     try {

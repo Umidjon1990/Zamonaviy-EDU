@@ -16,7 +16,7 @@ import {
   GraduationCap, Users, Calendar, LogOut, Plus, Check, X, Clock, 
   UserPlus, Edit, ArrowRightLeft, BookOpen, TrendingUp, Sparkles,
   CheckCircle2, XCircle, AlertCircle, ChevronRight, BarChart2, FileDown,
-  Banknote, SendHorizonal
+  Banknote, SendHorizonal, CreditCard, AlertTriangle, BadgeCheck
 } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -156,6 +156,49 @@ export default function TeacherDashboard() {
     enabled: !!statsGroupId,
   });
   const statsStudents = (statsStudentsRaw || []) as any[];
+
+  // Tanlangan guruh o'quvchilarining to'lov holati
+  const { data: paymentStatusData } = useQuery({
+    queryKey: ["group-payment-status", selectedGroup],
+    queryFn: async () => {
+      if (!selectedGroup) return [];
+      const res = await fetch(`/api/teacher/group/${selectedGroup}/payment-status`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedGroup,
+    refetchInterval: 60000,
+  });
+  const paymentStatus = (paymentStatusData || []) as any[];
+
+  // Bugungi davomat holati (o'tkazib yuborilgan darslar)
+  const { data: todayAttendanceStatusData } = useQuery({
+    queryKey: ["today-attendance-status", teacherId],
+    queryFn: async () => {
+      const res = await fetch(`/api/teacher/today-attendance-status`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!teacherId,
+    refetchInterval: 120000,
+  });
+  const todayAttendanceStatus = (todayAttendanceStatusData || []) as any[];
+
+  // Uzbek hafta kunlari
+  const uzbekDays = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
+  const todayUzbekDay = uzbekDays[new Date().getDay()];
+
+  // Bugun dars bor, lekin davomat olinmagan guruhlar
+  const missedAttendanceGroups = todayAttendanceStatus.filter((g: any) => {
+    const hasClassToday = (g.days || []).some((d: string) =>
+      d.toLowerCase().includes(todayUzbekDay.toLowerCase().slice(0, 3))
+    );
+    return hasClassToday && !g.hasAttendanceToday;
+  });
+
+  // O'quvchi to'lov holatini olish helper
+  const getStudentPaymentStatus = (studentId: number) =>
+    paymentStatus.find((p: any) => p.studentId === studentId);
 
   // O'qituvchi yig'gan to'lovlar tarixi
   const { data: collectedPaymentsData, refetch: refetchCollectedPayments } = useQuery({
@@ -727,14 +770,21 @@ export default function TeacherDashboard() {
                     <TableHeader>
                       <TableRow className="bg-muted/30">
                         <TableHead className="font-semibold">O'quvchi</TableHead>
-                        <TableHead className="font-semibold">Telefon</TableHead>
-                        <TableHead className="font-semibold">Ota-ona</TableHead>
+                        <TableHead className="font-semibold">To'lov holati</TableHead>
+                        <TableHead className="font-semibold hidden sm:table-cell">Telefon</TableHead>
                         <TableHead className="text-right font-semibold">Amallar</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {groupStudents.length > 0 ? (
-                        groupStudents.map((student: any, index: number) => (
+                        groupStudents.map((student: any) => {
+                          const ps = getStudentPaymentStatus(student.id);
+                          const isOverdue = !ps || ps.isOverdue;
+                          const daysSince = ps?.daysSinceLastPayment;
+                          const lastDate = ps?.lastPaymentDate
+                            ? new Date(ps.lastPaymentDate).toLocaleDateString("uz-UZ", { day: "2-digit", month: "2-digit" })
+                            : null;
+                          return (
                           <TableRow key={student.id} className="hover:bg-primary/5 transition-colors">
                             <TableCell>
                               <div className="flex items-center gap-3">
@@ -744,8 +794,35 @@ export default function TeacherDashboard() {
                                 <span className="font-medium">{student.firstName} {student.lastName}</span>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground">{student.phone}</TableCell>
-                            <TableCell className="text-muted-foreground">{student.parentPhone}</TableCell>
+                            <TableCell>
+                              {!ps ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0" />
+                                  <span className="text-xs text-muted-foreground">Yuklanmoqda...</span>
+                                </div>
+                              ) : isOverdue ? (
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                                    <span className="text-xs font-semibold text-red-600">
+                                      {daysSince === null ? "Hech to'lamagan" : `${daysSince} kun o'tdi`}
+                                    </span>
+                                  </div>
+                                  {lastDate && <p className="text-xs text-muted-foreground pl-3.5">Oxirgi: {lastDate}</p>}
+                                </div>
+                              ) : (
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <BadgeCheck className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                                    <span className="text-xs font-semibold text-green-700">
+                                      {daysSince === 0 ? "Bugun" : daysSince === 1 ? "Kecha" : `${daysSince} kun oldin`}
+                                    </span>
+                                  </div>
+                                  {lastDate && <p className="text-xs text-muted-foreground pl-5">{lastDate} · {(ps.lastPaymentAmount || 0).toLocaleString("uz-UZ")} so'm</p>}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm hidden sm:table-cell">{student.phone}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button size="sm" variant="outline" className="hover:bg-primary/10 hover:text-primary hover:border-primary" onClick={() => openEditStudent(student)}>
@@ -757,7 +834,8 @@ export default function TeacherDashboard() {
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))
+                          );
+                        })
                       ) : (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
@@ -864,6 +942,26 @@ export default function TeacherDashboard() {
 
           {/* Attendance Tab */}
           <TabsContent value="attendance" className="space-y-4 animate-slide-up">
+
+            {/* O'tkazilgan darslar ogohlantiruvi */}
+            {missedAttendanceGroups.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-800 text-sm">Bugun davomat olinmagan guruhlar!</p>
+                  <div className="mt-1 space-y-0.5">
+                    {missedAttendanceGroups.map((g: any) => (
+                      <p key={g.groupId} className="text-xs text-amber-700">
+                        • <span className="font-medium">{g.groupName}</span>
+                        {g.time && <span className="text-amber-600"> — {g.time}</span>}
+                        <span className="text-amber-500"> ({g.studentCount} o'quvchi)</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="space-y-2">
                 <Label className="text-muted-foreground text-sm">Guruh</Label>
@@ -892,53 +990,103 @@ export default function TeacherDashboard() {
             {selectedGroup ? (
               <Card className="card-modern overflow-hidden">
                 <CardHeader className="border-b bg-muted/30">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <CardTitle className="text-lg">Davomat jadvali</CardTitle>
-                    <Badge variant="outline" className="bg-white">
-                      {new Date(attendanceDate).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {/* Progress ko'rsatgich */}
+                      {groupStudents.length > 0 && (() => {
+                        const marked = groupStudents.filter((s: any) => getAttendanceStatus(s.id) !== null).length;
+                        const total = groupStudents.length;
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${marked === total ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                              {marked}/{total} belgilandi
+                            </span>
+                          </div>
+                        );
+                      })()}
+                      <Badge variant="outline" className="bg-white">
+                        {new Date(attendanceDate).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y">
                     {groupStudents.length > 0 ? (
-                      groupStudents.map((student: any) => {
+                      groupStudents.map((student: any, idx: number) => {
                         const status = getAttendanceStatus(student.id);
+                        const isMarked = status !== null;
                         return (
-                          <div key={student.id} className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors">
+                          <div
+                            key={student.id}
+                            className={`flex items-center justify-between p-4 transition-colors ${isMarked ? "bg-muted/10" : "hover:bg-muted/30"}`}
+                          >
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full gradient-info flex items-center justify-center text-white text-sm font-medium">
+                              {/* Status rangli krujok */}
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium relative
+                                ${status === "present" ? "bg-green-500" : status === "absent" ? "bg-red-500" : status === "late" ? "bg-amber-500" : "gradient-info"}`}>
                                 {student.firstName?.[0]}{student.lastName?.[0]}
+                                {isMarked && (
+                                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white flex items-center justify-center shadow">
+                                    {status === "present" && <CheckCircle2 className="w-3 h-3 text-green-600" />}
+                                    {status === "absent" && <XCircle className="w-3 h-3 text-red-500" />}
+                                    {status === "late" && <AlertCircle className="w-3 h-3 text-amber-500" />}
+                                  </span>
+                                )}
                               </div>
                               <div>
                                 <p className="font-medium">{student.firstName} {student.lastName}</p>
-                                <p className="text-xs text-muted-foreground">{student.phone}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {status === "present" ? "✓ Bor deb belgilandi" :
+                                   status === "absent" ? "✗ Yo'q deb belgilandi" :
+                                   status === "late" ? "⚡ Kech qoldi deb belgilandi" :
+                                   "Hali belgilanmagan"}
+                                </p>
                               </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-1.5">
                               <Button
                                 size="sm"
                                 variant={status === "present" ? "default" : "outline"}
-                                className={status === "present" ? "gradient-success border-0 text-white shadow-lg shadow-green-500/25" : "hover:bg-green-50 hover:text-green-600 hover:border-green-300"}
-                                onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: "present" })}
+                                className={`transition-all ${status === "present"
+                                  ? "gradient-success border-0 text-white shadow-lg shadow-green-500/25 ring-2 ring-green-400 ring-offset-1"
+                                  : "hover:bg-green-50 hover:text-green-600 hover:border-green-300 opacity-70"}`}
+                                onClick={() => {
+                                  if (status !== "present") markAttendanceMutation.mutate({ studentId: student.id, status: "present" });
+                                }}
+                                disabled={markAttendanceMutation.isPending}
                               >
-                                <CheckCircle2 className="w-4 h-4 mr-1" /> Bor
+                                <CheckCircle2 className="w-4 h-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Bor</span>
                               </Button>
                               <Button
                                 size="sm"
                                 variant={status === "absent" ? "default" : "outline"}
-                                className={status === "absent" ? "bg-red-500 border-0 text-white shadow-lg shadow-red-500/25" : "hover:bg-red-50 hover:text-red-600 hover:border-red-300"}
-                                onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: "absent" })}
+                                className={`transition-all ${status === "absent"
+                                  ? "bg-red-500 border-0 text-white shadow-lg shadow-red-500/25 ring-2 ring-red-400 ring-offset-1"
+                                  : "hover:bg-red-50 hover:text-red-600 hover:border-red-300 opacity-70"}`}
+                                onClick={() => {
+                                  if (status !== "absent") markAttendanceMutation.mutate({ studentId: student.id, status: "absent" });
+                                }}
+                                disabled={markAttendanceMutation.isPending}
                               >
-                                <XCircle className="w-4 h-4 mr-1" /> Yo'q
+                                <XCircle className="w-4 h-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Yo'q</span>
                               </Button>
                               <Button
                                 size="sm"
                                 variant={status === "late" ? "default" : "outline"}
-                                className={status === "late" ? "gradient-warning border-0 text-white shadow-lg shadow-amber-500/25" : "hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300"}
-                                onClick={() => markAttendanceMutation.mutate({ studentId: student.id, status: "late" })}
+                                className={`transition-all ${status === "late"
+                                  ? "gradient-warning border-0 text-white shadow-lg shadow-amber-500/25 ring-2 ring-amber-400 ring-offset-1"
+                                  : "hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 opacity-70"}`}
+                                onClick={() => {
+                                  if (status !== "late") markAttendanceMutation.mutate({ studentId: student.id, status: "late" });
+                                }}
+                                disabled={markAttendanceMutation.isPending}
                               >
-                                <AlertCircle className="w-4 h-4 mr-1" /> Kech
+                                <AlertCircle className="w-4 h-4 sm:mr-1" />
+                                <span className="hidden sm:inline">Kech</span>
                               </Button>
                             </div>
                           </div>
