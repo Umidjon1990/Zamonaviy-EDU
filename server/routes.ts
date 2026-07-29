@@ -1826,8 +1826,18 @@ export async function registerRoutes(
       const oldAmount = existingPayment.amount;
       const newAmount = amount !== undefined ? amount : oldAmount;
       
+      // Recalculate teacher earning if amount changed
+      let newTeacherEarning = existingPayment.teacherEarning;
+      if (newAmount !== oldAmount && existingPayment.teacherId) {
+        const teacher = await storage.getTeacher(existingPayment.teacherId, tenantId);
+        if (teacher && teacher.salaryPercent) {
+          newTeacherEarning = Math.round(newAmount * teacher.salaryPercent / 100);
+        }
+      }
+      
       const updatedPayment = await storage.updatePayment(id, tenantId, {
         amount: newAmount,
+        teacherEarning: newTeacherEarning,
         paymentType: paymentType || existingPayment.paymentType,
         notes: notes !== undefined ? notes : existingPayment.notes,
         status: status || existingPayment.status,
