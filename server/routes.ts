@@ -1826,12 +1826,16 @@ export async function registerRoutes(
       const oldAmount = existingPayment.amount;
       const newAmount = amount !== undefined ? amount : oldAmount;
       
-      // Recalculate teacher earning if amount changed
+      // Recalculate teacher earning if amount changed or payment becomes completed
+      const newStatus = status || existingPayment.status;
       let newTeacherEarning = existingPayment.teacherEarning;
-      if (newAmount !== oldAmount && existingPayment.teacherId) {
-        const teacher = await storage.getTeacher(existingPayment.teacherId, tenantId);
-        if (teacher && teacher.salaryPercent) {
-          newTeacherEarning = Math.round(newAmount * teacher.salaryPercent / 100);
+      if (newAmount !== oldAmount || (newStatus === 'completed' && existingPayment.status !== 'completed')) {
+        if (existingPayment.teacherId) {
+          const teacher = await storage.getTeacher(existingPayment.teacherId, tenantId);
+          const pct = teacher?.salaryPercent ?? 0;
+          newTeacherEarning = Math.round(newAmount * pct / 100);
+        } else {
+          newTeacherEarning = 0;
         }
       }
       
@@ -1840,7 +1844,7 @@ export async function registerRoutes(
         teacherEarning: newTeacherEarning,
         paymentType: paymentType || existingPayment.paymentType,
         notes: notes !== undefined ? notes : existingPayment.notes,
-        status: status || existingPayment.status,
+        status: newStatus,
       });
       
       if (updatedPayment && existingPayment.status === 'completed' && newAmount !== oldAmount) {

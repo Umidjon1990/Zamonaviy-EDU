@@ -1,0 +1,1 @@
+- [Payment teacherEarning snapshot](payment-teacher-earning.md) — salary = SUM of per-payment earning snapshots; any payment create/update/complete must recalc it. Prod DB is on Railway, not Replit.
