@@ -77,7 +77,6 @@ export const users = pgTable("users", {
   tenantId: integer("tenant_id").notNull(),
   email: text("email"),
   password: text("password").notNull(),
-  plainPassword: text("plain_password"),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   role: text("role").notNull(), // super_admin, markaz_admin, teacher, manager, staff, student, parent
@@ -223,6 +222,11 @@ export const payments = pgTable("payments", {
   teacherId: varchar("teacher_id"),
   amount: integer("amount").notNull(),
   teacherEarning: integer("teacher_earning").default(0),
+  groupId: integer("group_id"),
+  paymentPeriod: text("payment_period"),
+  teacherPercent: integer("teacher_percent"),
+  sourceCollectedId: integer("source_collected_id"),
+  deletedAt: timestamp("deleted_at"),
   paymentType: text("payment_type").notNull(), // cash, card, bank_transfer
   status: text("status").notNull(), // completed, pending, failed
   notes: text("notes"),
@@ -318,6 +322,8 @@ export const teacherCollectedPayments = pgTable("teacher_collected_payments", {
   paymentType: text("payment_type").notNull().default("cash"),
   notes: text("notes"),
   status: text("status").notNull().default("pending"), // pending, confirmed, rejected
+  paymentId: integer("payment_id"),
+  paymentPeriod: text("payment_period"),
   confirmedBy: text("confirmed_by"),
   confirmedAt: timestamp("confirmed_at"),
   rejectedBy: text("rejected_by"),

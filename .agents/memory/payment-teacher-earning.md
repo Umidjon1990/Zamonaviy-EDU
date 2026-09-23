@@ -1,9 +1,15 @@
 ---
-name: Payment teacherEarning snapshot
-description: How teacher salaries are computed from per-payment stored earnings and the pitfall when editing payments
+name: Transactional payment accounting
+description: Balance, earning snapshots, approvals, idempotency and notification rules
 ---
-Teacher monthly salary = SUM(payments.teacher_earning) for completed payments in the month (fallback to totalPayments * salaryPercent only when the sum is 0). `teacher_earning` is a snapshot computed at payment creation.
+All payment writes must use `server/payment-service.ts`; do not call storage CRUD directly.
+Payment, student balance delta, audit log, request key and notification outbox commit together.
+The completed status contributes amount to balance; other statuses contribute zero. Edits apply new contribution minus old contribution. Deletion reverses once and retains a soft-deleted audit record.
 
-**Why:** Editing a payment's amount (or completing a pending one) without recalculating `teacher_earning` silently corrupts salary reports — this caused a real prod discrepancy (55% teacher showing less). Fixed in PUT /api/payments/:id to recalc on amount change or transition to completed.
+Teacher salary is SUM(teacher_earning) for completed, non-deleted payments in the reporting month. No fallback based on a current percentage. New payments snapshot teacher_percent and teacher_earning; edits preserve the original percentage. Teacher collections become official payments only after admin confirmation, with source_collected_id unique within the tenant.
 
-**How to apply:** Any new code path that creates/updates/completes payments must set `teacher_earning = round(amount * teacher.salaryPercent / 100)` (0 if no teacher). Note: prod DB is on Railway, not Replit Neon — query it via the URL the user provides. Also pre-existing gap: payment status transitions (pending↔completed↔cancelled) don't fully adjust student balance except completed+amount-change.
+POST create and collect require an Idempotency-Key. Transaction-scoped per-tenant advisory locks protect concurrent requests; database failures roll back all accounting writes. Admins alone can mutate official payments. Collection permission does not grant official payment mutation rights.
+
+Use explicit group_id and payment_period. Legacy group-less payments are only attributed in filters if current membership is unambiguous; never guess historical amounts, teachers or group assignments. Existing balances are not recalculated by the startup migration.
+
+Telegram/SMS use a durable outbox after commit. Notifications may be delivered at least once after a worker crash; retry must never create another payment. Verify own Telegram contacts before linking. Production DB is on Railway.

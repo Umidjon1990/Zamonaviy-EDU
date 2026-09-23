@@ -37,7 +37,7 @@ export default function TeacherSalary() {
   });
 
   const { data: studentsRaw } = useQuery({
-    queryKey: ["/api/students"],
+    queryKey: ["students"],
     queryFn: async () => {
       const res = await fetch("/api/students", { credentials: "include" });
       if (!res.ok) return [];
@@ -48,7 +48,7 @@ export default function TeacherSalary() {
   const students = (Array.isArray(studentsRaw) ? studentsRaw : []) as any[];
 
   const { data: paymentsRaw } = useQuery({
-    queryKey: ["/api/payments"],
+    queryKey: ["payments", undefined],
     queryFn: async () => {
       const res = await fetch("/api/payments", { credentials: "include" });
       if (!res.ok) return [];

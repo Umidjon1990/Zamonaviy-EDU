@@ -1,3 +1,5 @@
+import { PaymentNotifications } from "@/components/PaymentNotifications";
+import { currentPaymentPeriod, paymentMatchesGroup } from "@shared/finance";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import PaymentReceipt from "@/components/PaymentReceipt";
 
 export default function Payments() {
-  const { data: payments, isLoading } = usePayments();
+  const { data: payments, isLoading, isError, error, refetch, dataUpdatedAt, isFetching } = usePayments();
   const { data: students } = useStudents();
   const { data: groups } = useGroups();
   const { data: teachers } = useTeachers();
@@ -31,6 +33,11 @@ export default function Payments() {
       return res.json();
     },
   });
+  const { data: collectedPayments = [] } = useQuery<any[]>({
+    queryKey: ["/api/teacher-collected-payments"], refetchInterval: 5000,
+    queryFn: async () => { const res = await fetch("/api/teacher-collected-payments"); if(!res.ok)throw new Error("Yig‘imlar yuklanmadi"); return res.json(); },
+  });
+  const pendingCollections = collectedPayments.filter(p => p.status === 'pending');
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
@@ -68,6 +75,8 @@ export default function Payments() {
     status: "completed",
     notes: "",
     teacherId: "",
+    groupId: "",
+    paymentPeriod: currentPaymentPeriod(),
   });
   
   const [newStudentData, setNewStudentData] = useState({
@@ -105,6 +114,12 @@ export default function Payments() {
     return studentsList.find((s: any) => s.id === formData.studentId);
   }, [studentsList, formData.studentId]);
 
+  const memberships = new Map<number,number[]>(studentsList.map((s:any)=>[s.id,s.groupIds||[]]));
+  const availablePaymentGroups = groupsList.filter((g:any)=>g.teacherId===formData.teacherId && (selectedStudent as any)?.groupIds?.includes(g.id));
+  const matchesGroup=(p:any,groupId:string)=>{
+    const group=groupsList.find((g:any)=>g.id===Number(groupId));
+    return !!group && paymentMatchesGroup(p,group,memberships,groupsList.filter((g:any)=>g.teacherId===group.teacherId).map((g:any)=>g.id));
+  };
   const selectedTeacher = useMemo(() => {
     if (!formData.teacherId) return null;
     return teachersList.find((t: any) => t.id === formData.teacherId);
@@ -178,8 +193,10 @@ export default function Payments() {
 
     const relevantTeacherId = filterTeacherId || (filterGroupId ? groupsList.find((g: any) => g.id?.toString() === filterGroupId)?.teacherId : null);
 
-    const relevantPayments = monthFilteredPayments.filter((p: any) => {
+    const relevantPayments = paymentsList.filter((p: any) => {
       if (!p.status || p.status !== 'completed') return false;
+      if((p.paymentPeriod || currentPaymentPeriod(new Date(p.createdAt)))!==`${selectedYear}-${String(selectedMonth+1).padStart(2,'0')}`)return false;
+      if(filterGroupId && !matchesGroup(p,filterGroupId))return false;
       if (relevantTeacherId && p.teacherId !== relevantTeacherId) return false;
       return true;
     });
@@ -190,10 +207,10 @@ export default function Payments() {
     const unpaid = gsData.filter((s: any) => !paidStudentIds.has(s.id));
 
     return { paid, unpaid, total: gsData.length, relevantTeacherId };
-  }, [groupStudentsData, monthFilteredPayments, filterTeacherId, filterGroupId, groupsList]);
+  }, [groupStudentsData, paymentsList, selectedMonth, selectedYear, filterTeacherId, filterGroupId, groupsList, studentsList]);
 
   const filteredPayments = useMemo(() => {
-    let result = monthFilteredPayments;
+    let result = filterFromDate || filterToDate ? paymentsList : monthFilteredPayments;
 
     if (filterSearch.trim()) {
       const query = filterSearch.toLowerCase().trim();
@@ -223,17 +240,14 @@ export default function Payments() {
     }
 
     if (filterGroupId) {
-      const group = groupsList.find((g: any) => g.id?.toString() === filterGroupId);
-      if (group && group.teacherId) {
-        result = result.filter((p: any) => p.teacherId === group.teacherId);
-      }
+      result = result.filter((p:any)=>matchesGroup(p,filterGroupId));
     }
 
     return result;
-  }, [monthFilteredPayments, filterSearch, filterFromDate, filterToDate, filterTeacherId, filterGroupId, studentsList, teachersList, groupsList]);
+  }, [paymentsList, monthFilteredPayments, filterSearch, filterFromDate, filterToDate, filterTeacherId, filterGroupId, studentsList, teachersList, groupsList]);
 
   const resetForm = () => {
-    setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "", teacherId: "" });
+    setFormData({ studentId: 0, amount: 0, paymentType: "cash", status: "completed", notes: "", teacherId: "", groupId:"", paymentPeriod:currentPaymentPeriod() });
     setNewStudentData({ firstName: "", lastName: "", phone: "", parentPhone: "" });
     setSearchQuery("");
     setStudentMode("existing");
@@ -266,6 +280,9 @@ export default function Payments() {
         status: formData.status,
         notes: formData.notes,
         teacherId: formData.teacherId,
+        groupId: studentMode === "existing" ? (formData.groupId ? Number(formData.groupId) : availablePaymentGroups.length===1 ? availablePaymentGroups[0].id : undefined) : undefined,
+        paymentPeriod: formData.paymentPeriod,
+        sendSms,
       };
 
       if (studentMode === "existing") {
@@ -279,24 +296,8 @@ export default function Payments() {
       
       const studentId = result.createdStudent ? result.createdStudent.id : formData.studentId;
       
-      if (sendSms && studentId) {
-        try {
-          const smsResponse = await fetch("/api/sms/payment-received", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ studentId, amount: formData.amount }),
-          });
-          const smsResult = await smsResponse.json();
-          if (smsResult.success) {
-            toast({ title: "SMS yuborildi", description: "O'quvchiga SMS xabarnoma yuborildi" });
-          } else {
-            toast({ title: "SMS xatosi", description: smsResult.error || "SMS yuborishda xatolik", variant: "destructive" });
-          }
-        } catch (smsError) {
-          console.error("SMS error:", smsError);
-        }
-      }
-      
+      if(sendSms && result.status === "completed")toast({title:"SMS navbatga qo‘shildi",description:"Yuborilish holati to‘lov xabarnomalarida ko‘rinadi."});
+
       const student = result.createdStudent || studentsList.find((s: any) => s.id === formData.studentId);
       const teacher = teachersList.find((t: any) => t.id === formData.teacherId);
       
@@ -308,7 +309,7 @@ export default function Payments() {
           if (groupsResponse.ok) {
             const studentGroupsData = await groupsResponse.json();
             if (studentGroupsData.length > 0) {
-              const firstGroupId = studentGroupsData[0].groupId;
+              const firstGroupId = result.groupId;
               studentGroup = groupsList.find((g: any) => g.id === firstGroupId);
               subject = studentGroup?.subjectId ? subjectsList.find((s: any) => s.id === studentGroup.subjectId) : null;
             }
@@ -404,6 +405,12 @@ export default function Payments() {
 
   return (
     <div className="space-y-6">
+      {isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-700">To‘lovlarni yangilab bo‘lmadi: {(error as Error)?.message}. Ko‘rinayotgan ma’lumot eskirgan bo‘lishi mumkin.</p>}
+      <p className="text-xs text-muted-foreground">Oxirgi yangilanish: {dataUpdatedAt?new Date(dataUpdatedAt).toLocaleTimeString('uz-UZ'):'—'}. To‘lovlar har 5 soniyada yangilanadi.</p>
+      {pendingCollections.length > 0 && <a href="/students" className="block rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">O‘qituvchilardan {pendingCollections.length} ta to‘lov tasdiqlashni kutmoqda. Jami {pendingCollections.reduce((s,p)=>s+p.amount,0).toLocaleString()} so‘m. Ko‘rib chiqish →</a>}
+      <PaymentNotifications />
+      {(filterFromDate||filterToDate)&&<p className="text-sm">Sana oralig‘i tanlangan: oy filtri ro‘yxatga qo‘llanmaydi.</p>}
+      {filterGroupId&&paymentsList.some((p:any)=>p.groupId==null)&&<p className="text-xs text-amber-700">Guruh aniq ko‘rsatilmagan eski to‘lovlar faqat guruhni ishonchli aniqlash mumkin bo‘lsa ko‘rsatiladi. To‘liq ro‘yxat uchun guruh filtrini tozalang.</p>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold tracking-tight">{translations.nav.payments}</h1>
@@ -432,6 +439,7 @@ export default function Payments() {
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" disabled={isFetching} onClick={()=>void refetch()}>Yangilash</Button>
           <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button className="flex-1 sm:flex-none" data-testid="button-add-payment">
@@ -484,7 +492,7 @@ export default function Payments() {
                           return (
                             <div
                               key={s.id}
-                              onClick={() => setFormData({ ...formData, studentId: s.id })}
+                              onClick={() => setFormData({ ...formData, studentId: s.id, groupId:"" })}
                               className={`p-3 cursor-pointer transition-colors ${
                                 isSelected 
                                   ? 'bg-primary/10 border-l-4 border-l-primary' 
@@ -584,7 +592,7 @@ export default function Payments() {
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">O'qituvchi *</Label>
-                  <Select value={formData.teacherId} onValueChange={(value) => setFormData({ ...formData, teacherId: value })}>
+                  <Select value={formData.teacherId} onValueChange={(value) => setFormData({ ...formData, teacherId: value, groupId:"" })}>
                     <SelectTrigger data-testid="select-teacher">
                       <SelectValue placeholder="O'qituvchini tanlang..." />
                     </SelectTrigger>
@@ -604,6 +612,11 @@ export default function Payments() {
                   </Select>
                 </div>
 
+                {availablePaymentGroups.length>0 && <div className="space-y-1.5">
+                  <Label>Guruh</Label><Select value={formData.groupId || (availablePaymentGroups.length===1?String(availablePaymentGroups[0].id):"")} onValueChange={groupId=>setFormData({...formData,groupId})}>
+                  <SelectTrigger><SelectValue placeholder="To‘lov qaysi guruh uchun?"/></SelectTrigger><SelectContent>{availablePaymentGroups.map((g:any)=><SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}</SelectContent></Select>
+                </div>}
+                <div className="space-y-1.5"><Label>Qaysi oy uchun?</Label><Input type="month" required value={formData.paymentPeriod} onChange={e=>setFormData({...formData,paymentPeriod:e.target.value})}/></div>
                 <div className="space-y-1.5">
                   <Label htmlFor="amount" className="text-xs font-medium">Summa (UZS) *</Label>
                   <Input
@@ -617,7 +630,7 @@ export default function Payments() {
                   />
                 </div>
 
-                {selectedTeacher && formData.amount > 0 && selectedTeacher.salaryPercent > 0 && (
+                {selectedTeacher && formData.amount > 0 && (selectedTeacher.salaryPercent || 0) > 0 && (
                   <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
                     <div className="flex justify-between items-center">
                       <span className="text-amber-700">O'qituvchi ulushi ({selectedTeacher.salaryPercent}%):</span>
@@ -860,6 +873,7 @@ export default function Payments() {
                           status: "completed",
                           notes: "",
                           teacherId: paidUnpaidData.relevantTeacherId || "",
+                          groupId:filterGroupId || String(s.groupId||""),paymentPeriod:`${selectedYear}-${String(selectedMonth+1).padStart(2,"0")}`,
                         });
                         setStudentMode("existing");
                         setSearchQuery(`${s.firstName} ${s.lastName}`);
@@ -916,7 +930,7 @@ export default function Payments() {
                       {getStudentName(payment.studentId, payment)}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {getTeacherName(payment.teacherId)}
+                      {getTeacherName(payment.teacherId)}<div className="text-xs">{groupsList.find((g:any)=>g.id===payment.groupId)?.name || "Guruh belgilanmagan"} · {payment.paymentPeriod || "Eski yozuv"}</div>
                     </TableCell>
                     <TableCell data-testid={`text-amount-${payment.id}`}>
                       <div>{payment.amount.toLocaleString()} UZS</div>

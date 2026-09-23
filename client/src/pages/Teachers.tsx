@@ -489,11 +489,7 @@ export default function Teachers() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-password">Yangi parol (bo'sh qoldirsa o'zgarmaydi)</Label>
-              {editingTeacher?.plainPassword && (
-                <p className="text-xs text-muted-foreground" data-testid="text-current-password">
-                  Joriy parol: <span className="font-mono font-medium text-foreground">{editingTeacher.plainPassword}</span>
-                </p>
-              )}
+
               <Input
                 id="edit-password"
                 type="password"
@@ -620,32 +616,7 @@ export default function Teachers() {
                     </TableCell>
                     <TableCell data-testid={`text-email-${teacher.id}`}>{teacher.email}</TableCell>
                     <TableCell>{teacher.phone}</TableCell>
-                    <TableCell data-testid={`text-password-${teacher.id}`}>
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-sm">
-                          {visiblePasswords.has(teacher.id) ? (teacher.plainPassword || "—") : "••••••"}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            setVisiblePasswords(prev => {
-                              const next = new Set(prev);
-                              if (next.has(teacher.id)) {
-                                next.delete(teacher.id);
-                              } else {
-                                next.add(teacher.id);
-                              }
-                              return next;
-                            });
-                          }}
-                          data-testid={`button-toggle-password-${teacher.id}`}
-                        >
-                          {visiblePasswords.has(teacher.id) ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        </Button>
-                      </div>
-                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">Yashirilgan. Tahrirda yangilanadi.</TableCell>
                     <TableCell>
                       <span className="inline-flex items-center px-2 py-1 rounded-md bg-primary/10 text-primary font-medium text-sm">
                         {teacher.salaryPercent || 0}%

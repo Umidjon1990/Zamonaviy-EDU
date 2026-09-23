@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
 const { Pool } = pkg;
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import {
   type User,
   type InsertUser,
@@ -56,7 +56,7 @@ import {
   teacherCollectedPayments,
 } from "@shared/schema";
 
-const pool = new Pool({
+export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
@@ -462,6 +462,7 @@ export class DatabaseStorage implements IStorage {
       .select({
         studentId: studentGroups.studentId,
         groupName: groups.name,
+        groupId: groups.id,
         subjectName: subjects.name,
         teacherFirstName: users.firstName,
         teacherLastName: users.lastName,
@@ -472,12 +473,13 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(groups.teacherId, users.id))
       .where(inArray(studentGroups.studentId, studentIds));
 
-    const groupMap = new Map<number, { groups: string[]; subjects: string[]; teachers: string[] }>();
+    const groupMap = new Map<number, { groups: string[]; groupIds:number[]; subjects: string[]; teachers: string[] }>();
     for (const row of sgRows) {
       if (!groupMap.has(row.studentId)) {
-        groupMap.set(row.studentId, { groups: [], subjects: [], teachers: [] });
+        groupMap.set(row.studentId, { groups: [], groupIds:[], subjects: [], teachers: [] });
       }
       const entry = groupMap.get(row.studentId)!;
+      entry.groupIds.push(row.groupId);
       if (row.groupName) entry.groups.push(row.groupName);
       entry.subjects.push(row.subjectName || '');
       const teacherName = [row.teacherFirstName, row.teacherLastName].filter(Boolean).join(' ');
@@ -486,6 +488,7 @@ export class DatabaseStorage implements IStorage {
 
     return studentList.map(student => ({
       ...student,
+      groupIds: groupMap.get(student.id)?.groupIds || [],
       groupNames: groupMap.get(student.id)?.groups || [],
       subjectNames: groupMap.get(student.id)?.subjects || [],
       teacherNames: groupMap.get(student.id)?.teachers || [],
@@ -610,12 +613,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPaymentsByTeacher(teacherId: string, tenantId: number): Promise<Payment[]> {
-    const teacherStudents = await this.getStudentsByTeacher(teacherId, tenantId);
-    const studentIds = teacherStudents.map(s => s.id);
-    if (studentIds.length === 0) return [];
-    
     return await db.select().from(payments)
-      .where(and(inArray(payments.studentId, studentIds), eq(payments.tenantId, tenantId)))
+      .where(and(eq(payments.teacherId, teacherId), eq(payments.tenantId, tenantId), isNull(payments.deletedAt)))
       .orderBy(desc(payments.createdAt));
   }
 
@@ -659,7 +658,7 @@ export class DatabaseStorage implements IStorage {
       ));
     
     const totalPayments = Number(result[0]?.total || 0);
-    const salary = Number(result[0]?.totalEarning || 0) || Math.round(totalPayments * salaryPercent / 100);
+    const salary = Number(result[0]?.totalEarning || 0);
     
     return { totalPayments, salaryPercent, salary };
   }
@@ -737,7 +736,7 @@ export class DatabaseStorage implements IStorage {
 
   // Payments
   async getPayments(tenantId: number, studentId?: number): Promise<Payment[]> {
-    const conditions = [eq(payments.tenantId, tenantId)];
+    const conditions = [eq(payments.tenantId, tenantId), isNull(payments.deletedAt)];
     
     if (studentId) {
       conditions.push(eq(payments.studentId, studentId));
@@ -858,11 +857,15 @@ export class DatabaseStorage implements IStorage {
   
   // Telegram
   async updateStudentTelegramChatId(studentId: number, chatId: string): Promise<void> {
-    await db.update(students).set({ telegramChatId: chatId }).where(eq(students.id, studentId));
+    await pool.query(`WITH updated AS (UPDATE students SET telegram_chat_id=$1 WHERE id=$2 RETURNING id)
+      INSERT INTO telegram_verified_links(kind,entity_id,chat_id) SELECT 'student',id::text,$1 FROM updated
+      ON CONFLICT(kind,entity_id) DO UPDATE SET chat_id=EXCLUDED.chat_id,verified_at=NOW()`,[chatId,studentId]);
   }
   
   async updateUserTelegramChatId(userId: string, chatId: string): Promise<void> {
-    await db.update(users).set({ telegramChatId: chatId }).where(eq(users.id, userId));
+    await pool.query(`WITH updated AS (UPDATE users SET telegram_chat_id=$1 WHERE id=$2 RETURNING id)
+      INSERT INTO telegram_verified_links(kind,entity_id,chat_id) SELECT 'user',id,$1 FROM updated
+      ON CONFLICT(kind,entity_id) DO UPDATE SET chat_id=EXCLUDED.chat_id,verified_at=NOW()`,[chatId,userId]);
   }
   
   async getStudentByTelegramChatId(chatId: string): Promise<Student | undefined> {

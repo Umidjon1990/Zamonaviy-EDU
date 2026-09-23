@@ -1,3 +1,4 @@
+import { submitFinance, invalidateFinance } from "@/lib/finance";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,7 +144,7 @@ export default function TeacherDashboard() {
     queryKey: ["teacher-stats-attendance", statsGroupId, statsMonth, statsYear],
     queryFn: async () => {
       const res = await fetch(`/api/attendance?groupId=${statsGroupId}&month=${statsMonth}&year=${statsYear}`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Ma’lumotlarni yuklab bo‘lmadi");
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
@@ -155,7 +156,7 @@ export default function TeacherDashboard() {
     queryKey: ["stats-group-students", statsGroupId],
     queryFn: async () => {
       const res = await fetch(`/api/groups/${statsGroupId}/students`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Ma’lumotlarni yuklab bo‘lmadi");
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
@@ -169,7 +170,7 @@ export default function TeacherDashboard() {
     queryFn: async () => {
       if (!selectedGroup) return [];
       const res = await fetch(`/api/teacher/group/${selectedGroup}/payment-status`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Ma’lumotlarni yuklab bo‘lmadi");
       return res.json();
     },
     enabled: !!selectedGroup,
@@ -182,7 +183,7 @@ export default function TeacherDashboard() {
     queryKey: ["today-attendance-status", teacherId],
     queryFn: async () => {
       const res = await fetch(`/api/teacher/today-attendance-status`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Ma’lumotlarni yuklab bo‘lmadi");
       return res.json();
     },
     enabled: !!teacherId,
@@ -211,7 +212,7 @@ export default function TeacherDashboard() {
     queryKey: ["teacher-collected-payments", teacherId],
     queryFn: async () => {
       const res = await fetch("/api/teacher/collected-payments");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Ma’lumotlarni yuklab bo‘lmadi");
       return res.json();
     },
     enabled: !!teacherId,
@@ -219,20 +220,9 @@ export default function TeacherDashboard() {
   const collectedPayments = (collectedPaymentsData || []) as any[];
 
   const submitPaymentMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/teacher/collected-payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Xatolik");
-      }
-      return res.json();
-    },
+    mutationFn: (data:any) => submitFinance('/api/teacher/collected-payments',data),
     onSuccess: () => {
-      refetchCollectedPayments();
+      void invalidateFinance(queryClient);
       setPaymentForm({ studentId: "", groupId: "", amount: "", paymentType: "cash", notes: "" });
       toast({ title: "Muvaffaqiyat", description: "To'lov adminga yuborildi. Tasdiq kutilmoqda." });
     },

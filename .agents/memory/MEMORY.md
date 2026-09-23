@@ -1,1 +1,1 @@
-- [Payment teacherEarning snapshot](payment-teacher-earning.md) — salary = SUM of per-payment earning snapshots; any payment create/update/complete must recalc it. Prod DB is on Railway, not Replit.
+- [Transactional payment accounting](payment-teacher-earning.md) — all payment writes use the transaction service; preserve earnings, idempotency, role checks and outbox delivery. Production database is on Railway.

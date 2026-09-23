@@ -1,3 +1,5 @@
+import { submitFinance, invalidateFinance } from "./finance";
+import type { Lead, Payment, Student, User, Group, Subject, Expense } from "@shared/schema";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const API_BASE = "/api";
@@ -52,7 +54,7 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
 export function useLeads() {
   return useQuery({
     queryKey: ["leads"],
-    queryFn: () => apiCall("/leads"),
+    queryFn: () => apiCall<Lead[]>("/leads"),
   });
 }
 
@@ -84,7 +86,7 @@ export function useDeleteLead() {
 export function useStudents() {
   return useQuery({
     queryKey: ["students"],
-    queryFn: () => apiCall("/students"),
+    queryFn: () => apiCall<Student[]>("/students"),
   });
 }
 
@@ -133,7 +135,7 @@ export function useBulkDeleteStudents() {
 export function useSubjects() {
   return useQuery({
     queryKey: ["subjects"],
-    queryFn: () => apiCall("/subjects"),
+    queryFn: () => apiCall<Subject[]>("/subjects"),
   });
 }
 
@@ -165,7 +167,7 @@ export function useDeleteSubject() {
 export function useGroups() {
   return useQuery({
     queryKey: ["groups"],
-    queryFn: () => apiCall("/groups"),
+    queryFn: () => apiCall<Group[]>("/groups"),
   });
 }
 
@@ -218,18 +220,17 @@ export function useImportGroupTemplate() {
 export function usePayments(studentId?: number) {
   return useQuery({
     queryKey: ["payments", studentId],
-    queryFn: () => apiCall(`/payments${studentId ? `?studentId=${studentId}` : ""}`),
+    refetchInterval: 5000,
+    queryFn: () => apiCall<Payment[]>(`/payments${studentId ? `?studentId=${studentId}` : ""}`),
   });
 }
 
 export function useCreatePayment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => apiCall("/payments", { method: "POST", body: JSON.stringify(data) }),
+    mutationFn: (data: any) => submitFinance("/api/payments", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["payments"] });
-      queryClient.invalidateQueries({ queryKey: ["students"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      void invalidateFinance(queryClient);
     },
   });
 }
@@ -247,9 +248,7 @@ export function useUpdatePayment() {
     mutationFn: ({ id, ...data }: { id: number; amount?: number; paymentType?: string; notes?: string; status?: string }) => 
       apiCall(`/payments/${id}`, { method: "PUT", body: JSON.stringify(data) }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["payments"] });
-      queryClient.invalidateQueries({ queryKey: ["students"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      void invalidateFinance(queryClient);
     },
   });
 }
@@ -259,9 +258,7 @@ export function useDeletePayment() {
   return useMutation({
     mutationFn: (id: number) => apiCall(`/payments/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["payments"] });
-      queryClient.invalidateQueries({ queryKey: ["students"] });
-      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      void invalidateFinance(queryClient);
     },
   });
 }
@@ -298,7 +295,7 @@ export function useUpdateAttendance() {
 export function useTeachers() {
   return useQuery({
     queryKey: ["teachers"],
-    queryFn: () => apiCall("/teachers"),
+    queryFn: () => apiCall<User[]>("/teachers"),
   });
 }
 
@@ -378,7 +375,7 @@ export function useExpenses(month?: number, year?: number) {
   if (year) params.append("year", year.toString());
   return useQuery({
     queryKey: ["expenses", month, year],
-    queryFn: () => apiCall(`/expenses${params.toString() ? `?${params.toString()}` : ""}`),
+    queryFn: () => apiCall<Expense[]>(`/expenses${params.toString() ? `?${params.toString()}` : ""}`),
   });
 }
 

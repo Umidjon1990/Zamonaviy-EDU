@@ -15,7 +15,7 @@ import { Building2, Users, CreditCard, TrendingUp, Plus, Settings, Pencil, Trash
 import { useLocation } from "wouter";
 import type { Tenant, SubscriptionPlan } from "@shared/schema";
 
-function getAuthHeaders() {
+function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem("superAdminToken");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
@@ -87,24 +87,30 @@ export default function SuperAdmin() {
 
   const { data: stats } = useQuery({
     queryKey: ["/api/admin/stats"],
+    enabled: isAuthenticated === true,
     queryFn: async () => {
-      const res = await fetch("/api/admin/stats");
+      const res = await fetch("/api/admin/stats", { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Ma’lumot olinmadi. Qayta kiring.");
       return res.json();
     },
   });
 
   const { data: tenants = [] } = useQuery<Tenant[]>({
     queryKey: ["/api/admin/tenants"],
+    enabled: isAuthenticated === true,
     queryFn: async () => {
-      const res = await fetch("/api/admin/tenants");
+      const res = await fetch("/api/admin/tenants", { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Ma’lumot olinmadi. Qayta kiring.");
       return res.json();
     },
   });
 
   const { data: plans = [] } = useQuery<SubscriptionPlan[]>({
     queryKey: ["/api/admin/plans"],
+    enabled: isAuthenticated === true,
     queryFn: async () => {
-      const res = await fetch("/api/admin/plans");
+      const res = await fetch("/api/admin/plans", { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Ma’lumot olinmadi. Qayta kiring.");
       return res.json();
     },
   });
@@ -113,7 +119,7 @@ export default function SuperAdmin() {
     mutationFn: async (data: typeof newTenant) => {
       const res = await fetch("/api/admin/tenants", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to create tenant");
@@ -131,7 +137,7 @@ export default function SuperAdmin() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<Tenant> }) => {
       const res = await fetch(`/api/admin/tenants/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to update tenant");
@@ -147,7 +153,7 @@ export default function SuperAdmin() {
     mutationFn: async (data: typeof newPlan) => {
       const res = await fetch("/api/admin/plans", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to create plan");
@@ -165,7 +171,7 @@ export default function SuperAdmin() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<SubscriptionPlan> }) => {
       const res = await fetch(`/api/admin/plans/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to update plan");
@@ -181,6 +187,7 @@ export default function SuperAdmin() {
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/admin/plans/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error("Failed to delete plan");
       return res.ok;
@@ -194,7 +201,7 @@ export default function SuperAdmin() {
     mutationFn: async ({ tenantId, smsEnabled, addCredits }: { tenantId: number; smsEnabled?: boolean; addCredits?: number }) => {
       const res = await fetch(`/api/admin/tenants/${tenantId}/sms`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ smsEnabled, addCredits }),
       });
       if (!res.ok) throw new Error("Failed to update SMS settings");

@@ -1,3 +1,4 @@
+import { invalidateFinance } from "@/lib/finance";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,7 +81,7 @@ export default function Students() {
     queryKey: ["/api/student-activity-logs"],
     queryFn: async () => {
       const res = await fetch("/api/student-activity-logs?limit=100", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Ma’lumotlarni yuklab bo‘lmadi");
       return res.json();
     },
     enabled: !isTeacher,
@@ -91,11 +92,11 @@ export default function Students() {
     queryKey: ["/api/teacher-collected-payments"],
     queryFn: async () => {
       const res = await fetch("/api/teacher-collected-payments", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error("Ma’lumotlarni yuklab bo‘lmadi");
       return res.json();
     },
     enabled: !isTeacher,
-    refetchInterval: 30000,
+    refetchInterval: 5000,
   });
   const teacherPayments = (teacherPaymentsData || []) as any[];
   const pendingTeacherPayments = teacherPayments.filter((p: any) => p.status === "pending");
@@ -110,8 +111,8 @@ export default function Students() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teacher-collected-payments"] });
-      toast({ title: "Muvaffaqiyat", description: "To'lov tasdiqlandi va baytlandi" });
+      void invalidateFinance(queryClient);
+      toast({ title: "Muvaffaqiyat", description: "To'lov tasdiqlandi va balans yangilandi" });
     },
     onError: (e: any) => toast({ title: "Xatolik", description: e.message, variant: "destructive" }),
   });
@@ -128,7 +129,7 @@ export default function Students() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/teacher-collected-payments"] });
+      void invalidateFinance(queryClient);
       setRejectingId(null);
       setRejectReason("");
       toast({ title: "Rad etildi", description: "To'lov rad etildi" });

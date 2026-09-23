@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { 
@@ -61,6 +62,11 @@ interface AppLayoutProps {
 export function AppLayout({ children, userRole, userName = "Foydalanuvchi", tenantName = "O'quv markaz", tenantLogo }: AppLayoutProps) {
   // Xavfsiz default - agar rol noma'lum bo'lsa, hech narsa ko'rsatilmaydi
   const safeRole = userRole || "";
+  const {data:pendingPayments=[],isError:pendingError}=useQuery<any[]>({
+    queryKey:["/api/teacher-collected-payments"], enabled:safeRole==='markaz_admin',refetchInterval:5000,
+    queryFn:async()=>{const r=await fetch('/api/teacher-collected-payments');if(!r.ok)throw new Error('Yuklanmadi');return r.json();}
+  });
+  const pendingCount=pendingPayments.filter(p=>p.status==='pending').length;
   const navItems = allNavItems.filter(item => item.roles.includes(safeRole));
   const [location] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -102,6 +108,7 @@ export function AppLayout({ children, userRole, userName = "Foydalanuvchi", tena
               >
                 <item.icon className="w-5 h-5 shrink-0" />
                 <span className="truncate">{item.label}</span>
+                {item.href==='/students' && safeRole==='markaz_admin' && (pendingCount>0||pendingError) && <span className="ml-auto rounded-full bg-amber-500 px-2 text-xs text-black" title="Tasdiqlash kutilayotgan to‘lovlar">{pendingError?'!':pendingCount}</span>}
               </div>
             </Link>
           );

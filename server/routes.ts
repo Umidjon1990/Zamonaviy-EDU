@@ -1,10 +1,14 @@
+import { createSuperAdminAuth } from "./security";
+import { paymentMatchesGroup } from "../shared/finance";
+import { createPaymentService, FinanceError } from "./payment-service";
+import { ZodError } from "zod";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
 import * as XLSX from "xlsx";
-import { storage, DuplicatePhoneError } from "./storage";
+import { storage, pool, DuplicatePhoneError } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
-import { notifyStudentAttendance, notifyStudentPayment, sendPaymentReceipt, notifyTeacherAboutPayment, notifyAdminAttendanceTaken } from "./telegram-bot";
+import { notifyStudentAttendance, sendPaymentReceipt, notifyAdminAttendanceTaken } from "./telegram-bot";
 import { verifyObjectPath } from "./replit_integrations/object_storage/routes";
 import {
   type Student,
@@ -29,11 +33,23 @@ export async function registerRoutes(
   // ===== TENANT AUTHENTICATION =====
   
   // Middleware to require tenant authentication
-  const requireTenantAuth = (req: any, res: any, next: any) => {
-    if (!req.session.tenantId || !req.session.userId) {
-      return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
-    }
-    next();
+  const requireTenantAuth = async (req: any, res: any, next: any) => {
+    if (!req.session.tenantId || !req.session.userId) return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.tenantId !== req.session.tenantId) return res.status(401).json({error:"Qayta kiring"});
+      req.session.role = user.role;
+      next();
+    } catch { res.status(503).json({error:"Xizmat vaqtincha mavjud emas"}); }
+  };
+  const requireAdmin = (req:any,res:any,next:any) => req.session.role === 'markaz_admin' ? next() : res.status(403).json({error:"Faqat administrator uchun"});
+  const finance = createPaymentService(pool);
+  const actor = (req:any) => ({tenantId:req.session.tenantId,userId:req.session.userId,role:req.session.role});
+  const financeFailure = (res:any,error:unknown) => {
+    if(error instanceof ZodError) return res.status(400).json({error:"Summa, guruh yoki to‘lov ma’lumotlari noto‘g‘ri", details:error.issues.map(i=>({path:i.path,message:i.message}))});
+    if(error instanceof FinanceError) return res.status(error.status).json({error:error.message});
+    console.error('Finance operation failed', {code:(error as any)?.code || 'internal'});
+    return res.status(500).json({error:"Amal bajarilmadi. Shu so‘rovni qayta yuborish mumkin."});
   };
 
   // Get tenant ID from session - throws if not authenticated
@@ -249,6 +265,22 @@ export async function registerRoutes(
   app.use("/api/stats", requireTenantAuth);
   app.use("/api/tenant-sms", requireTenantAuth);
 
+  app.use("/api/teacher-collected-payments", requireTenantAuth, requireAdmin);
+  app.use("/api/student-activity-logs", requireTenantAuth, requireAdmin);
+  app.use("/api/teacher", requireTenantAuth);
+  app.use("/api/sms", requireTenantAuth, requireAdmin);
+  app.use("/api/telegram", requireTenantAuth, requireAdmin);
+  app.use("/api/expenses", requireTenantAuth, (req, res, next) => {
+    if (req.method === 'GET' && req.session.role === 'manager') return next();
+    return requireAdmin(req, res, next);
+  });
+  app.use("/api/teachers", (req,res,next)=> req.method === 'GET' ? next() : requireAdmin(req,res,next));
+  app.get('/api/payment-notifications', requireTenantAuth, requireAdmin, async(req,res)=>{
+    try{const result=await pool.query(`SELECT id,payment_id AS "paymentId",channel,status,attempts,last_error AS "lastError",created_at AS "createdAt" FROM payment_notifications WHERE tenant_id=$1 AND status IN ('failed','pending','sending') ORDER BY id DESC LIMIT 100`,[getTenantId(req)]);res.json(result.rows);}catch{res.status(500).json({error:"Xabarnomalar olinmadi"});}
+  });
+  app.post('/api/payment-notifications/:id/retry',requireTenantAuth,requireAdmin,async(req,res)=>{
+    try{await pool.query("UPDATE payment_notifications SET status='pending',attempts=0,next_attempt_at=NOW(),last_error=NULL WHERE id=$1 AND tenant_id=$2 AND status='failed'",[Number(req.params.id),getTenantId(req)]);res.json({success:true});}catch{res.status(500).json({error:"Qayta urinish bajarilmadi"});}
+  });
   // ===== TENANT SMS STATUS =====
   app.get("/api/tenant-sms", async (req, res) => {
     try {
@@ -478,7 +510,8 @@ export async function registerRoutes(
       if (!existing) {
         return res.status(404).json({ error: "Student not found" });
       }
-      const student = await storage.updateStudent(id, tenantId, req.body);
+      const {firstName,lastName,phone,parentPhone,status}=req.body;
+      const student = await storage.updateStudent(id, tenantId, {firstName,lastName,phone,parentPhone,status});
       res.json(student);
     } catch (error) {
       if (error instanceof DuplicatePhoneError) {
@@ -740,7 +773,7 @@ export async function registerRoutes(
             phone: phone || null,
             email: email || null,
             password: defaultPassword,
-            plainPassword: "123456",
+
             salaryPercent,
             role: "teacher",
           });
@@ -1240,7 +1273,7 @@ export async function registerRoutes(
       // Activity log: o'quvchi guruhga qo'shildi
       try {
         const actorId = getUserId(req);
-        const actorRole = getRole(req);
+        const actorRole = getUserRole(req);
         const actor = await storage.getUser(actorId);
         await storage.createStudentActivityLog({
           tenantId,
@@ -1253,7 +1286,7 @@ export async function registerRoutes(
           actorName: actor ? `${actor.firstName} ${actor.lastName}` : actorId,
           actorRole,
         });
-      } catch (_) {}
+      } catch { console.warn("Activity log write failed"); }
 
       res.status(201).json(studentGroup);
     } catch (error) {
@@ -1285,7 +1318,7 @@ export async function registerRoutes(
       // Activity log: o'quvchi guruhdan chiqarildi
       try {
         const actorId = getUserId(req);
-        const actorRole = getRole(req);
+        const actorRole = getUserRole(req);
         const actor = await storage.getUser(actorId);
         await storage.createStudentActivityLog({
           tenantId,
@@ -1298,7 +1331,7 @@ export async function registerRoutes(
           actorName: actor ? `${actor.firstName} ${actor.lastName}` : actorId,
           actorRole,
         });
-      } catch (_) {}
+      } catch { console.warn("Activity log write failed"); }
 
       res.status(204).send();
     } catch (error) {
@@ -1363,7 +1396,7 @@ export async function registerRoutes(
             data.studentId, 
             group.name, 
             data.status as "present" | "absent",
-            new Date(data.date)
+            new Date(data.date), tenantId
           ).catch(err => console.error("Telegram notification error:", err));
         }
       }
@@ -1714,180 +1747,24 @@ export async function registerRoutes(
       if (!payment) {
         return res.status(404).json({ error: "Payment not found" });
       }
+      if (isTeacher(req) && payment.teacherId !== getUserId(req)) return res.status(403).json({error:"Ruxsat yo‘q"});
       res.json(payment);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch payment" });
     }
   });
 
-  app.post("/api/payments", async (req, res) => {
-    try {
-      if (isTeacher(req)) {
-        const allowed = await hasTeacherPermission(req, 'accept_payment');
-        if (!allowed) {
-          return res.status(403).json({ error: "To'lov qabul qilish uchun ruxsat yo'q" });
-        }
-      }
-      const tenantId = getTenantId(req);
-      const { newStudent, teacherId, amount, paymentType, status, notes, studentId: existingStudentId } = req.body;
-      
-      let finalStudentId = existingStudentId;
-      let createdStudent = null;
-      
-      if (newStudent && !existingStudentId) {
-        const { firstName, lastName, phone, parentPhone } = newStudent;
-        if (!firstName || !lastName) {
-          return res.status(400).json({ error: "Ism va familiya kiritilishi kerak" });
-        }
-        createdStudent = await storage.createStudent({
-          tenantId,
-          firstName,
-          lastName,
-          phone: phone || "",
-          parentPhone: parentPhone || "",
-          status: "active",
-          balance: 0,
-        });
-        finalStudentId = createdStudent.id;
-      }
-      
-      if (!finalStudentId) {
-        return res.status(400).json({ error: "O'quvchi tanlanishi yoki yangi o'quvchi ma'lumotlari kiritilishi kerak" });
-      }
-      
-      let teacherEarning = 0;
-      if (teacherId && amount) {
-        const teacher = await storage.getTeacher(teacherId, tenantId);
-        if (teacher && teacher.salaryPercent) {
-          teacherEarning = Math.round(amount * teacher.salaryPercent / 100);
-        }
-      }
-
-      let studentName = null;
-      if (createdStudent) {
-        studentName = `${createdStudent.firstName} ${createdStudent.lastName}`;
-      } else {
-        const existingStudent = await storage.getStudent(finalStudentId, tenantId);
-        if (existingStudent) {
-          studentName = `${existingStudent.firstName} ${existingStudent.lastName}`;
-        }
-      }
-      
-      const data = insertPaymentSchema.parse({
-        tenantId,
-        studentId: finalStudentId,
-        teacherId: teacherId || null,
-        amount,
-        teacherEarning,
-        paymentType: paymentType || "cash",
-        status: status || "completed",
-        notes: notes || null,
-        studentName,
-      });
-      const payment = await storage.createPayment(data);
-      
-      if (payment.status === 'completed') {
-        const student = await storage.getStudent(payment.studentId, tenantId);
-        if (student) {
-          const newBalance = student.balance + payment.amount;
-          await storage.updateStudent(payment.studentId, tenantId, {
-            balance: newBalance,
-          });
-          
-          notifyStudentPayment(payment.studentId, payment.amount, newBalance)
-            .catch(err => console.error("Telegram notification error:", err));
-          
-          notifyTeacherAboutPayment(payment.studentId, payment.amount, tenantId)
-            .catch(err => console.error("Teacher payment notification error:", err));
-        }
-      }
-      
-      res.status(201).json({ ...payment, createdStudent });
-    } catch (error: any) {
-      if (error?.message?.includes("telefon raqami")) {
-        return res.status(400).json({ error: error.message });
-      }
-      console.error("Payment creation error:", error);
-      res.status(400).json({ error: "To'lov ma'lumotlarida xatolik" });
-    }
+  app.post("/api/payments", requireAdmin, async (req, res) => {
+    try { res.status(201).json(await finance.create(actor(req), req.get('Idempotency-Key'), req.body)); }
+    catch(error){financeFailure(res,error);}
   });
-
-  app.put("/api/payments/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const tenantId = getTenantId(req);
-      
-      const existingPayment = await storage.getPayment(id, tenantId);
-      if (!existingPayment) {
-        return res.status(404).json({ error: "Payment not found" });
-      }
-      
-      const { amount, paymentType, notes, status } = req.body;
-      const oldAmount = existingPayment.amount;
-      const newAmount = amount !== undefined ? amount : oldAmount;
-      
-      // Recalculate teacher earning if amount changed or payment becomes completed
-      const newStatus = status || existingPayment.status;
-      let newTeacherEarning = existingPayment.teacherEarning;
-      if (newAmount !== oldAmount || (newStatus === 'completed' && existingPayment.status !== 'completed')) {
-        if (existingPayment.teacherId) {
-          const teacher = await storage.getTeacher(existingPayment.teacherId, tenantId);
-          const pct = teacher?.salaryPercent ?? 0;
-          newTeacherEarning = Math.round(newAmount * pct / 100);
-        } else {
-          newTeacherEarning = 0;
-        }
-      }
-      
-      const updatedPayment = await storage.updatePayment(id, tenantId, {
-        amount: newAmount,
-        teacherEarning: newTeacherEarning,
-        paymentType: paymentType || existingPayment.paymentType,
-        notes: notes !== undefined ? notes : existingPayment.notes,
-        status: newStatus,
-      });
-      
-      if (updatedPayment && existingPayment.status === 'completed' && newAmount !== oldAmount) {
-        const student = await storage.getStudent(existingPayment.studentId, tenantId);
-        if (student) {
-          const balanceDiff = newAmount - oldAmount;
-          await storage.updateStudent(existingPayment.studentId, tenantId, {
-            balance: student.balance + balanceDiff,
-          });
-        }
-      }
-      
-      res.json(updatedPayment);
-    } catch (error) {
-      res.status(400).json({ error: "Failed to update payment" });
-    }
+  app.put("/api/payments/:id", requireAdmin, async (req,res)=>{
+    try{res.json(await finance.update(actor(req), Number(req.params.id), req.body));}
+    catch(error){financeFailure(res,error);}
   });
-
-  app.delete("/api/payments/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const tenantId = getTenantId(req);
-      
-      const existingPayment = await storage.getPayment(id, tenantId);
-      if (!existingPayment) {
-        return res.status(404).json({ error: "Payment not found" });
-      }
-      
-      // Revert student balance if payment was completed
-      if (existingPayment.status === 'completed') {
-        const student = await storage.getStudent(existingPayment.studentId, tenantId);
-        if (student) {
-          await storage.updateStudent(existingPayment.studentId, tenantId, {
-            balance: student.balance - existingPayment.amount,
-          });
-        }
-      }
-      
-      await storage.deletePayment(id, tenantId);
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete payment" });
-    }
+  app.delete("/api/payments/:id", requireAdmin, async(req,res)=>{
+    try{await finance.remove(actor(req),Number(req.params.id));res.status(204).send();}
+    catch(error){financeFailure(res,error);}
   });
 
   // ===== TEACHER SALARY =====
@@ -1911,6 +1788,7 @@ export async function registerRoutes(
     try {
       const tenantId = getTenantId(req);
       const teacherId = req.params.teacherId;
+      if(isTeacher(req) && teacherId !== getUserId(req)) return res.status(403).json({error:"Ruxsat yo‘q"});
       const fromMonth = Math.max(1, Math.min(12, parseInt(req.query.fromMonth as string) || (new Date().getMonth() + 1)));
       const toMonth = Math.max(fromMonth, Math.min(12, parseInt(req.query.toMonth as string) || fromMonth));
       const year = parseInt(req.query.year as string) || new Date().getFullYear();
@@ -1939,7 +1817,7 @@ export async function registerRoutes(
 
       const totalPayments = teacherPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
       const totalEarning = teacherPayments.reduce((sum: number, p: any) => sum + (p.teacherEarning || 0), 0);
-      const calculatedSalary = totalEarning || Math.round(totalPayments * salaryPercent / 100);
+      const calculatedSalary = totalEarning;
 
       const advanceExpenses = await storage.getExpensesByTeacher(teacherId, tenantId, startDate, endDate);
       const totalAdvance = advanceExpenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
@@ -2157,7 +2035,7 @@ export async function registerRoutes(
         lastName,
         email: email || null,
         password: hashedPassword,
-        plainPassword: rawPassword,
+
         phone,
         salaryPercent: salaryPercent || 0,
         role: "teacher",
@@ -2192,7 +2070,6 @@ export async function registerRoutes(
       
       if (password && password.trim() !== "") {
         updateData.password = await bcrypt.hash(password, 10);
-        updateData.plainPassword = password;
       }
       
       const updated = await storage.updateTeacher(teacherId, tenantId, updateData);
@@ -2357,7 +2234,7 @@ export async function registerRoutes(
           actorName: actor ? `${actor.firstName} ${actor.lastName}` : actorId,
           actorRole: "teacher",
         });
-      } catch (_) {}
+      } catch { console.warn("Activity log write failed"); }
 
       res.json({ success: true });
     } catch (error) {
@@ -2378,39 +2255,9 @@ export async function registerRoutes(
   });
 
   // Teacher Collected Payments — o'qituvchi to'lov yig'adi
-  app.post("/api/teacher/collected-payments", requireTenantAuth, requireTeacherPermission('accept_payment'), async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const teacherUserId = getUserId(req);
-      const teacher = await storage.getUser(teacherUserId);
-      const { studentId, groupId, amount, paymentType, notes } = req.body;
-      if (!studentId || !amount) {
-        return res.status(400).json({ error: "O'quvchi va summa kiritilishi kerak" });
-      }
-      const student = await storage.getStudent(parseInt(studentId), tenantId);
-      if (!student) return res.status(404).json({ error: "O'quvchi topilmadi" });
-      let groupName: string | undefined;
-      if (groupId) {
-        const group = await storage.getGroup(parseInt(groupId), tenantId);
-        groupName = group?.name;
-      }
-      const payment = await storage.createTeacherCollectedPayment({
-        tenantId,
-        teacherId: teacherUserId,
-        teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : teacherUserId,
-        studentId: parseInt(studentId),
-        studentName: `${student.firstName} ${student.lastName}`,
-        groupId: groupId ? parseInt(groupId) : undefined,
-        groupName,
-        amount: parseInt(amount),
-        paymentType: paymentType || "cash",
-        notes: notes || null,
-        status: "pending",
-      });
-      res.status(201).json(payment);
-    } catch (error) {
-      res.status(500).json({ error: "To'lovni saqlashda xatolik" });
-    }
+  app.post("/api/teacher/collected-payments", requireTenantAuth, async(req,res)=>{
+    try{res.status(201).json(await finance.collect(actor(req),req.get('Idempotency-Key'),req.body));}
+    catch(error){financeFailure(res,error);}
   });
 
   // O'qituvchi uchun guruh o'quvchilarining to'lov holati
@@ -2418,12 +2265,16 @@ export async function registerRoutes(
     try {
       const groupId = parseInt(req.params.groupId);
       const tenantId = getTenantId(req);
+      const group=await storage.getGroup(groupId,tenantId);
+      if(!group || (isTeacher(req) && group.teacherId!==getUserId(req)))return res.status(403).json({error:"Guruhga ruxsat yo‘q"});
+      const sameTeacherGroups=(await storage.getGroups(tenantId)).filter(g=>g.teacherId===group.teacherId).map(g=>g.id);
       const groupStudents = await storage.getStudentsByGroup(groupId, tenantId);
       const now = new Date();
       const result = await Promise.all(
         groupStudents.map(async (student) => {
           const studentPayments = await storage.getPayments(tenantId, student.id);
-          const completedPayments = studentPayments.filter((p) => p.status === "completed");
+          const membership=(await storage.getStudentGroups(student.id,tenantId)).map(m=>m.groupId);
+          const completedPayments = studentPayments.filter(p => p.status==='completed' && paymentMatchesGroup(p,group,new Map([[student.id,membership]]),sameTeacherGroups));
           const lastPayment = completedPayments[0] || null;
           const lastPaymentDate = lastPayment ? new Date(lastPayment.createdAt) : null;
           const daysSince = lastPaymentDate
@@ -2500,62 +2351,13 @@ export async function registerRoutes(
     }
   });
 
-  // Admin tasdiqlaydi — rasmiy to'lov yaratiladi va student balansi yangilanadi
-  app.post("/api/teacher-collected-payments/:id/confirm", async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const id = parseInt(req.params.id);
-      const actorId = getUserId(req);
-      const payments = await storage.getTeacherCollectedPayments(tenantId);
-      const tcp = payments.find(p => p.id === id);
-      if (!tcp) return res.status(404).json({ error: "To'lov topilmadi" });
-      if (tcp.status !== "pending") return res.status(400).json({ error: "Bu to'lov allaqachon ko'rib chiqilgan" });
-
-      // Rasmiy to'lov yaratish
-      const actor = await storage.getUser(actorId);
-      const actorName = actor ? `${actor.firstName} ${actor.lastName}` : actorId;
-      const payment = await storage.createPayment({
-        tenantId,
-        studentId: tcp.studentId,
-        teacherId: null,
-        amount: tcp.amount,
-        teacherEarning: 0,
-        paymentType: tcp.paymentType as any,
-        status: "completed",
-        notes: `O'qituvchi ${tcp.teacherName} yig'gan. Admin ${actorName} tasdiqladi.${tcp.notes ? " " + tcp.notes : ""}`,
-        studentName: tcp.studentName,
-      });
-
-      // Student balansini yangilash
-      const student = await storage.getStudent(tcp.studentId, tenantId);
-      if (student) {
-        await storage.updateStudent(tcp.studentId, tenantId, { balance: student.balance + tcp.amount });
-      }
-
-      // Statusni yangilash
-      await storage.updateTeacherCollectedPaymentStatus(id, tenantId, "confirmed", actorId);
-      res.json({ success: true, paymentId: payment.id });
-    } catch (error) {
-      res.status(500).json({ error: "Tasdiqlashda xatolik" });
-    }
+  app.post("/api/teacher-collected-payments/:id/confirm", requireAdmin, async(req,res)=>{
+    try{res.json(await finance.decide(actor(req),Number(req.params.id),'confirm'));}
+    catch(error){financeFailure(res,error);}
   });
-
-  // Admin rad etadi
-  app.post("/api/teacher-collected-payments/:id/reject", async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const id = parseInt(req.params.id);
-      const actorId = getUserId(req);
-      const { reason } = req.body;
-      const payments = await storage.getTeacherCollectedPayments(tenantId);
-      const tcp = payments.find(p => p.id === id);
-      if (!tcp) return res.status(404).json({ error: "To'lov topilmadi" });
-      if (tcp.status !== "pending") return res.status(400).json({ error: "Bu to'lov allaqachon ko'rib chiqilgan" });
-      await storage.updateTeacherCollectedPaymentStatus(id, tenantId, "rejected", actorId, reason);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Rad etishda xatolik" });
-    }
+  app.post("/api/teacher-collected-payments/:id/reject", requireAdmin, async(req,res)=>{
+    try{res.json(await finance.decide(actor(req),Number(req.params.id),'reject',req.body.reason));}
+    catch(error){financeFailure(res,error);}
   });
 
   app.delete("/api/teachers/:id", async (req, res) => {
@@ -2644,42 +2446,8 @@ export async function registerRoutes(
   });
 
   // Payment received (approved template 1)
-  app.post("/api/sms/payment-received", async (req, res) => {
-    try {
-      const { studentId, amount, groupId } = req.body;
-      const tenantId = getTenantId(req);
-      const student = await storage.getStudent(studentId, tenantId);
-      
-      if (!student) {
-        return res.status(404).json({ error: "O'quvchi topilmadi" });
-      }
-
-      const phone = student.parentPhone || student.phone;
-      if (!phone) {
-        return res.status(400).json({ error: "Telefon raqami yo'q" });
-      }
-
-      let courseName = "umumiy kursi";
-      
-      // If groupId provided, use it; otherwise find student's first group
-      let group = groupId ? await storage.getGroup(groupId, tenantId) : null;
-      if (!group) {
-        const studentGroupsList = await storage.getStudentGroups(studentId, tenantId);
-        if (studentGroupsList.length > 0) {
-          group = await storage.getGroup(studentGroupsList[0].groupId, tenantId);
-        }
-      }
-      
-      if (group) {
-        const groupName = group.name.trim();
-        courseName = groupName.toLowerCase().includes("kurs") ? groupName : groupName + " kursi";
-      }
-      
-      const result = await sendPaymentReceivedSMS(phone, student.firstName.trim(), courseName, amount);
-      res.json(result);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to send payment confirmation" });
-    }
+  app.post("/api/sms/payment-received", (_req,res)=>{
+    res.status(410).json({success:false,error:"To‘lov SMSi endi avtomatik navbatdan yuboriladi. To‘lovlar sahifasini yangilang."});
   });
 
   // Absence notification (approved template 3)
@@ -2768,7 +2536,10 @@ export async function registerRoutes(
         return res.status(403).json({ success: false, error: "O'quvchi topilmadi yoki ruxsat yo'q" });
       }
       
-      const result = await sendPaymentReceipt(studentId, paymentId, amount, groupName);
+      const payment=await storage.getPayment(Number(paymentId),tenantId);
+      if(!payment||payment.studentId!==Number(studentId)||payment.status!=='completed'||payment.deletedAt)return res.status(400).json({success:false,error:"Tasdiqlangan to‘lov topilmadi"});
+      const group=payment.groupId?await storage.getGroup(payment.groupId,tenantId):null;
+      const result = await sendPaymentReceipt(payment.studentId,payment.id,payment.amount,tenantId,group?.name);
       res.json(result);
     } catch (error) {
       console.error("Telegram receipt error:", error);
@@ -2781,27 +2552,7 @@ export async function registerRoutes(
   const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
   const SUPER_ADMIN_TOKEN_SECRET = process.env.SUPER_ADMIN_TOKEN_SECRET;
 
-  function generateToken(): string {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 15);
-    return Buffer.from(`${timestamp}:${random}:${SUPER_ADMIN_TOKEN_SECRET}`).toString('base64');
-  }
-
-  function verifyToken(token: string): boolean {
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('utf-8');
-      const parts = decoded.split(':');
-      if (parts.length !== 3) return false;
-      const timestamp = parseInt(parts[0]);
-      const secret = parts[2];
-      // Token expires after 24 hours
-      if (Date.now() - timestamp > 24 * 60 * 60 * 1000) return false;
-      if (secret !== SUPER_ADMIN_TOKEN_SECRET) return false;
-      return true;
-    } catch {
-      return false;
-    }
-  }
+  const superAdminAuth = createSuperAdminAuth(SUPER_ADMIN_TOKEN_SECRET || '', process.env.SESSION_SECRET || '');
 
   app.post("/api/super-admin/login", (req, res) => {
     if (!SUPER_ADMIN_USERNAME || !SUPER_ADMIN_PASSWORD || !SUPER_ADMIN_TOKEN_SECRET) {
@@ -2809,7 +2560,7 @@ export async function registerRoutes(
     }
     const { username, password } = req.body;
     if (username === SUPER_ADMIN_USERNAME && password === SUPER_ADMIN_PASSWORD) {
-      const token = generateToken();
+      const token = superAdminAuth.generate();
       res.json({ success: true, token });
     } else {
       res.status(401).json({ error: "Login yoki parol noto'g'ri" });
@@ -2822,22 +2573,12 @@ export async function registerRoutes(
       return res.status(401).json({ valid: false });
     }
     const token = authHeader.substring(7);
-    const valid = verifyToken(token);
+    const valid = superAdminAuth.verify(token);
     res.json({ valid });
   });
 
-  // Middleware to protect super admin routes
-  const requireSuperAdmin = (req: any, res: any, next: any) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
-    }
-    const token = authHeader.substring(7);
-    if (!verifyToken(token)) {
-      return res.status(401).json({ error: "Token yaroqsiz yoki muddati o'tgan" });
-    }
-    next();
-  };
+  // Guard every platform-admin route before registering its handlers.
+  app.use('/api/admin', superAdminAuth.requireAuth);
 
   // ===== SUPER ADMIN: SUBSCRIPTION PLANS =====
   app.get("/api/admin/plans", async (req, res) => {
@@ -3117,7 +2858,7 @@ export async function registerRoutes(
         lastName,
         email: null,
         password: hashedPassword,
-        plainPassword: rawPassword,
+
         phone: phone.replace(/\D/g, ''),
         role: "manager",
         salaryPercent: 0,

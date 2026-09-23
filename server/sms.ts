@@ -23,6 +23,7 @@ async function getToken(): Promise<string> {
 
   const response = await fetch(`${ESKIZ_API_URL}/auth/login`, {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
@@ -50,11 +51,11 @@ export async function sendSMS(phone: string, message: string): Promise<{ success
       formattedPhone = "998" + formattedPhone.replace(/^0/, "");
     }
 
-    console.log(`SMS yuborilmoqda: ${formattedPhone}`);
-    console.log(`Xabar: ${message}`);
+
 
     const response = await fetch(`${ESKIZ_API_URL}/message/sms/send`, {
       method: "POST",
+      signal: AbortSignal.timeout(15000),
       headers: {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -67,16 +68,16 @@ export async function sendSMS(phone: string, message: string): Promise<{ success
     });
 
     const data = await response.json();
-    console.log("Eskiz javob:", JSON.stringify(data));
+
 
     if (data.status === "success" || data.status === "waiting") {
       return { success: true, messageId: data.id };
     } else {
-      return { success: false, error: data.message || "SMS yuborishda xatolik" };
+      return { success: false, error: String(data.message).includes("fill the balance") ? "SMS provayderi balansi tugagan. Eskiz hisobini to‘ldiring." : "SMS provayderi xabarni qabul qilmadi" };
     }
   } catch (error: any) {
-    console.error("SMS yuborishda xatolik:", error);
-    return { success: false, error: error.message };
+    console.error("SMS provider request failed");
+    return { success: false, error: "SMS xizmatiga ulanib bo‘lmadi" };
   }
 }
 
@@ -85,6 +86,7 @@ export async function getBalance(): Promise<{ balance: number; error?: string }>
     const token = await getToken();
 
     const response = await fetch(`${ESKIZ_API_URL}/user/get-limit`, {
+      signal: AbortSignal.timeout(15000),
       headers: {
         "Authorization": `Bearer ${token}`,
       },
@@ -93,7 +95,7 @@ export async function getBalance(): Promise<{ balance: number; error?: string }>
     const data = await response.json();
     return { balance: data.data?.balance || 0 };
   } catch (error: any) {
-    return { balance: 0, error: error.message };
+    return { balance: 0, error: "SMS xizmatiga ulanib bo‘lmadi" };
   }
 }
 
