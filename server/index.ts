@@ -10,7 +10,7 @@ import { registerRoutes } from "./routes";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { startTelegramBot, startScheduledNotifications } from "./telegram-bot";
+import { startTelegramBot, stopTelegramBot, startScheduledNotifications } from "./telegram-bot";
 
 // Auto-fix database schema on startup
 async function fixDatabaseSchema() {
@@ -142,6 +142,16 @@ async function fixDatabaseSchema() {
 
 const app = express();
 const httpServer = createServer(app);
+let shuttingDown = false;
+const shutdown = () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  void stopTelegramBot().catch(() => console.error("Telegram shutdown failed"));
+  httpServer.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 10_000).unref();
+};
+process.once('SIGTERM', shutdown);
+process.once('SIGINT', shutdown);
 
 // Trust proxy for Railway/production environments
 if (process.env.NODE_ENV === "production") {
@@ -275,7 +285,7 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
-      startTelegramBot();
+      void startTelegramBot().catch(() => console.error("Telegram initialization failed"));
       startScheduledNotifications();
       startPaymentNotifications();
     },

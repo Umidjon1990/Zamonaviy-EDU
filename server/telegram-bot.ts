@@ -1,3 +1,4 @@
+import { runBotPolling } from "./bot-polling";
 import { ownsTelegramContact } from "./security";
 import { Bot, Context, session, SessionFlavor, GrammyError, HttpError } from "grammy";
 import { storage } from "./storage";
@@ -19,6 +20,7 @@ interface SessionData {
 type BotContext = Context & SessionFlavor<SessionData>;
 
 let bot: Bot<BotContext> | null = null;
+let stoppingBot = false;
 
 export async function startTelegramBot() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -28,6 +30,7 @@ export async function startTelegramBot() {
     return;
   }
 
+  stoppingBot = false;
   bot = new Bot<BotContext>(token);
 
   bot.use(session({
@@ -151,37 +154,18 @@ export async function startTelegramBot() {
   });
 
   bot.catch((err) => {
-    console.error("Telegram bot xatosi:", err);
+    console.error("Telegram update handler failed", { code: (err.error as any)?.error_code });
   });
 
-  // Retry logic for network issues
-  const maxRetries = 3;
-  let retryCount = 0;
-  
-  const startBot = async (): Promise<void> => {
-    if (!bot) return;
-    try {
-      console.log(`Telegram bot ishga tushirilmoqda... (urinish ${retryCount + 1}/${maxRetries})`);
-      const botInfo = await bot.api.getMe();
-      console.log("Bot ma'lumotlari:", botInfo.username, botInfo.id);
-      
-      bot.start({
-        onStart: (botInfo) => {
-          console.log("Telegram bot muvaffaqiyatli ishga tushdi:", botInfo.username);
-        },
-      });
-    } catch (error) {
-      retryCount++;
-      if (error instanceof HttpError && retryCount < maxRetries) {
-        console.log(`Telegram bot ulanish xatosi, qayta urinish ${retryCount}...`);
-        await new Promise(resolve => setTimeout(resolve, 5000)); // 5 soniya kutish
-        return startBot();
-      }
-      console.error("Telegram bot ishga tushishda xatolik:", error);
-    }
-  };
-  
-  await startBot();
+  await runBotPolling(async () => {
+    if (!bot || stoppingBot) return;
+    await bot.start({
+      onStart: () => console.log("Telegram bot muvaffaqiyatli ishga tushdi"),
+    });
+  }, {
+    stopped: () => stoppingBot,
+    onError: (code, retrying) => console.error("Telegram polling unavailable", { code, retrying }),
+  });
 }
 
 function normalizePhone(phone: string): string {
@@ -1028,10 +1012,9 @@ export async function sendDailyReportToAdmins(): Promise<void> {
   }
 }
 
-export function stopTelegramBot() {
-  if (bot) {
-    bot.stop();
-  }
+export async function stopTelegramBot() {
+  stoppingBot = true;
+  if (bot?.isRunning()) await bot.stop();
 }
 
 export async function sendTelegramMessage(chatId: string | number, message: string): Promise<boolean> {
