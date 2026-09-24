@@ -14,5 +14,5 @@ export async function submitFinance(url:string,data:unknown):Promise<any>{
   return result;
 }
 export function invalidateFinance(client:QueryClient){
-  return client.invalidateQueries({predicate:q=>/payment|student|stats|salary|finance|report|group/i.test(String(q.queryKey[0]))});
+  return client.invalidateQueries({predicate:q=>q.queryKey[0]!=="payment-revision"&&/tuition|payment|student|stats|salary|finance|report|group/i.test(String(q.queryKey[0]))});
 }

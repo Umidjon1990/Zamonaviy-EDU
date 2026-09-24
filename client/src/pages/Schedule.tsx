@@ -5,13 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Clock, Users } from "lucide-react";
 
 export default function Schedule() {
-  const days = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
-  const times = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
+  const days = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
 
-  const { data: groupsData, isLoading } = useQuery({
+
+  const { data: groupsData, isLoading, error } = useQuery({
     queryKey: ["groups"],
     queryFn: async () => {
       const res = await fetch("/api/groups", { credentials: "include" });
+      if(!res.ok)throw new Error("Jadval olinmadi");
       return res.json();
     },
   });
@@ -21,10 +22,12 @@ export default function Schedule() {
     if (!timeStr) return null;
     const match = timeStr.match(/(\d{1,2}):(\d{2})/);
     if (match) {
-      return `${match[1].padStart(2, '0')}:00`;
+      return `${match[1].padStart(2, '0')}:${match[2]}`;
     }
     return null;
   };
+
+  const times=Array.from(new Set(groups.map(g=>parseTime(g.time)).filter((v):v is string=>!!v))).sort();
 
   const getClassesForSlot = (time: string, dayName: string) => {
     return groups.filter((group: any) => {
@@ -32,7 +35,7 @@ export default function Schedule() {
       
       const groupDays = Array.isArray(group.days) ? group.days : [];
       const hasDay = groupDays.some((d: string) => 
-        d.toLowerCase() === dayName.toLowerCase()
+        (({Du:'Dushanba',Se:'Seshanba',Chor:'Chorshanba',Pay:'Payshanba',Ju:'Juma',Sha:'Shanba',Yak:'Yakshanba'} as Record<string,string>)[d]||d).toLowerCase() === dayName.toLowerCase()
       );
       
       if (!hasDay) return false;
@@ -42,6 +45,7 @@ export default function Schedule() {
     });
   };
 
+  if(error)return <p role="alert">Jadval olinmadi. Sahifani yangilang.</p>;
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -66,7 +70,7 @@ export default function Schedule() {
         </CardHeader>
         <CardContent>
           <div className="min-w-[900px]">
-            <div className="grid grid-cols-7 border-b">
+            <div className="grid grid-cols-8 border-b">
               <div className="p-4 font-medium text-muted-foreground border-r bg-muted/30">
                 <Clock className="w-4 h-4 inline mr-1" /> Vaqt
               </div>
@@ -78,7 +82,7 @@ export default function Schedule() {
             </div>
             
             {times.map((time) => (
-              <div key={time} className="grid grid-cols-7 border-b last:border-b-0">
+              <div key={time} className="grid grid-cols-8 border-b last:border-b-0">
                 <div className="p-3 text-sm font-medium text-muted-foreground border-r bg-muted/5 flex items-center justify-center">
                   {time}
                 </div>

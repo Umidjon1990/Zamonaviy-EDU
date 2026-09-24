@@ -15,6 +15,8 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
+    tenantSlug: "",
+    role: "",
     phone: "",
     password: "",
   });
@@ -27,7 +29,7 @@ export default function Login() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({...formData,tenantSlug:formData.tenantSlug||undefined,role:formData.role||undefined}),
         credentials: "include",
       });
 
@@ -107,12 +109,16 @@ export default function Login() {
                   size="icon"
                   className="absolute right-0 top-0 h-full px-3"
                   onClick={() => setShowPassword(!showPassword)}
-                  data-testid="button-toggle-password"
+                  aria-label={showPassword ? "Parolni yashirish" : "Parolni ko‘rsatish"} data-testid="button-toggle-password"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
+            <details className="text-sm"><summary>Bir nechta markazda akkauntingiz bormi?</summary>
+              <Label htmlFor="tenant-slug">Markaz manzili (slug)</Label><Input id="tenant-slug" value={formData.tenantSlug} onChange={e=>setFormData({...formData,tenantSlug:e.target.value})} />
+              <Label htmlFor="account-role">Rol</Label><select id="account-role" value={formData.role} onChange={e=>setFormData({...formData,role:e.target.value})}><option value="">Avtomatik</option><option value="markaz_admin">Admin</option><option value="teacher">O‘qituvchi</option><option value="manager">Rahbar</option></select>
+            </details>
             <Button 
               type="submit" 
               className="w-full" 

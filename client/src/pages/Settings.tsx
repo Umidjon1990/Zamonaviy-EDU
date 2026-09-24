@@ -1,3 +1,4 @@
+import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,17 +21,19 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   
   const [centerInfo, setCenterInfo] = useState({
-    name: "Zamonaviy-Edu Learning Center",
-    phone: "+998 90 123 45 67",
-    address: "Toshkent sh., Yunusobod t., 12-uy",
+    name: "",
+    phone: "",
+    address: "",
   });
 
   const [notifications, setNotifications] = useState({
-    smsEnabled: true,
+    smsEnabled: false,
     marketingEnabled: false,
-    darkMode: false,
+    darkMode: localStorage.getItem("crm-theme")==="dark",
   });
 
+  const {data:settings}=useQuery({queryKey:['settings'],queryFn:async()=>{const r=await apiRequest('GET','/api/settings');return r.json();}});
+  useEffect(()=>{if(settings){setCenterInfo({name:settings.name,phone:settings.phone,address:settings.address});setNotifications(v=>({...v,smsEnabled:settings.smsEnabled,marketingEnabled:settings.marketingSmsEnabled}));}},[settings]);
   const [branding, setBranding] = useState({
     logo: "",
     receiptTitle: "",
@@ -247,8 +250,9 @@ export default function Settings() {
   const handleSaveCenter = async () => {
     setIsSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      localStorage.setItem("centerInfo", JSON.stringify(centerInfo));
+      await apiRequest('PATCH','/api/settings',centerInfo);
+      await queryClient.invalidateQueries({queryKey:['settings']});
+      await queryClient.invalidateQueries({queryKey:['/api/auth/me']});
       toast({ title: "Muvaffaqiyat", description: "Markaz ma'lumotlari saqlandi" });
     } catch (error) {
       toast({ title: "Xatolik", description: "Saqlashda xatolik yuz berdi", variant: "destructive" });
@@ -260,8 +264,11 @@ export default function Settings() {
   const handleSaveNotifications = async () => {
     setIsSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      localStorage.setItem("notifications", JSON.stringify(notifications));
+      await apiRequest('PATCH','/api/settings',{smsEnabled:notifications.smsEnabled,marketingSmsEnabled:notifications.marketingEnabled});
+      localStorage.setItem('crm-theme',notifications.darkMode?'dark':'light');
+      document.documentElement.classList.toggle('dark',notifications.darkMode);
+      await queryClient.invalidateQueries({queryKey:['settings']});
+      await queryClient.invalidateQueries({queryKey:['tenant-sms']});
       toast({ title: "Muvaffaqiyat", description: "Sozlamalar saqlandi" });
     } catch (error) {
       toast({ title: "Xatolik", description: "Saqlashda xatolik yuz berdi", variant: "destructive" });
@@ -325,7 +332,7 @@ export default function Settings() {
             <div className="flex items-center justify-between space-x-2">
               <Label htmlFor="notifications" className="flex flex-col space-y-1">
                 <span>SMS xabarnomalar</span>
-                <span className="font-normal text-xs text-muted-foreground">Ota-onalarga davomat haqida SMS yuborish</span>
+                <span className="font-normal text-xs text-muted-foreground">Markazning barcha SMS jo‘natishlariga ruxsat</span>
               </Label>
               <Switch 
                 id="notifications" 

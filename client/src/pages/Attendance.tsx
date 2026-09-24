@@ -26,39 +26,43 @@ export default function Attendance() {
   const [pendingGrades, setPendingGrades] = useState<Record<number, number | null>>({});
   const [pendingAttendance, setPendingAttendance] = useState<Record<number, string | null>>({});
 
-  const { data: groupsData } = useQuery({
+  const { data: groupsData, error:groupsError } = useQuery({
     queryKey: ["groups"],
     queryFn: async () => {
       const res = await fetch("/api/groups", { credentials: "include" });
+      if(!res.ok)throw new Error((await res.json()).error||"So‘rov bajarilmadi");
       return res.json();
     },
   });
   const groups = (groupsData || []) as any[];
 
-  const { data: studentsData } = useQuery({
+  const { data: studentsData, error:studentsError } = useQuery({
     queryKey: ["group-students", selectedGroup],
     queryFn: async () => {
       const res = await fetch(`/api/groups/${selectedGroup}/students`, { credentials: "include" });
+      if(!res.ok)throw new Error((await res.json()).error||"So‘rov bajarilmadi");
       return res.json();
     },
     enabled: !!selectedGroup,
   });
   const groupStudents = (studentsData || []) as any[];
 
-  const { data: attendanceData, refetch: refetchAttendance } = useQuery({
+  const { data: attendanceData, error:attendanceError, refetch: refetchAttendance } = useQuery({
     queryKey: ["attendance", selectedGroup, selectedDate],
     queryFn: async () => {
       const res = await fetch(`/api/attendance?groupId=${selectedGroup}&date=${selectedDate}`, { credentials: "include" });
+      if(!res.ok)throw new Error((await res.json()).error||"So‘rov bajarilmadi");
       return res.json();
     },
     enabled: !!selectedGroup,
   });
   const attendance = (attendanceData || []) as any[];
 
-  const { data: gradesData, refetch: refetchGrades } = useQuery({
+  const { data: gradesData, error:gradesError, refetch: refetchGrades } = useQuery({
     queryKey: ["grades", selectedGroup, selectedDate],
     queryFn: async () => {
       const res = await fetch(`/api/grades?groupId=${selectedGroup}&date=${selectedDate}`, { credentials: "include" });
+      if(!res.ok)throw new Error((await res.json()).error||"So‘rov bajarilmadi");
       return res.json();
     },
     enabled: !!selectedGroup,
@@ -78,8 +82,10 @@ export default function Attendance() {
           status,
         }),
       });
+      if(!res.ok)throw new Error((await res.json()).error||"So‘rov bajarilmadi");
       return res.json();
     },
+    onError:(error:Error)=>toast({title:"Xatolik",description:error.message,variant:"destructive"}),
     onSuccess: () => {
       refetchAttendance();
       toast({ title: "Muvaffaqiyat", description: "Davomat belgilandi" });
@@ -100,8 +106,10 @@ export default function Attendance() {
           topic: gradeTopic || null,
         }),
       });
+      if(!res.ok)throw new Error((await res.json()).error||"So‘rov bajarilmadi");
       return res.json();
     },
+    onError:(error:Error)=>toast({title:"Xatolik",description:error.message,variant:"destructive"}),
     onSuccess: () => {
       refetchGrades();
       toast({ title: "Muvaffaqiyat", description: "Baho qo'yildi" });

@@ -1,7 +1,9 @@
 import { runBotPolling } from "./bot-polling";
 import { ownsTelegramContact } from "./security";
 import { Bot, Context, session, SessionFlavor, GrammyError, HttpError } from "grammy";
-import { storage } from "./storage";
+import { activeTenant } from "./accounts";
+import { uzDate } from "../shared/domain";
+import { storage, pool } from "./storage";
 
 function getNowUz(): Date {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' }));
@@ -15,6 +17,7 @@ interface SessionData {
   teacherId?: string;
   adminId?: string;
   tenantId?: number;
+  choices?: {kind:"admin"|"teacher"|"student";id:string;tenantId:number;label:string}[];
 }
 
 type BotContext = Context & SessionFlavor<SessionData>;
@@ -38,6 +41,17 @@ export async function startTelegramBot() {
       step: "start",
     }),
   }));
+
+  bot.use(async(ctx,next)=>{
+    if(ctx.session.step==='verified'){
+      const s=ctx.session,entity=s.studentId?await storage.getStudent(s.studentId,s.tenantId!):await storage.getUser(s.teacherId||s.adminId||'');
+      const kind=s.studentId?'student':'user',id=String(s.studentId||s.teacherId||s.adminId||'');
+      const link=await pool.query('SELECT 1 FROM telegram_verified_links WHERE kind=$1 AND entity_id=$2 AND chat_id=$3',[kind,id,String(ctx.chat?.id)]);
+      if(!entity||entity.archivedAt||!activeTenant(await storage.getTenant(s.tenantId!))||!link.rows.length){ctx.session={step:'start'};await ctx.reply('Qayta tasdiqlash uchun /start buyrug‘ini bosing.');return;}
+    }
+    return next();
+  });
+  bot.callbackQuery(/^account:(\d+)$/,async ctx=>{await ctx.answerCallbackQuery();await selectAccount(ctx,Number(ctx.match[1]));});
 
   bot.command("start", async (ctx) => {
     console.log("Bot /start buyrug'i qabul qilindi:", ctx.from?.id);
@@ -180,163 +194,29 @@ function normalizePhone(phone: string): string {
   return normalized;
 }
 
-async function handlePhoneNumber(ctx: BotContext, rawPhone: string) {
-  const phone = normalizePhone(rawPhone);
-  
-  if (phone.length < 12) {
-    await ctx.reply(
-      "❌ Telefon raqami noto'g'ri formatda.\n\n" +
-      "Iltimos, to'liq raqamni kiriting:\n" +
-      "Namuna: +998901234567 yoki 901234567"
-    );
-    return;
-  }
-
-  // Get all tenants and search across all of them
-  const tenants = await storage.getTenants();
-  
-  for (const tenant of tenants) {
-    const tenantId = tenant.id;
-    
-    // Check for admin first (markaz_admin role)
-    const admins = await storage.getAdmins(tenantId);
-    const admin = admins.find((u) => {
-      const adminPhone = u.phone ? normalizePhone(u.phone) : "";
-      return adminPhone === phone;
-    });
-
-    if (admin) {
-      ctx.session.step = "verified";
-      ctx.session.userType = "admin";
-      ctx.session.adminId = admin.id;
-      ctx.session.phone = phone;
-      ctx.session.tenantId = tenantId;
-
-      const chatId = ctx.chat?.id?.toString();
-      if (chatId) {
-        await storage.updateUserTelegramChatId(admin.id, chatId);
-      }
-
-      await ctx.reply(
-        `✅ Xush kelibsiz, ${admin.firstName} ${admin.lastName}!\n\n` +
-        `👔 Siz admin sifatida aniqlandingiz.\n` +
-        `🏢 Markaz: ${tenant.name}\n\n` +
-        `📊 Buyruqlar:\n` +
-        `/statistika - Umumiy statistika\n` +
-        `/tushum - Oylik tushum\n` +
-        `/qarzdorlar - Qarzdor o'quvchilar\n` +
-        `/hisobot - Kunlik hisobot\n`,
-        {
-          reply_markup: {
-            keyboard: [
-              [{ text: "📊 Statistika" }, { text: "💰 Tushum" }],
-              [{ text: "⚠️ Qarzdorlar" }, { text: "📋 Hisobot" }],
-            ],
-            resize_keyboard: true,
-          },
-        }
-      );
-      return;
-    }
-
-    // Check for teacher
-    const teachers = await storage.getTeachers(tenantId);
-    const teacher = teachers.find((t) => {
-      const teacherPhone = t.phone ? normalizePhone(t.phone) : "";
-      return teacherPhone === phone;
-    });
-
-    if (teacher) {
-      ctx.session.step = "verified";
-      ctx.session.userType = "teacher";
-      ctx.session.teacherId = teacher.id;
-      ctx.session.phone = phone;
-      ctx.session.tenantId = tenantId;
-
-      const chatId = ctx.chat?.id?.toString();
-      if (chatId) {
-        await storage.updateUserTelegramChatId(teacher.id, chatId);
-      }
-
-      await ctx.reply(
-        `✅ Xush kelibsiz, ${teacher.firstName} ${teacher.lastName}!\n\n` +
-        `👨‍🏫 Siz o'qituvchi sifatida aniqlandingiz.\n` +
-        `🏢 Markaz: ${tenant.name}\n\n` +
-        `📊 Buyruqlar:\n` +
-        `/guruhlar - Guruhlaringiz\n` +
-        `/oylik - Oylik hisobi\n` +
-        `/davomat - Davomat statistikasi\n` +
-        `/malumot - Umumiy ma'lumot\n` +
-        `/qarzdorlar - Qarzdor o'quvchilar\n`,
-        {
-          reply_markup: {
-            keyboard: [
-              [{ text: "📚 Guruhlar" }, { text: "💰 Oylik" }],
-              [{ text: "📅 Davomat" }, { text: "📊 Ma'lumot" }],
-              [{ text: "⚠️ Qarzdorlar" }],
-            ],
-            resize_keyboard: true,
-          },
-        }
-      );
-      return;
-    }
-
-    // Check for student
-    const students = await storage.getStudents(tenantId);
-    const matchingStudents = students.filter((s) => {
-      const studentPhone = normalizePhone(s.phone);
-      const parentPhone = s.parentPhone ? normalizePhone(s.parentPhone) : "";
-      return studentPhone === phone || parentPhone === phone;
-    });
-    
-    if (matchingStudents.length > 1) {
-      await ctx.reply(
-        "⚠️ Bir nechta o'quvchi topildi. Iltimos, markaz bilan bog'laning."
-      );
-      return;
-    }
-    
-    const student = matchingStudents[0];
-
-    if (student) {
-      ctx.session.step = "verified";
-      ctx.session.userType = "student";
-      ctx.session.studentId = student.id;
-      ctx.session.phone = phone;
-      ctx.session.tenantId = tenantId;
-
-      const chatId = ctx.chat?.id?.toString();
-      if (chatId) {
-        await storage.updateStudentTelegramChatId(student.id, chatId);
-      }
-
-      await ctx.reply(
-        `✅ Tabriklaymiz! Siz ${student.firstName} ${student.lastName} sifatida aniqlandingiz.\n\n` +
-        `🏢 Markaz: ${tenant.name}\n\n` +
-        `📊 Buyruqlar:\n` +
-        `/balans - Balansingizni ko'rish\n` +
-        `/davomat - Davomat ma'lumotlari\n` +
-        `/guruhlar - Guruhlaringiz\n`,
-        {
-          reply_markup: {
-            keyboard: [
-              [{ text: "💰 Balans" }, { text: "📅 Davomat" }],
-              [{ text: "📚 Guruhlar" }],
-            ],
-            resize_keyboard: true,
-          },
-        }
-      );
-      return;
-    }
-  }
-  
-  // Not found in any tenant
-  await ctx.reply(
-    "❌ Kechirasiz, bu telefon raqami tizimda topilmadi.\n\n" +
-    "Iltimos, markaz bilan bog'laning yoki boshqa raqam kiriting."
-  );
+async function handlePhoneNumber(ctx:BotContext,rawPhone:string){
+ const phone=normalizePhone(rawPhone);ctx.session.phone=phone;ctx.session.step='awaiting_phone';
+ const choices:NonNullable<SessionData['choices']>=[];
+ for(const tenant of await storage.getTenants()){
+  if(!activeTenant(tenant))continue;
+  for(const u of [...await storage.getAdmins(tenant.id),...await storage.getTeachers(tenant.id)])if(!u.archivedAt&&normalizePhone(u.phone||'')===phone)choices.push({kind:u.role==='teacher'?'teacher':'admin',id:u.id,tenantId:tenant.id,label:`${tenant.name} · ${u.firstName} ${u.lastName} (${u.role==='teacher'?'o‘qituvchi':'admin'})`});
+  for(const st of await storage.getStudents(tenant.id))if(normalizePhone(st.phone)===phone||normalizePhone(st.parentPhone||'')===phone)choices.push({kind:'student',id:String(st.id),tenantId:tenant.id,label:`${tenant.name} · ${st.firstName} ${st.lastName}`});
+ }
+ ctx.session.choices=choices;
+ if(!choices.length){await ctx.reply('Telefon raqami faol markazda topilmadi. Markaz bilan bog‘laning.');return;}
+ if(choices.length===1)return selectAccount(ctx,0);
+ await ctx.reply('Markaz yoki farzandingizni tanlang:',{reply_markup:{inline_keyboard:choices.map((c,i)=>[{text:c.label.slice(0,100),callback_data:`account:${i}`}])}});
+}
+async function selectAccount(ctx:BotContext,index:number){
+ const choice=ctx.session.choices?.[index];if(!choice||!ctx.session.phone||ctx.chat?.type!=='private'){await ctx.reply('Avval /start orqali kontaktingizni yuboring.');return;}
+ const entity=choice.kind==='student'?await storage.getStudent(Number(choice.id),choice.tenantId):await storage.getUser(choice.id);
+ const phone=ctx.session.phone;
+ if(!entity||entity.archivedAt||entity.tenantId!==choice.tenantId||!activeTenant(await storage.getTenant(choice.tenantId))||!(normalizePhone(entity.phone||'')===phone||('parentPhone' in entity&&normalizePhone(entity.parentPhone)===phone))){await ctx.reply('Akkaunt o‘zgargan. /start orqali qayta tasdiqlang.');return;}
+ const chat=String(ctx.chat.id);
+ if(choice.kind==='student')await storage.updateStudentTelegramChatId(Number(choice.id),chat);else await storage.updateUserTelegramChatId(choice.id,chat);
+ Object.assign(ctx.session,{step:'verified',tenantId:choice.tenantId,userType:choice.kind,studentId:choice.kind==='student'?Number(choice.id):undefined,teacherId:choice.kind==='teacher'?choice.id:undefined,adminId:choice.kind==='admin'?choice.id:undefined});
+ const commands=choice.kind==='admin'?'/statistika /tushum /qarzdorlar /hisobot':choice.kind==='teacher'?'/guruhlar /oylik /davomat':'/balans /davomat /guruhlar';
+ await ctx.reply(`✅ ${choice.label}\n${commands}\nBoshqa akkauntni tanlash: /start`,{reply_markup:{remove_keyboard:true}});
 }
 
 async function handleVerifiedUser(ctx: BotContext) {
@@ -570,7 +450,7 @@ async function showTeacherSalary(ctx: BotContext, teacherId: string) {
 
   const debtStudents = teacherStudentIds
     .map(id => allStudentsMap.get(id))
-    .filter(s => s && s.balance <= 0);
+    .filter(s => s && s.balance < 0);
   const paidStudents = teacherStudentIds
     .map(id => allStudentsMap.get(id))
     .filter(s => s && s.balance > 0);
@@ -625,7 +505,7 @@ async function showTeacherInfo(ctx: BotContext, teacherId: string) {
     const students = await storage.getStudentsByGroup(group.id, tenantId);
     for (const s of students) {
       teacherStudentIds.push(s.id);
-      if (s.balance <= 0) debtorCount++;
+      if (s.balance < 0) debtorCount++;
       else paidCount++;
     }
   }
@@ -670,7 +550,7 @@ async function showTeacherDebtors(ctx: BotContext, teacherId: string) {
 
   for (const group of groups) {
     const students = await storage.getStudentsByGroup(group.id, tenantId);
-    const debtors = students.filter(s => s.balance <= 0);
+    const debtors = students.filter(s => s.balance < 0);
     
     if (debtors.length === 0) continue;
     
@@ -756,7 +636,7 @@ async function showAdminStats(ctx: BotContext) {
   const activeStudents = students.filter(s => s.status === "active").length;
   const pausedStudents = students.filter(s => s.status === "paused").length;
   const newLeads = leads.filter(l => l.status === "new").length;
-  const debtors = students.filter(s => s.balance <= 0).length;
+  const debtors = students.filter(s => s.balance < 0).length;
   
   const message = 
     `📊 <b>Umumiy statistika</b>\n\n` +
@@ -800,7 +680,7 @@ async function showAdminIncome(ctx: BotContext) {
   // Today's income
   const today = getNowUz();
   today.setHours(0, 0, 0, 0);
-  const todayPayments = monthlyPayments.filter(p => new Date(p.createdAt) >= today);
+  const todayPayments = monthlyPayments.filter(p => uzDate(p.createdAt)===uzDate());
   const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
   
   const message = 
@@ -819,7 +699,7 @@ async function showAdminIncome(ctx: BotContext) {
 async function showAdminDebtors(ctx: BotContext) {
   const tenantId = ctx.session.tenantId!;
   const students = await storage.getStudents(tenantId);
-  const debtors = students.filter(s => s.balance <= 0).sort((a, b) => a.balance - b.balance);
+  const debtors = students.filter(s => s.balance < 0).sort((a, b) => a.balance - b.balance);
   
   if (debtors.length === 0) {
     await ctx.reply("✅ Qarzdor o'quvchilar yo'q!");
@@ -864,16 +744,16 @@ async function showAdminDailyReport(ctx: BotContext) {
   // Today's stats
   const todayPayments = payments.filter(p => {
     const paymentDate = new Date(p.createdAt);
-    return paymentDate >= today && p.status === "completed";
+    return uzDate(paymentDate)===uzDate() && p.status === "completed";
   });
   const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
   
-  const todayLeads = leads.filter(l => new Date(l.createdAt) >= today);
+  const todayLeads = leads.filter(l => uzDate(l.createdAt)===uzDate());
   
   // Active students and debtors
   const activeStudents = students.filter(s => s.status === "active").length;
-  const debtors = students.filter(s => s.balance <= 0).length;
-  const totalDebt = students.filter(s => s.balance <= 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
+  const debtors = students.filter(s => s.balance < 0).length;
+  const totalDebt = students.filter(s => s.balance < 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
   
   // Today's attendance - filter by today's date
   const allAttendance = await storage.getAttendance(tenantId, undefined, undefined, now.getMonth() + 1, now.getFullYear());
@@ -963,13 +843,13 @@ export async function sendDailyReportToAdmins(): Promise<void> {
           
           const todayPayments = payments.filter(p => {
             const paymentDate = new Date(p.createdAt);
-            return paymentDate >= today && p.status === "completed";
+            return uzDate(paymentDate)===uzDate() && p.status === "completed";
           });
           const todayIncome = todayPayments.reduce((sum, p) => sum + p.amount, 0);
           
           const activeStudents = students.filter(s => s.status === "active").length;
-          const debtors = students.filter(s => s.balance <= 0).length;
-          const totalDebt = students.filter(s => s.balance <= 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
+          const debtors = students.filter(s => s.balance < 0).length;
+          const totalDebt = students.filter(s => s.balance < 0).reduce((sum, s) => sum + Math.abs(s.balance), 0);
           
           const allAttendance = await storage.getAttendance(tenantId, undefined, undefined, now.getMonth() + 1, now.getFullYear());
           const todayStr = today.toISOString().split('T')[0];
@@ -1003,7 +883,7 @@ export async function sendDailyReportToAdmins(): Promise<void> {
             
             `🌙 Yaxshi dam oling!`;
           
-          await sendTelegramMessage(admin.telegramChatId, message);
+          await queueScheduled(tenantId,admin.id,`daily-report:${uzDate()}`,message);
         } catch (error) {
           console.error(`Error sending daily report to admin ${admin.id}:`, error);
         }
@@ -1081,7 +961,7 @@ export async function notifyAdminAttendanceTaken(
 export async function notifyStudentAttendance(
   studentId: number, 
   groupName: string, 
-  status: "present" | "absent",
+  status: "present" | "absent" | "late",
   date: Date,
   tenantId: number
 ): Promise<boolean> {
@@ -1090,7 +970,7 @@ export async function notifyStudentAttendance(
   
   const dateStr = date.toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" });
   const statusEmoji = status === "present" ? "✅" : "❌";
-  const statusText = status === "present" ? "Keldi" : "Kelmadi";
+  const statusText = status === "present" ? "Keldi" : status==="late"?"Kechikdi":"Kelmadi";
   
   const message = 
     `📅 <b>Davomat qayd qilindi</b>\n\n` +
@@ -1185,7 +1065,7 @@ export async function notifyTeacherDailySchedule(teacherId: string): Promise<boo
   const todayShort = dayNames[today.getDay().toString()];
   
   // Filter groups that have class today
-  const todayGroups = groups.filter(g => g.days?.includes(todayShort));
+  const todayGroups = groups.filter(g => g.days?.some(d=>dayName(d)===dayName(todayShort)));
   
   if (todayGroups.length === 0) return false;
   
@@ -1220,7 +1100,7 @@ export async function notifyTeacherDailySchedule(teacherId: string): Promise<boo
   
   message += `Omadli darslar! 📚`;
   
-  return sendTelegramMessage(teacher.telegramChatId, message);
+  return queueScheduled(teacher.tenantId,teacher.id,`daily-schedule:${uzDate()}`,message);
 }
 
 export async function notifyTeacherClassReminder(
@@ -1270,7 +1150,7 @@ export async function notifyTeacherClassReminder(
   
   message += `\n30 daqiqadan so'ng boshlanadi! 🔔`;
   
-  return sendTelegramMessage(teacher.telegramChatId, message);
+  return queueScheduled(teacher.tenantId,teacher.id,`class-reminder:${groupId}:${uzDate()}`,message);
 }
 
 // Scheduled job to send daily schedules at 8:00 AM
@@ -1302,10 +1182,10 @@ export function startScheduledNotifications() {
     
     const now = getNowUz();
     // Uzbekistan is UTC+5
-    const uzHour = (now.getUTCHours() + 5) % 24;
-    const uzMinutes = now.getUTCMinutes();
+    const uzHour = now.getHours();
+    const uzMinutes = now.getMinutes();
     
-    if (uzHour === 8 && uzMinutes === 0) {
+    if (uzHour === 8) {
       isSendingDailySchedules = true;
       try {
         await sendDailySchedulesToAllTeachers();
@@ -1317,7 +1197,7 @@ export function startScheduledNotifications() {
     }
     
     // Send admin evening report at 9 PM
-    if (uzHour === 21 && uzMinutes === 0) {
+    if (uzHour === 21) {
       try {
         await sendDailyReportToAdmins();
       } catch (error) {
@@ -1377,8 +1257,8 @@ async function checkClassReminders() {
   try {
     const now = getNowUz();
     // Uzbekistan is UTC+5
-    const uzHour = (now.getUTCHours() + 5) % 24;
-    const uzMinutes = now.getUTCMinutes();
+    const uzHour = now.getHours();
+    const uzMinutes = now.getMinutes();
     
     const dayNames: Record<string, string> = {
       "0": "Yakshanba", "1": "Du", "2": "Se", "3": "Chor", "4": "Pay", "5": "Juma", "6": "Shanba"
@@ -1399,7 +1279,7 @@ async function checkClassReminders() {
           const groups = await storage.getGroupsByTeacher(teacher.id, tenant.id);
           
           for (const group of groups) {
-            if (!group.days || !group.days.includes(todayShort)) continue;
+            if (!group.days || !group.days.some(d=>dayName(d)===dayName(todayShort))) continue;
             if (!group.time) continue;
             
             // Parse group time (e.g., "14:00 - 15:30")
@@ -1422,7 +1302,7 @@ async function checkClassReminders() {
               reminderMinute = groupMinute + 30;
             }
             
-            if (uzHour === reminderHour && uzMinutes === reminderMinute) {
+            if (uzHour*60+uzMinutes >= reminderHour*60+reminderMinute && uzHour*60+uzMinutes < groupHour*60+groupMinute) {
               try {
                 await notifyTeacherClassReminder(teacher.id, group.name, group.time, group.room, group.id);
               } catch (error) {
@@ -1474,3 +1354,6 @@ async function checkExpiredTrials() {
     console.error("Error checking expired trials:", error);
   }
 }
+
+function dayName(v:string){return ({Du:'Dushanba',Se:'Seshanba',Chor:'Chorshanba',Pay:'Payshanba',Ju:'Juma',Sha:'Shanba',Yak:'Yakshanba'} as Record<string,string>)[v]||v;}
+async function queueScheduled(tenantId:number,userId:string,key:string,text:string){await pool.query(`INSERT INTO payment_notifications(tenant_id,event_key,channel,recipient_type,recipient_id,payload) VALUES($1,$2,'telegram','user',$3,$4) ON CONFLICT(event_key) DO NOTHING`,[tenantId,`${key}:${tenantId}:${userId}`,userId,JSON.stringify({kind:'scheduled',text})]);return true;}

@@ -1,3 +1,4 @@
+import { monthBounds, uzDate, parseClassTime } from "../shared/domain";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
 const { Pool } = pkg;
@@ -142,7 +143,7 @@ export interface IStorage {
   getStudentsByGroup(groupId: number, tenantId: number): Promise<Student[]>;
   getStudentsByTeacher(teacherId: string, tenantId: number): Promise<Student[]>;
   getPaymentsByTeacher(teacherId: string, tenantId: number): Promise<Payment[]>;
-  getAttendanceByTeacher(teacherId: string, tenantId: number, groupId?: number, month?: number, year?: number): Promise<Attendance[]>;
+  getAttendanceByTeacher(teacherId: string, tenantId: number, groupId?: number, month?: number, year?: number, date?:Date): Promise<Attendance[]>;
   getTeacherSalary(teacherId: string, tenantId: number, month: number, year: number): Promise<{ totalPayments: number; salaryPercent: number; salary: number }>;
   createGroup(group: InsertGroup): Promise<Group>;
   updateGroup(id: number, tenantId: number, group: Partial<InsertGroup>): Promise<Group | undefined>;
@@ -311,6 +312,11 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getUsersByPhone(phone:string):Promise<User[]>{
+    const normalized=normalizePhone(phone);
+    return await db.select().from(users).where(and(isNull(users.archivedAt),sql`RIGHT(REGEXP_REPLACE(${users.phone}, '[^0-9]', '', 'g'),9) = ${normalized.slice(-9)}`));
+  }
+
   async getUserByPhone(phone: string): Promise<User | undefined> {
     // Clean the phone number - remove all non-digits
     const cleanPhone = phone.replace(/\D/g, '');
@@ -356,20 +362,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(id: string, tenantId: number): Promise<boolean> {
-    const result = await db.delete(users).where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
+    const result = await db.update(users).set({archivedAt:new Date()}).where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
   async getTeachers(tenantId: number): Promise<User[]> {
-    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'teacher')));
+    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'teacher'),isNull(users.archivedAt)));
   }
 
   async getManagers(tenantId: number): Promise<User[]> {
-    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'manager')));
+    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'manager'),isNull(users.archivedAt)));
   }
 
   async getStaff(tenantId: number): Promise<User[]> {
-    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'staff')));
+    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'staff'),isNull(users.archivedAt)));
   }
 
   async createStaff(staff: InsertUser): Promise<User> {
@@ -415,7 +421,7 @@ export class DatabaseStorage implements IStorage {
   }
   
   async getAdmins(tenantId: number): Promise<User[]> {
-    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'markaz_admin')));
+    return await db.select().from(users).where(and(eq(users.tenantId, tenantId), eq(users.role, 'markaz_admin'),isNull(users.archivedAt)));
   }
 
   // Leads
@@ -445,11 +451,13 @@ export class DatabaseStorage implements IStorage {
 
   // Students
   async getStudents(tenantId: number): Promise<Student[]> {
-    return await db.select().from(students).where(eq(students.tenantId, tenantId)).orderBy(desc(students.createdAt));
+    return await db.select().from(students).where(and(eq(students.tenantId, tenantId),isNull(students.archivedAt))).orderBy(desc(students.createdAt));
   }
 
+  async getStudentsIncludingArchived(tenantId:number):Promise<Student[]>{return db.select().from(students).where(eq(students.tenantId,tenantId));}
+
   async getStudent(id: number, tenantId: number): Promise<Student | undefined> {
-    const result = await db.select().from(students).where(and(eq(students.id, id), eq(students.tenantId, tenantId))).limit(1);
+    const result = await db.select().from(students).where(and(eq(students.id, id), eq(students.tenantId, tenantId),isNull(students.archivedAt))).limit(1);
     return result[0];
   }
 
@@ -468,7 +476,7 @@ export class DatabaseStorage implements IStorage {
         teacherLastName: users.lastName,
       })
       .from(studentGroups)
-      .innerJoin(groups, and(eq(studentGroups.groupId, groups.id), eq(groups.tenantId, tenantId)))
+      .innerJoin(groups, and(eq(studentGroups.groupId, groups.id), eq(groups.tenantId, tenantId),isNull(groups.archivedAt)))
       .leftJoin(subjects, eq(groups.subjectId, subjects.id))
       .leftJoin(users, eq(groups.teacherId, users.id))
       .where(inArray(studentGroups.studentId, studentIds));
@@ -495,24 +503,15 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async createStudent(student: InsertStudent): Promise<Student> {
-    // Telefon raqamini tekshirish
-    if (student.phone) {
-      const normalizedPhone = normalizePhone(student.phone);
-      if (normalizedPhone) {
-        const existing = await db.select().from(students).where(
-          and(
-            eq(students.tenantId, student.tenantId),
-            sql`REGEXP_REPLACE(${students.phone}, '[^0-9]', '', 'g') = ${normalizedPhone}`
-          )
-        ).limit(1);
-        if (existing.length > 0) {
-          throw new DuplicatePhoneError("student", student.phone);
-        }
-      }
-    }
-    const result = await db.insert(students).values(student).returning();
-    return result[0];
+  async createStudent(student:InsertStudent):Promise<Student>{return this.createStudentInGroup(student);}
+  async createStudentInGroup(student:InsertStudent,groupId?:number):Promise<Student>{
+    return db.transaction(async tx=>{
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(711,${student.tenantId})`);
+      if(student.phone){const normalized=normalizePhone(student.phone);const existing=await tx.select({id:students.id}).from(students).where(and(eq(students.tenantId,student.tenantId),isNull(students.archivedAt),sql`RIGHT(REGEXP_REPLACE(${students.phone}, '[^0-9]', '', 'g'),9) = ${normalized.slice(-9)}`)).limit(1);if(existing.length)throw new DuplicatePhoneError('student',student.phone);}
+      const [row]=await tx.insert(students).values({...student,balance:0,telegramChatId:null}).returning();
+      if(groupId)await tx.insert(studentGroups).values({studentId:row.id,groupId});
+      return row;
+    });
   }
 
   async updateStudent(id: number, tenantId: number, student: Partial<InsertStudent>): Promise<Student | undefined> {
@@ -532,22 +531,21 @@ export class DatabaseStorage implements IStorage {
         }
       }
     }
-    const result = await db.update(students).set({ ...student, updatedAt: new Date() }).where(and(eq(students.id, id), eq(students.tenantId, tenantId))).returning();
+    const result = await db.update(students).set({ ...student, updatedAt: new Date() }).where(and(eq(students.id, id), eq(students.tenantId, tenantId),isNull(students.archivedAt))).returning();
     return result[0];
   }
 
   async deleteStudent(id: number, tenantId: number): Promise<boolean> {
-    const result = await db.delete(students).where(and(eq(students.id, id), eq(students.tenantId, tenantId)));
+    const result = await db.update(students).set({archivedAt:new Date(),status:"left"}).where(and(eq(students.id, id), eq(students.tenantId, tenantId),isNull(students.archivedAt)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
   async bulkDeleteStudents(studentIds: number[], tenantId: number): Promise<number> {
     if (studentIds.length === 0) return 0;
-    const tenantStudents = await db.select({ id: students.id }).from(students).where(and(inArray(students.id, studentIds), eq(students.tenantId, tenantId)));
+    const tenantStudents = await db.select({ id: students.id }).from(students).where(and(inArray(students.id, studentIds), eq(students.tenantId, tenantId),isNull(students.archivedAt)));
     const validIds = tenantStudents.map(s => s.id);
     if (validIds.length === 0) return 0;
-    await db.delete(studentGroups).where(inArray(studentGroups.studentId, validIds));
-    const result = await db.delete(students).where(inArray(students.id, validIds));
+    const result = await db.update(students).set({archivedAt:new Date(),status:"left"}).where(inArray(students.id, validIds));
     return result.rowCount || 0;
   }
 
@@ -578,7 +576,7 @@ export class DatabaseStorage implements IStorage {
 
   // Groups
   async getGroups(tenantId: number): Promise<Group[]> {
-    return await db.select().from(groups).where(eq(groups.tenantId, tenantId)).orderBy(desc(groups.createdAt));
+    return await db.select().from(groups).where(and(eq(groups.tenantId, tenantId),isNull(groups.archivedAt))).orderBy(desc(groups.createdAt));
   }
 
   async getGroup(id: number, tenantId: number): Promise<Group | undefined> {
@@ -587,7 +585,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getGroupsByTeacher(teacherId: string, tenantId: number): Promise<Group[]> {
-    return await db.select().from(groups).where(and(eq(groups.teacherId, teacherId), eq(groups.tenantId, tenantId))).orderBy(desc(groups.createdAt));
+    return await db.select().from(groups).where(and(eq(groups.teacherId, teacherId), eq(groups.tenantId, tenantId),isNull(groups.archivedAt))).orderBy(desc(groups.createdAt));
   }
 
   async getStudentsByGroup(groupId: number, tenantId: number): Promise<Student[]> {
@@ -595,7 +593,7 @@ export class DatabaseStorage implements IStorage {
       .select({ student: students })
       .from(studentGroups)
       .innerJoin(students, eq(studentGroups.studentId, students.id))
-      .where(and(eq(studentGroups.groupId, groupId), eq(students.tenantId, tenantId)));
+      .where(and(eq(studentGroups.groupId, groupId), eq(students.tenantId, tenantId),isNull(students.archivedAt)));
     return result.map(r => r.student);
   }
 
@@ -608,7 +606,7 @@ export class DatabaseStorage implements IStorage {
       .selectDistinct({ student: students })
       .from(studentGroups)
       .innerJoin(students, eq(studentGroups.studentId, students.id))
-      .where(and(inArray(studentGroups.groupId, groupIds), eq(students.tenantId, tenantId)));
+      .where(and(inArray(studentGroups.groupId, groupIds), eq(students.tenantId, tenantId),isNull(students.archivedAt)));
     return result.map(r => r.student);
   }
 
@@ -618,17 +616,16 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(payments.createdAt));
   }
 
-  async getAttendanceByTeacher(teacherId: string, tenantId: number, groupId?: number, month?: number, year?: number): Promise<Attendance[]> {
+  async getAttendanceByTeacher(teacherId: string, tenantId: number, groupId?: number, month?: number, year?: number, date?:Date): Promise<Attendance[]> {
     const teacherGroups = await this.getGroupsByTeacher(teacherId, tenantId);
-    const groupIds = groupId ? [groupId] : teacherGroups.map(g => g.id);
+    const groupIds = teacherGroups.filter(g=>!groupId||g.id===groupId).map(g=>g.id);
     if (groupIds.length === 0) return [];
     
     const conditions = [inArray(attendance.groupId, groupIds), eq(attendance.tenantId, tenantId)];
+    if(date)conditions.push(sql`${attendance.date}::date = ${date.toISOString().slice(0,10)}::date`);
     
     if (month && year) {
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const {startDate,endDate}=monthBounds(year,month);
       conditions.push(sql`${attendance.date} >= ${startDate}`);
       conditions.push(sql`${attendance.date} <= ${endDate}`);
     }
@@ -640,9 +637,7 @@ export class DatabaseStorage implements IStorage {
     const teacher = await this.getTeacher(teacherId, tenantId);
     const salaryPercent = teacher?.salaryPercent || 0;
     
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
-    endDate.setHours(23, 59, 59, 999);
+    const {startDate,endDate}=monthBounds(year,month);
     
     const result = await db.select({
       total: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
@@ -652,7 +647,7 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(payments.teacherId, teacherId),
         eq(payments.tenantId, tenantId),
-        eq(payments.status, 'completed'),
+        eq(payments.status, 'completed'),isNull(payments.deletedAt),
         sql`${payments.createdAt} >= ${startDate}`,
         sql`${payments.createdAt} <= ${endDate}`
       ));
@@ -663,18 +658,30 @@ export class DatabaseStorage implements IStorage {
     return { totalPayments, salaryPercent, salary };
   }
 
-  async createGroup(group: InsertGroup): Promise<Group> {
-    const result = await db.insert(groups).values(group).returning();
-    return result[0];
+  async saveGroup(group:Partial<InsertGroup>,tenantId:number,id?:number):Promise<Group|undefined>{
+    return db.transaction(async tx=>{
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(710,${tenantId})`);
+      const [old]=id?await tx.select().from(groups).where(and(eq(groups.id,id),eq(groups.tenantId,tenantId))):[];
+      if(id&&!old)return undefined;
+      const next={...old,...group,tenantId} as InsertGroup;
+      const interval=parseClassTime(next.time);if(!interval)throw new Error('Dars vaqti noto‘g‘ri');
+      const [teacher]=await tx.select().from(users).where(and(eq(users.id,next.teacherId),eq(users.tenantId,tenantId),eq(users.role,'teacher'),isNull(users.archivedAt)));
+      if(!teacher)throw new Error('O‘qituvchi topilmadi');
+      if(next.subjectId){const [subject]=await tx.select().from(subjects).where(and(eq(subjects.id,next.subjectId),eq(subjects.tenantId,tenantId)));if(!subject)throw new Error('Fan topilmadi');}
+      const others=await tx.select().from(groups).where(and(eq(groups.tenantId,tenantId),isNull(groups.archivedAt)));
+      const day=(v:string)=>({Du:'Dushanba',Se:'Seshanba',Chor:'Chorshanba',Pay:'Payshanba',Ju:'Juma',Sha:'Shanba',Yak:'Yakshanba'} as Record<string,string>)[v]||v;
+      if(!old||['time','days','room','teacherId'].some(k=>JSON.stringify((old as any)[k])!==JSON.stringify((next as any)[k]))){
+        for(const g of others){if(g.id===id||!(g.teacherId===next.teacherId||(next.room&&g.room===next.room))||!g.days.some(d=>next.days.map(day).includes(day(d))))continue;const v=parseClassTime(g.time);if(v&&interval.start<v.end&&v.start<interval.end)throw new Error(`Dars vaqti ${g.name} bilan to‘qnashadi`);}
+      }
+      if(id&&group.maxStudents!==undefined){await tx.execute(sql`SELECT id FROM groups WHERE id=${id} FOR UPDATE`);const members=await tx.select({id:students.id}).from(studentGroups).innerJoin(students,eq(students.id,studentGroups.studentId)).where(and(eq(studentGroups.groupId,id),isNull(students.archivedAt)));if(members.length>group.maxStudents)throw new Error('Sig‘im mavjud o‘quvchilar sonidan kam');}
+      const [row]=id?await tx.update(groups).set(group).where(and(eq(groups.id,id),eq(groups.tenantId,tenantId))).returning():await tx.insert(groups).values(next).returning();return row;
+    });
   }
-
-  async updateGroup(id: number, tenantId: number, group: Partial<InsertGroup>): Promise<Group | undefined> {
-    const result = await db.update(groups).set(group).where(and(eq(groups.id, id), eq(groups.tenantId, tenantId))).returning();
-    return result[0];
-  }
+  async createGroup(group:InsertGroup):Promise<Group>{return (await this.saveGroup(group,group.tenantId))!;}
+  async updateGroup(id:number,tenantId:number,group:Partial<InsertGroup>):Promise<Group|undefined>{return this.saveGroup(group,tenantId,id);}
 
   async deleteGroup(id: number, tenantId: number): Promise<boolean> {
-    const result = await db.delete(groups).where(and(eq(groups.id, id), eq(groups.tenantId, tenantId)));
+    const result = await db.update(groups).set({archivedAt:new Date()}).where(and(eq(groups.id, id), eq(groups.tenantId, tenantId)));
     return result.rowCount !== null && result.rowCount > 0;
   }
 
@@ -686,8 +693,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addStudentToGroup(studentGroup: InsertStudentGroup): Promise<StudentGroup> {
-    const result = await db.insert(studentGroups).values(studentGroup).returning();
-    return result[0];
+    return db.transaction(async tx=>{
+      await tx.execute(sql`SELECT id FROM groups WHERE id=${studentGroup.groupId} FOR UPDATE`);
+      const [old]=await tx.select().from(studentGroups).where(and(eq(studentGroups.studentId,studentGroup.studentId),eq(studentGroups.groupId,studentGroup.groupId))).limit(1);
+      if(old)return old;
+      const [row]=await tx.insert(studentGroups).values(studentGroup).returning();return row;
+    });
   }
 
   async removeStudentFromGroup(studentId: number, groupId: number): Promise<boolean> {
@@ -705,13 +716,11 @@ export class DatabaseStorage implements IStorage {
     }
     
     if (date) {
-      conditions.push(eq(attendance.date, date));
+      conditions.push(sql`${attendance.date}::date = ${date.toISOString().slice(0,10)}::date`);
     }
     
     if (month && year) {
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const {startDate,endDate}=monthBounds(year,month);
       conditions.push(sql`${attendance.date} >= ${startDate}`);
       conditions.push(sql`${attendance.date} <= ${endDate}`);
     }
@@ -787,9 +796,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     if (month && year) {
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const {startDate,endDate}=monthBounds(year,month);
       conditions.push(sql`${grades.date} >= ${startDate}`);
       conditions.push(sql`${grades.date} <= ${endDate}`);
     }
@@ -843,8 +850,8 @@ export class DatabaseStorage implements IStorage {
       .from(payments)
       .where(and(
         eq(payments.tenantId, tenantId),
-        eq(payments.status, 'completed'),
-        sql`${payments.createdAt} >= ${thirtyDaysAgo}`
+        eq(payments.status, 'completed'),isNull(payments.deletedAt),
+        sql`${payments.createdAt} >= ${monthBounds(Number(uzDate().slice(0,4)),Number(uzDate().slice(5,7))).startDate}`
       ));
 
     return {
@@ -860,12 +867,14 @@ export class DatabaseStorage implements IStorage {
     await pool.query(`WITH updated AS (UPDATE students SET telegram_chat_id=$1 WHERE id=$2 RETURNING id)
       INSERT INTO telegram_verified_links(kind,entity_id,chat_id) SELECT 'student',id::text,$1 FROM updated
       ON CONFLICT(kind,entity_id) DO UPDATE SET chat_id=EXCLUDED.chat_id,verified_at=NOW()`,[chatId,studentId]);
+    await pool.query("UPDATE payment_notifications SET status='pending',attempts=0,next_attempt_at=NOW() WHERE channel='telegram' AND recipient_type='student' AND recipient_id=$1 AND status='failed'",[String(studentId)]);
   }
   
   async updateUserTelegramChatId(userId: string, chatId: string): Promise<void> {
     await pool.query(`WITH updated AS (UPDATE users SET telegram_chat_id=$1 WHERE id=$2 RETURNING id)
       INSERT INTO telegram_verified_links(kind,entity_id,chat_id) SELECT 'user',id,$1 FROM updated
       ON CONFLICT(kind,entity_id) DO UPDATE SET chat_id=EXCLUDED.chat_id,verified_at=NOW()`,[chatId,userId]);
+    await pool.query("UPDATE payment_notifications SET status='pending',attempts=0,next_attempt_at=NOW() WHERE channel='telegram' AND recipient_type='user' AND recipient_id=$1 AND status='failed'",[userId]);
   }
   
   async getStudentByTelegramChatId(chatId: string): Promise<Student | undefined> {
@@ -881,9 +890,7 @@ export class DatabaseStorage implements IStorage {
   async getExpenses(tenantId: number, month?: number, year?: number): Promise<Expense[]> {
     const conditions = [eq(expenses.tenantId, tenantId)];
     if (month && year) {
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const {startDate,endDate}=monthBounds(year,month);
       conditions.push(sql`${expenses.date} >= ${startDate}`);
       conditions.push(sql`${expenses.date} <= ${endDate}`);
     }
@@ -927,9 +934,7 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(cashReceipts.submittedBy, filters.submittedBy));
     }
     if (filters?.month && filters?.year) {
-      const startDate = new Date(filters.year, filters.month - 1, 1);
-      const endDate = new Date(filters.year, filters.month, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const {startDate,endDate}=monthBounds(filters.year,filters.month);
       conditions.push(sql`${cashReceipts.submittedAt} >= ${startDate}`);
       conditions.push(sql`${cashReceipts.submittedAt} <= ${endDate}`);
     }
@@ -1032,16 +1037,14 @@ export class DatabaseStorage implements IStorage {
     paymentCount: number;
     expenseCount: number;
   }> {
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
-    endDate.setHours(23, 59, 59, 999);
+    const {startDate,endDate}=monthBounds(year,month);
 
     const incomeResult = await db.select({
       total: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
       count: sql<number>`COUNT(*)::int`,
     }).from(payments).where(and(
       eq(payments.tenantId, tenantId),
-      eq(payments.status, 'completed'),
+      eq(payments.status, 'completed'),isNull(payments.deletedAt),
       sql`${payments.createdAt} >= ${startDate}`,
       sql`${payments.createdAt} <= ${endDate}`
     ));
@@ -1060,13 +1063,13 @@ export class DatabaseStorage implements IStorage {
       debtorCount: sql<number>`COUNT(*)::int`,
     }).from(students).where(and(
       eq(students.tenantId, tenantId),
-      sql`${students.balance} <= 0`
+      sql`${students.balance} < 0`
     ));
 
     const studentCounts = await db.select({
       active: sql<number>`COUNT(*) FILTER (WHERE ${students.status} = 'active')::int`,
       total: sql<number>`COUNT(*)::int`,
-    }).from(students).where(eq(students.tenantId, tenantId));
+    }).from(students).where(and(eq(students.tenantId, tenantId),isNull(students.archivedAt)));
 
     const attendResult = await db.select({
       present: sql<number>`COUNT(*) FILTER (WHERE ${attendance.status} = 'present')::int`,

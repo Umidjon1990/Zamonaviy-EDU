@@ -1,5 +1,6 @@
-const CACHE_NAME = 'zamonaviy-edu-v5';
+const CACHE_NAME = 'zamonaviy-edu-v6';
 const APP_SHELL = [
+  '/offline.html',
   '/manifest.json',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
@@ -33,7 +34,7 @@ self.addEventListener('fetch', (event) => {
   // SPA navigatsiya — har doim network, xato bo'lsa index.html qaytaramiz
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
+      fetch(request).catch(() => caches.match('/offline.html'))
     );
     return;
   }

@@ -259,18 +259,7 @@ export default function Students() {
         return;
       }
 
-      const newStudent = await createStudent.mutateAsync({
-        ...studentData,
-        balance: balance > 0 ? -balance : balance,
-      }) as any;
-      
-      if (groupId && groupId > 0 && newStudent?.id) {
-        try {
-          await addStudentToGroup.mutateAsync({ studentId: newStudent.id, groupId });
-        } catch (groupError) {
-          toast({ title: "Ogohlantirish", description: "O'quvchi qo'shildi, lekin guruhga qo'shishda xatolik", variant: "destructive" });
-        }
-      }
+      await createStudent.mutateAsync({...studentData,...(groupId>0?{groupId}: {})});
       
       toast({ title: "Muvaffaqiyat", description: "Yangi o'quvchi qo'shildi" });
       setIsOpen(false);
@@ -298,7 +287,7 @@ export default function Students() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { groupId, teacherId, ...studentData } = formData;
+      const { groupId, teacherId, balance, ...studentData } = formData;
       await updateStudent.mutateAsync({ id: editingStudent.id, ...studentData });
       toast({ title: "Muvaffaqiyat", description: "O'quvchi ma'lumotlari yangilandi" });
       setIsEditOpen(false);
@@ -518,9 +507,10 @@ export default function Students() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="balance">Oylik to'lov (qarzdorlik)</Label>
+                <p className="text-xs text-muted-foreground">Kurs haqi «To‘lovlar» bo‘limida alohida hisobga yoziladi.</p>
+              <Label htmlFor="balance">Oylik to'lov (qarzdorlik)</Label>
                 <Input
-                  id="balance"
+                  id="balance" disabled
                   type="number"
                   value={formData.balance}
                   onChange={(e) => setFormData({ ...formData, balance: parseInt(e.target.value) || 0 })}
@@ -714,7 +704,7 @@ export default function Students() {
             <div className="space-y-2">
               <Label htmlFor="edit-balance">Balans (UZS)</Label>
               <Input
-                id="edit-balance"
+                id="edit-balance" disabled
                 type="number"
                 value={formData.balance}
                 onChange={(e) => setFormData({ ...formData, balance: parseInt(e.target.value) || 0 })}

@@ -1,3 +1,4 @@
+import { migrateAudit } from "./audit-migration";
 import { migrateFinance } from "./finance-migration";
 import { pool } from "./storage";
 import { publicJson } from "./security";
@@ -7,7 +8,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pg from "pg";
 import { registerRoutes } from "./routes";
-import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startTelegramBot, stopTelegramBot, startScheduledNotifications } from "./telegram-bot";
@@ -195,6 +196,7 @@ declare module "http" {
 
 declare module "express-session" {
   interface SessionData {
+    authVersion?: number;
     userId?: string;
     tenantId?: number;
     role?: string;
@@ -245,10 +247,11 @@ app.use((req, res, next) => {
   // Fix database schema before starting
   await fixDatabaseSchema();
   await migrateFinance(pool);
+  await migrateAudit(pool);
   app.get("/api/health", async(_req,res)=>{try{await pool.query("SELECT 1");res.json({status:"ok",version:process.env.RAILWAY_GIT_COMMIT_SHA||"local"});}catch{res.status(503).json({status:"unavailable"});}});
   
   // Register object storage routes for file uploads
-  registerObjectStorageRoutes(app);
+  app.all(["/api/objects/*","/objects/*"],(_req,res)=>res.status(410).json({error:"Fayl yuklash xizmati ulanmagan"}));
   
   await registerRoutes(httpServer, app);
 

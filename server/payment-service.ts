@@ -32,27 +32,27 @@ export function createPaymentService(pool:Pool) {
   async function groupFor(c:PoolClient,a:Actor,studentId:number,teacherId:string,groupId?:number) {
     const rows=(await c.query(`SELECT g.* FROM groups g JOIN student_groups sg ON sg.group_id=g.id
       WHERE sg.student_id=$1 AND g.tenant_id=$2 AND g.teacher_id=$3`,[studentId,a.tenantId,teacherId])).rows;
-    if(groupId){const group=rows.find(g=>g.id===groupId);if(!group)throw new FinanceError("O‘quvchi, guruh va o‘qituvchi mos emas");return group;}
+    if(groupId){const group=rows.find(g=>g.id===groupId&&!g.archived_at);if(!group)throw new FinanceError("O‘quvchi, guruh va o‘qituvchi mos emas");return group;}
     if(rows.length>1)throw new FinanceError("To‘lov qaysi guruh uchun ekanini tanlang");
     return rows[0] || null;
   }
   async function queue(c:PoolClient,a:Actor,p:any,event:string,sendSms=false) {
     const recipients=(await c.query("SELECT id FROM users WHERE tenant_id=$1 AND role='markaz_admin'",[a.tenantId])).rows.map(r=>({kind:'user',id:r.id,label:'admin'}));
-    if(p.status==='completed' && !p.deleted_at){
+    if(p.status==='completed' || p.status==='cancelled' || p.status==='rejected' || p.deleted_at){
       recipients.push({kind:'student',id:String(p.student_id),label:'student'});
       if(p.teacher_id)recipients.push({kind:'user',id:p.teacher_id,label:'teacher'});
     }
     for(const r of recipients) await c.query(`INSERT INTO payment_notifications(tenant_id,payment_id,event_key,channel,recipient_type,recipient_id,payload)
-      VALUES($1,$2,$3,'telegram',$4,$5,$6) ON CONFLICT(event_key) DO NOTHING`,[a.tenantId,p.id,`${event}:${r.label}:${r.id}`,r.kind,r.id,JSON.stringify({event,amount:p.amount,studentName:p.student_name,groupId:p.group_id,status:p.status,deleted:!!p.deleted_at,paymentId:p.id,collectionId:p.collection_id})]);
+      VALUES($1,$2,$3,'telegram',$4,$5,$6) ON CONFLICT(event_key) DO NOTHING`,[a.tenantId,p.id,`${event}:${r.label}:${r.id}`,r.kind,r.id,JSON.stringify({event,amount:p.amount,studentName:p.student_name,groupId:p.group_id,status:p.status,deleted:!!p.deleted_at,paymentId:p.id,collectionId:p.collection_id,recipientLabel:r.label,reason:p.reason})]);
     if(sendSms&&p.status==='completed')await c.query(`INSERT INTO payment_notifications(tenant_id,payment_id,event_key,channel,recipient_type,recipient_id,payload)
       VALUES($1,$2,$3,'sms','student',$4,$5) ON CONFLICT(event_key) DO NOTHING`,[a.tenantId,p.id,`${event}:sms`,String(p.student_id),JSON.stringify({amount:p.amount,groupId:p.group_id})]);
   }
   async function insert(c:PoolClient,a:Actor,d:any,sourceId?:number) {
     moneySchema.parse(d.amount);paymentTypeSchema.parse(d.paymentType);
     const student=(await c.query("SELECT * FROM students WHERE id=$1 AND tenant_id=$2 FOR UPDATE",[d.studentId,a.tenantId])).rows[0];
-    if(!student)throw new FinanceError("O‘quvchi topilmadi",404);
+    if(!student || student.archived_at)throw new FinanceError("O‘quvchi topilmadi",404);
     const teacher=(await c.query("SELECT * FROM users WHERE id=$1 AND tenant_id=$2 AND role='teacher'",[d.teacherId,a.tenantId])).rows[0];
-    if(!teacher)throw new FinanceError("O‘qituvchi topilmadi",404);
+    if(!teacher || teacher.archived_at)throw new FinanceError("O‘qituvchi topilmadi",404);
     const group=await groupFor(c,a,student.id,teacher.id,d.groupId);
     const pct=Number(teacher.salary_percent??0);
     if(pct<0||pct>100)throw new FinanceError("O‘qituvchi foizi 0–100 oralig‘ida bo‘lishi kerak");
@@ -107,7 +107,7 @@ export function createPaymentService(pool:Pool) {
       return idempotent(a,key,{action:'collect',...d},async c=>{
         const teacher=(await c.query("SELECT * FROM users WHERE id=$1 AND tenant_id=$2 AND role='teacher'",[a.userId,a.tenantId])).rows[0];
         if(!teacher?.permissions?.includes('accept_payment'))throw new FinanceError("To‘lov qabul qilishga ruxsat yo‘q",403);
-        const student=(await c.query("SELECT * FROM students WHERE id=$1 AND tenant_id=$2",[d.studentId,a.tenantId])).rows[0];if(!student)throw new FinanceError("O‘quvchi topilmadi",404);
+        const student=(await c.query("SELECT * FROM students WHERE id=$1 AND tenant_id=$2",[d.studentId,a.tenantId])).rows[0];if(!student || student.archived_at)throw new FinanceError("O‘quvchi topilmadi",404);
         const group=await groupFor(c,a,d.studentId,a.userId,d.groupId);
         const row=(await c.query(`INSERT INTO teacher_collected_payments(tenant_id,teacher_id,teacher_name,student_id,student_name,group_id,group_name,amount,payment_type,notes,status,payment_period)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11) RETURNING *`,[a.tenantId,a.userId,`${teacher.first_name} ${teacher.last_name}`,student.id,`${student.first_name} ${student.last_name}`,group.id,group.name,d.amount,d.paymentType,d.notes||null,d.paymentPeriod||currentPaymentPeriod()])).rows[0];
@@ -131,6 +131,7 @@ export function createPaymentService(pool:Pool) {
         await c.query("UPDATE teacher_collected_payments SET status='rejected',rejected_by=$1,rejected_at=NOW(),rejection_reason=$2 WHERE id=$3 AND tenant_id=$4",[a.userId,(reason||'').slice(0,2000),id,a.tenantId]);
       }
       await c.query("UPDATE payment_notifications SET status='cancelled' WHERE tenant_id=$1 AND event_key LIKE $2 AND status IN ('pending','failed')",[a.tenantId,`collection:${id}:pending:%`]);
+      if(decision==='reject')await queue(c,a,{id:null,collection_id:row.id,student_id:row.student_id,student_name:row.student_name,teacher_id:row.teacher_id,group_id:row.group_id,amount:row.amount,status:'rejected',reason:(reason||'').slice(0,2000)},`collection:${id}:rejected`);
       await audit(c,a,paymentId,`collection_${decision}`,row,{status:decision,paymentId});return {success:true,paymentId};
     });}
   };

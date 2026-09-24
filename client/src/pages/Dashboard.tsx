@@ -213,7 +213,7 @@ export default function Dashboard() {
     {
       title: "Faol guruhlar",
       value: stats?.activeGroups || groupsList.length || 0,
-      change: `${groupsList.filter((g: any) => g.status === 'active').length} ta`,
+      change: `${groupsList.length} ta`,
       changeType: "up",
       icon: GraduationCap,
       iconBg: "bg-purple-500/10",

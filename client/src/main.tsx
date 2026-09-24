@@ -1,3 +1,4 @@
+try{document.documentElement.classList.toggle('dark',localStorage.getItem('crm-theme')==='dark');}catch{}
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";

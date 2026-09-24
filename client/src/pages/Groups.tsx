@@ -40,6 +40,7 @@ export default function Groups() {
     queryFn: async () => {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (!res.ok) return null;
+      if(!res.ok)throw new Error((await res.json()).error||"So‘rov bajarilmadi");
       return res.json();
     },
   });

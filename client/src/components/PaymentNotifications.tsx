@@ -8,7 +8,7 @@ export function PaymentNotifications(){
   if(!data.length)return null;
   return <details className="rounded-lg border p-3 text-sm"><summary className="cursor-pointer font-medium">To‘lov xabarnomalari: {data.filter(j=>j.status==='failed').length} ta yuborilmagan, {data.filter(j=>j.status!=='failed').length} ta navbatda</summary>
     <p className="my-2 text-muted-foreground">Xabarnoma yuborilmagani saqlangan to‘lovni bekor qilmaydi. Telegram uchun botda /start orqali o‘z kontaktini tasdiqlash kerak.</p>
-    {data.slice(0,20).map(j=><div key={j.id} className="flex items-center justify-between gap-2 border-t py-2"><span>{j.paymentId?`Chek #${j.paymentId}`:'Kutayotgan yig‘im'} · {j.channel.toUpperCase()} · {j.lastError||'Yuborish navbatida'}</span>{j.status==='failed'&&<Button size="sm" variant="outline" disabled={retry.isPending} onClick={()=>retry.mutate(j.id)}>Qayta yuborish</Button>}</div>)}
+    {data.slice(0,20).map(j=><div key={j.id} className="flex items-center justify-between gap-2 border-t py-2"><span>{j.paymentId?`Chek #${j.paymentId}`:'Xabarnoma'} · {j.channel.toUpperCase()} · {j.recipientLabel||j.recipientType} · {j.lastError||'Yuborish navbatida'}</span>{j.status==='failed'&&<Button size="sm" variant="outline" disabled={retry.isPending} onClick={()=>retry.mutate(j.id)}>Qayta yuborish</Button>}</div>)}
     {retry.isError&&<p role="alert">Qayta urinish bajarilmadi. Sahifani yangilang.</p>}
   </details>;
 }

@@ -1,7 +1,12 @@
+import { createBillingService } from "./billing-service";
+import { createDomainService } from "./domain-service";
+import { registerAccessGuards } from "./access";
+import { activeTenant, registerAccounts } from "./accounts";
+import { monthBounds, uzDate, parseClassTime } from "../shared/domain";
 import { createSuperAdminAuth } from "./security";
 import { paymentMatchesGroup } from "../shared/finance";
 import { createPaymentService, FinanceError } from "./payment-service";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcrypt";
@@ -9,7 +14,6 @@ import * as XLSX from "xlsx";
 import { storage, pool, DuplicatePhoneError } from "./storage";
 import { sendSMS, getBalance, smsTemplates, sendPaymentReceivedSMS, sendLowBalanceSMS, sendAbsenceSMS } from "./sms";
 import { notifyStudentAttendance, sendPaymentReceipt, notifyAdminAttendanceTaken } from "./telegram-bot";
-import { verifyObjectPath } from "./replit_integrations/object_storage/routes";
 import {
   type Student,
   insertLeadSchema,
@@ -34,16 +38,21 @@ export async function registerRoutes(
   
   // Middleware to require tenant authentication
   const requireTenantAuth = async (req: any, res: any, next: any) => {
+    if (req.authChecked) return next();
     if (!req.session.tenantId || !req.session.userId) return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
     try {
       const user = await storage.getUser(req.session.userId);
-      if (!user || user.tenantId !== req.session.tenantId) return res.status(401).json({error:"Qayta kiring"});
+      if (!user || user.archivedAt || user.tenantId !== req.session.tenantId || (req.session.authVersion ?? 0) !== user.authVersion) return res.status(401).json({error:"Qayta kiring"});
+      if(!activeTenant(await storage.getTenant(user.tenantId))) return res.status(403).json({error:"Markaz obunasi faol emas"});
+      req.authChecked=true;req.authUser=user;
       req.session.role = user.role;
       next();
     } catch { res.status(503).json({error:"Xizmat vaqtincha mavjud emas"}); }
   };
   const requireAdmin = (req:any,res:any,next:any) => req.session.role === 'markaz_admin' ? next() : res.status(403).json({error:"Faqat administrator uchun"});
   const finance = createPaymentService(pool);
+  const billing=createBillingService(pool);
+  const domain=createDomainService(pool);
   const actor = (req:any) => ({tenantId:req.session.tenantId,userId:req.session.userId,role:req.session.role});
   const financeFailure = (res:any,error:unknown) => {
     if(error instanceof ZodError) return res.status(400).json({error:"Summa, guruh yoki to‘lov ma’lumotlari noto‘g‘ri", details:error.issues.map(i=>({path:i.path,message:i.message}))});
@@ -99,117 +108,8 @@ export async function registerRoutes(
     next();
   };
 
-  // Login for tenant admins/staff
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { phone, password } = req.body;
-      if (!phone || !password) {
-        return res.status(400).json({ error: "Telefon va parol kiritilishi shart" });
-      }
-
-      // Clean phone number
-      const cleanPhone = phone.replace(/\D/g, '');
-      
-      // Find user by phone
-      const user = await storage.getUserByPhone(cleanPhone);
-      if (!user) {
-        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
-      }
-
-      // Password check using bcrypt
-      const passwordMatch = await bcrypt.compare(password, user.password);
-      if (!passwordMatch) {
-        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
-      }
-
-      // Check if tenant is active
-      const tenant = await storage.getTenant(user.tenantId);
-      if (!tenant) {
-        return res.status(401).json({ error: "Markaz topilmadi" });
-      }
-      if (tenant.status === "suspended") {
-        return res.status(403).json({ error: "Markaz obunasi to'xtatilgan. Admin bilan bog'laning." });
-      }
-
-      // Set session
-      req.session.userId = user.id;
-      req.session.tenantId = user.tenantId;
-      req.session.role = user.role;
-
-      res.json({
-        user: {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          phone: user.phone,
-          permissions: user.permissions || [],
-        },
-        tenant: {
-          id: tenant.id,
-          name: tenant.name,
-          slug: tenant.slug,
-        },
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ error: "Tizim xatosi" });
-    }
-  });
-
-  app.post("/api/auth/rahbar-login", async (req, res) => {
-    try {
-      const { phone, password } = req.body;
-      if (!phone || !password) {
-        return res.status(400).json({ error: "Telefon va parol kiritilishi shart" });
-      }
-
-      const cleanPhone = phone.replace(/\D/g, '');
-      const user = await storage.getUserByPhone(cleanPhone);
-      if (!user) {
-        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
-      }
-
-      if (user.role !== "manager") {
-        return res.status(403).json({ error: "Faqat rahbar kirishi mumkin" });
-      }
-
-      const passwordMatch = await bcrypt.compare(password, user.password);
-      if (!passwordMatch) {
-        return res.status(401).json({ error: "Telefon yoki parol noto'g'ri" });
-      }
-
-      const tenant = await storage.getTenant(user.tenantId);
-      if (!tenant) {
-        return res.status(401).json({ error: "Markaz topilmadi" });
-      }
-      if (tenant.status === "suspended") {
-        return res.status(403).json({ error: "Markaz obunasi to'xtatilgan. Admin bilan bog'laning." });
-      }
-
-      req.session.userId = user.id;
-      req.session.tenantId = user.tenantId;
-      req.session.role = user.role;
-
-      res.json({
-        user: {
-          id: user.id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          phone: user.phone,
-        },
-        tenant: {
-          id: tenant.id,
-          name: tenant.name,
-          slug: tenant.slug,
-        },
-      });
-    } catch (error) {
-      console.error("Rahbar login error:", error);
-      res.status(500).json({ error: "Tizim xatosi" });
-    }
-  });
+  registerAccounts(app);
+  registerAccessGuards(app,requireTenantAuth);
 
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
@@ -220,7 +120,7 @@ export async function registerRoutes(
     });
   });
 
-  app.get("/api/auth/me", async (req, res) => {
+  app.get("/api/auth/me", requireTenantAuth, async (req, res) => {
     if (!req.session.userId || !req.session.tenantId) {
       return res.status(401).json({ error: "Avtorizatsiya talab qilinadi" });
     }
@@ -276,11 +176,19 @@ export async function registerRoutes(
   });
   app.use("/api/teachers", (req,res,next)=> req.method === 'GET' ? next() : requireAdmin(req,res,next));
   app.get('/api/payment-notifications', requireTenantAuth, requireAdmin, async(req,res)=>{
-    try{const result=await pool.query(`SELECT id,payment_id AS "paymentId",channel,status,attempts,last_error AS "lastError",created_at AS "createdAt" FROM payment_notifications WHERE tenant_id=$1 AND status IN ('failed','pending','sending') ORDER BY id DESC LIMIT 100`,[getTenantId(req)]);res.json(result.rows);}catch{res.status(500).json({error:"Xabarnomalar olinmadi"});}
+    try{const result=await pool.query(`SELECT id,payment_id AS "paymentId",channel,recipient_type AS "recipientType",recipient_id AS "recipientId",payload->>'recipientLabel' AS "recipientLabel",status,attempts,last_error AS "lastError",created_at AS "createdAt" FROM payment_notifications WHERE tenant_id=$1 AND status IN ('failed','pending','sending') ORDER BY id DESC LIMIT 100`,[getTenantId(req)]);res.json(result.rows);}catch{res.status(500).json({error:"Xabarnomalar olinmadi"});}
   });
   app.post('/api/payment-notifications/:id/retry',requireTenantAuth,requireAdmin,async(req,res)=>{
     try{await pool.query("UPDATE payment_notifications SET status='pending',attempts=0,next_attempt_at=NOW(),last_error=NULL WHERE id=$1 AND tenant_id=$2 AND status='failed'",[Number(req.params.id),getTenantId(req)]);res.json({success:true});}catch{res.status(500).json({error:"Qayta urinish bajarilmadi"});}
   });
+  app.get('/api/payment-reconciliation/groups',requireTenantAuth,requireAdmin,async(req,res)=>{try{res.json((await pool.query('SELECT id,name,teacher_id AS "teacherId",archived_at AS "archivedAt" FROM groups WHERE tenant_id=$1 ORDER BY name',[getTenantId(req)])).rows);}catch{res.status(503).json({error:'Guruhlar olinmadi'});}});
+  app.put('/api/payments/:id/reconcile',requireTenantAuth,requireAdmin,async(req,res)=>{try{res.json(await billing.reconcile(actor(req),Number(req.params.id),req.body));}catch(e){financeFailure(res,e);}});
+  app.get('/api/tuition-charges',requireTenantAuth,requireAdmin,async(req,res)=>{try{res.json((await pool.query('SELECT c.*,s.first_name,s.last_name,g.name AS group_name FROM tuition_charges c JOIN students s ON s.id=c.student_id AND s.tenant_id=c.tenant_id JOIN groups g ON g.id=c.group_id AND g.tenant_id=c.tenant_id WHERE c.tenant_id=$1 ORDER BY c.id DESC LIMIT 200',[getTenantId(req)])).rows);}catch{res.status(503).json({error:'Kurs haqlari olinmadi'});}});
+  app.post('/api/tuition-charges',requireTenantAuth,requireAdmin,async(req,res)=>{try{res.status(201).json(await billing.create(actor(req),req.get('Idempotency-Key'),req.body));}catch(e){financeFailure(res,e);}});
+  app.delete('/api/tuition-charges/:id',requireTenantAuth,requireAdmin,async(req,res)=>{try{res.json(await billing.void(actor(req),Number(req.params.id),req.body.reason));}catch(e){financeFailure(res,e);}});
+  app.get('/api/payments/revision',requireTenantAuth,async(req,res)=>{try{const r=await pool.query('SELECT COALESCE(MAX(id),0) AS revision FROM payment_audit_logs WHERE tenant_id=$1',[getTenantId(req)]);res.json({revision:String(r.rows[0].revision)});}catch{res.status(503).json({error:'Yangilanish tekshirilmadi'});}});
+  app.get('/api/settings',requireTenantAuth,requireAdmin,async(req,res)=>{const t=await storage.getTenant(getTenantId(req));if(!t)return res.status(404).json({error:'Topilmadi'});res.json({name:t.name,phone:t.phone,address:t.address||'',smsEnabled:t.smsEnabled,marketingSmsEnabled:t.marketingSmsEnabled,attendanceSmsEnabled:t.attendanceSmsEnabled});});
+  app.patch('/api/settings',requireTenantAuth,requireAdmin,async(req,res)=>{try{const d=z.object({name:z.string().trim().min(1).max(200),phone:z.string().max(30),address:z.string().max(1000),smsEnabled:z.boolean(),marketingSmsEnabled:z.boolean(),attendanceSmsEnabled:z.boolean()}).partial().strict().parse(req.body);res.json(await storage.updateTenant(getTenantId(req),d));}catch{res.status(400).json({error:'Sozlamalarni saqlashda xatolik'});}});
   // ===== TENANT SMS STATUS =====
   app.get("/api/tenant-sms", async (req, res) => {
     try {
@@ -461,14 +369,8 @@ export async function registerRoutes(
   app.get("/api/students/unassigned", async (req, res) => {
     try {
       const tenantId = getTenantId(req);
-      const allStudents = await storage.getStudents(tenantId);
-      const unassigned = [];
-      for (const student of allStudents) {
-        const groups = await storage.getStudentGroups(student.id, tenantId);
-        if (groups.length === 0) {
-          unassigned.push(student);
-        }
-      }
+      const allStudents = await storage.getStudentsWithGroups(await storage.getStudents(tenantId),tenantId);
+      const unassigned=allStudents.filter(s=>s.groupIds.length===0);
       res.json(unassigned);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch unassigned students" });
@@ -491,8 +393,9 @@ export async function registerRoutes(
 
   app.post("/api/students", async (req, res) => {
     try {
-      const data = insertStudentSchema.parse({ ...req.body, tenantId: getTenantId(req) });
-      const student = await storage.createStudent(data);
+      const {groupId,...input}=req.body;
+      const data = insertStudentSchema.parse({ ...input, balance:0, tenantId: getTenantId(req) });
+      const student = await storage.createStudentInGroup(data,groupId);
       res.status(201).json(student);
     } catch (error) {
       if (error instanceof DuplicatePhoneError) {
@@ -764,7 +667,9 @@ export async function registerRoutes(
             continue;
           }
           
-          const defaultPassword = await bcrypt.hash("123456", 10);
+          const importPassword=String(row["Parol"]||row["password"]||"");
+          if(importPassword.length<10){results.errors.push(`${firstName}: Parol ustunida kamida 10 belgili shaxsiy parol kerak`);continue;}
+          const defaultPassword = await bcrypt.hash(importPassword, 10);
           
           await storage.createUser({
             tenantId,
@@ -874,15 +779,8 @@ export async function registerRoutes(
       }
       
       const teachers = await storage.getTeachers(tenantId);
-      const enriched = await Promise.all(groups.map(async (g) => {
-        const groupStudents = await storage.getStudentsByGroup(g.id, tenantId);
-        const teacher = teachers.find(t => t.id === g.teacherId);
-        return {
-          ...g,
-          studentCount: groupStudents.length,
-          teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : null,
-        };
-      }));
+      const counts=(await pool.query('SELECT sg.group_id,COUNT(DISTINCT sg.student_id)::int AS count FROM student_groups sg JOIN groups g ON g.id=sg.group_id JOIN students s ON s.id=sg.student_id WHERE g.tenant_id=$1 AND s.tenant_id=$1 AND s.archived_at IS NULL GROUP BY sg.group_id',[tenantId])).rows;
+      const enriched=groups.map(g=>({...g,studentCount:counts.find(c=>c.group_id===g.id)?.count||0,teacherName:teachers.find(t=>t.id===g.teacherId)?`${teachers.find(t=>t.id===g.teacherId)!.firstName} ${teachers.find(t=>t.id===g.teacherId)!.lastName}`:null}));
       
       res.json(enriched);
     } catch (error) {
@@ -946,7 +844,7 @@ export async function registerRoutes(
       // Parse subjectId properly
       const updateData = {
         ...req.body,
-        subjectId: req.body.subjectId ? parseInt(req.body.subjectId) : null,
+        ...(req.body.subjectId !== undefined ? {subjectId:req.body.subjectId} : {}),
       };
       const group = await storage.updateGroup(id, tenantId, updateData);
       res.json(group);
@@ -1166,6 +1064,7 @@ export async function registerRoutes(
         }
       }
       
+      if(isTeacher(req)&&teacher.id!==getUserId(req))return res.status(403).json({error:"Faqat o‘z guruhingizni import qiling"});
       // Create group
       const group = await storage.createGroup({
         tenantId,
@@ -1175,7 +1074,7 @@ export async function registerRoutes(
         time: time || "09:00",
         room: room || "",
         maxStudents: 20,
-        subjectId: subjectId,
+        subjectId: subjectId || null,
         level: "Beginner",
       });
       
@@ -1339,9 +1238,6 @@ export async function registerRoutes(
     }
   });
 
-  const attendanceNotifyTimers = new Map<string, NodeJS.Timeout>();
-  const attendancePendingCounts = new Map<string, { present: number; absent: number; total: number; tenantId: number; teacherId: string; groupId: number; date: Date }>();
-
   // ===== ATTENDANCE =====
   app.get("/api/attendance", async (req, res) => {
     try {
@@ -1352,7 +1248,7 @@ export async function registerRoutes(
       
       // O'qituvchi faqat o'z guruhlarining davomatini ko'radi
       if (isTeacher(req)) {
-        const attendance = await storage.getAttendanceByTeacher(getUserId(req), getTenantId(req), groupId, month, year);
+        const attendance = await storage.getAttendanceByTeacher(getUserId(req), getTenantId(req), groupId, month, year, date);
         return res.json(attendance);
       }
       
@@ -1363,93 +1259,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance", async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const body = {
-        ...req.body,
-        tenantId,
-        studentId: typeof req.body.studentId === 'string' ? parseInt(req.body.studentId) : req.body.studentId,
-        groupId: typeof req.body.groupId === 'string' ? parseInt(req.body.groupId) : req.body.groupId,
-        date: req.body.date ? new Date(req.body.date) : undefined,
-      };
-      const data = insertAttendanceSchema.parse(body);
-      
-      // Check if attendance record already exists for this student/group/date
-      const existingRecords = await storage.getAttendance(tenantId, data.groupId, new Date(data.date));
-      const existingRecord = existingRecords.find((a: any) => a.studentId === data.studentId);
-      
-      let attendance;
-      if (existingRecord) {
-        // Update existing record
-        attendance = await storage.updateAttendance(existingRecord.id, tenantId, { status: data.status });
-      } else {
-        // Create new record
-        attendance = await storage.createAttendance(data);
-      }
-      
-      // Send Telegram notification to student
-      if (data.studentId && data.groupId && data.status && data.date) {
-        const group = await storage.getGroup(data.groupId, tenantId);
-        if (group) {
-          notifyStudentAttendance(
-            data.studentId, 
-            group.name, 
-            data.status as "present" | "absent",
-            new Date(data.date), tenantId
-          ).catch(err => console.error("Telegram notification error:", err));
-        }
-      }
-      
-      // Debounced admin notification for attendance batch
-      if (data.groupId && data.date) {
-        const userId = getUserId(req);
-        const dateKey = new Date(data.date).toISOString().split('T')[0];
-        const key = `${tenantId}-${data.groupId}-${dateKey}`;
-        
-        const existing = attendancePendingCounts.get(key);
-        if (existing) {
-          if (data.status === 'present') existing.present++;
-          else if (data.status === 'absent') existing.absent++;
-          existing.total++;
-        } else {
-          attendancePendingCounts.set(key, {
-            present: data.status === 'present' ? 1 : 0,
-            absent: data.status === 'absent' ? 1 : 0,
-            total: 1,
-            tenantId,
-            teacherId: userId,
-            groupId: data.groupId,
-            date: new Date(data.date),
-          });
-        }
-        
-        const existingTimer = attendanceNotifyTimers.get(key);
-        if (existingTimer) clearTimeout(existingTimer);
-        
-        attendanceNotifyTimers.set(key, setTimeout(async () => {
-          const counts = attendancePendingCounts.get(key);
-          if (counts) {
-            notifyAdminAttendanceTaken(
-              counts.tenantId,
-              counts.teacherId,
-              counts.groupId,
-              counts.date,
-              counts.present,
-              counts.absent,
-              counts.total
-            ).catch(err => console.error("Admin attendance notify error:", err));
-            attendancePendingCounts.delete(key);
-            attendanceNotifyTimers.delete(key);
-          }
-        }, 5000));
-      }
-      
-      res.status(201).json(attendance);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid attendance data" });
-    }
-  });
+  app.post("/api/attendance",async(req,res)=>{try{res.status(201).json(await domain.classRecord(actor(req),'attendance',req.body));}catch(e){financeFailure(res,e);}});
 
   // Absent students report - haftalik/oylik
   app.get("/api/attendance/absent-report", requireTenantAuth, async (req, res) => {
@@ -1579,13 +1389,7 @@ export async function registerRoutes(
         return days;
       })() : [];
 
-      const formatGroupTime = (g: any) => {
-        const time = g.time || '09:00';
-        const duration = g.duration || 90;
-        const [h, m] = time.split(':').map(Number);
-        const endMin = (h || 9) * 60 + (m || 0) + duration;
-        return `${time}-${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
-      };
+      const formatGroupTime=(g:any)=>{const v=parseClassTime(g.time||'09:00');if(!v)return g.time||'';const fmt=(n:number)=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;return `${fmt(v.start)} - ${fmt(v.end)}`;};
 
       const summary = teachers.map((teacher: any) => {
         const teacherGroups = allGroups.filter((g: any) => g.teacherId === teacher.id);
@@ -1705,21 +1509,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/attendance/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const tenantId = getTenantId(req);
-      // Attendance records are created with tenantId, so we verify ownership
-      const existing = await storage.getAttendanceById(id, tenantId);
-      if (!existing) {
-        return res.status(404).json({ error: "Attendance record not found" });
-      }
-      const attendance = await storage.updateAttendance(id, tenantId, req.body);
-      res.json(attendance);
-    } catch (error) {
-      res.status(400).json({ error: "Failed to update attendance" });
-    }
-  });
+  app.patch("/api/attendance/:id",async(req,res)=>{try{const old=await storage.getAttendanceById(Number(req.params.id),getTenantId(req));if(!old)return res.status(404).json({error:'Topilmadi'});const d={studentId:old.studentId,groupId:old.groupId,date:old.date,status:old.status,notes:old.notes,...req.body};res.json(await domain.classRecord(actor(req),'attendance',d));}catch(e){financeFailure(res,e);}});
 
   // ===== PAYMENTS =====
   app.get("/api/payments", async (req, res) => {
@@ -1804,9 +1594,7 @@ export async function registerRoutes(
       }
 
       const salaryPercent = teacher.salaryPercent || 0;
-      const startDate = new Date(year, fromMonth - 1, 1);
-      const endDate = new Date(year, toMonth, 0);
-      endDate.setHours(23, 59, 59, 999);
+      const {startDate,endDate}=monthBounds(year,fromMonth,toMonth);
 
       const allPayments = await storage.getPayments(tenantId);
       const teacherPayments = allPayments.filter((p: any) => {
@@ -1825,8 +1613,9 @@ export async function registerRoutes(
 
       let studentsData: any[] = [];
       if (includeStudents) {
-        const studentIds = [...new Set(teacherPayments.map((p: any) => p.studentId))];
-        const allStudents = await storage.getStudents(tenantId);
+        const roster=await storage.getStudentsByTeacher(teacherId,tenantId);
+        const studentIds = [...new Set([...roster.map(s=>s.id),...teacherPayments.map((p: any) => p.studentId)])];
+        const allStudents = await storage.getStudentsIncludingArchived(tenantId);
         studentsData = studentIds.map(sid => {
           const student = allStudents.find(s => s.id === sid);
           const studentPayments = teacherPayments.filter((p: any) => p.studentId === sid);
@@ -1949,52 +1738,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/grades", async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const gradeBody = {
-        ...req.body,
-        tenantId,
-        studentId: typeof req.body.studentId === 'string' ? parseInt(req.body.studentId) : req.body.studentId,
-        groupId: typeof req.body.groupId === 'string' ? parseInt(req.body.groupId) : req.body.groupId,
-        grade: typeof req.body.grade === 'string' ? parseInt(req.body.grade) : req.body.grade,
-        date: req.body.date ? new Date(req.body.date) : undefined,
-      };
-      const data = insertGradeSchema.parse(gradeBody);
-      
-      // Check if grade record already exists for this student/group/date
-      const existingRecords = await storage.getGrades(tenantId, data.groupId, data.studentId, new Date(data.date));
-      const existingRecord = existingRecords.length > 0 ? existingRecords[0] : null;
-      
-      let grade;
-      if (existingRecord) {
-        // Update existing record
-        grade = await storage.updateGrade(existingRecord.id, tenantId, { grade: data.grade, topic: data.topic });
-      } else {
-        // Create new record
-        grade = await storage.createGrade(data);
-      }
-      
-      res.status(201).json(grade);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid grade data" });
-    }
-  });
+  app.post("/api/grades",async(req,res)=>{try{res.status(201).json(await domain.classRecord(actor(req),'grades',req.body));}catch(e){financeFailure(res,e);}});
 
-  app.patch("/api/grades/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const tenantId = getTenantId(req);
-      const existing = await storage.getGradeById(id, tenantId);
-      if (!existing) {
-        return res.status(404).json({ error: "Grade not found" });
-      }
-      const grade = await storage.updateGrade(id, tenantId, req.body);
-      res.json(grade);
-    } catch (error) {
-      res.status(400).json({ error: "Failed to update grade" });
-    }
-  });
+  app.patch("/api/grades/:id",async(req,res)=>{try{const old=await storage.getGradeById(Number(req.params.id),getTenantId(req));if(!old)return res.status(404).json({error:'Topilmadi'});const d={studentId:old.studentId,groupId:old.groupId,date:old.date,grade:old.grade,topic:old.topic,notes:old.notes,...req.body};res.json(await domain.classRecord(actor(req),'grades',d));}catch(e){financeFailure(res,e);}});
 
   app.delete("/api/grades/:id", async (req, res) => {
     try {
@@ -2018,7 +1764,7 @@ export async function registerRoutes(
   app.get("/api/teachers", async (req, res) => {
     try {
       const teachers = await storage.getTeachers(getTenantId(req));
-      res.json(teachers);
+      res.json(isTeacher(req)?teachers.map(t=>({id:t.id,firstName:t.firstName,lastName:t.lastName,subjectId:t.subjectId})):teachers);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch teachers" });
     }
@@ -2027,7 +1773,8 @@ export async function registerRoutes(
   app.post("/api/teachers", async (req, res) => {
     try {
       const { firstName, lastName, email, password, phone, salaryPercent } = req.body;
-      const rawPassword = password || "password123";
+      if(typeof password!=="string"||password.length<10)return res.status(400).json({error:"Parol kamida 10 belgidan iborat bo‘lsin"});
+      const rawPassword = password;
       const hashedPassword = await bcrypt.hash(rawPassword, 10);
       const teacher = await storage.createUser({
         tenantId: getTenantId(req),
@@ -2153,7 +1900,7 @@ export async function registerRoutes(
         }
       }
       
-      const student = await storage.createStudent({
+      const student = await storage.createStudentInGroup({
         tenantId,
         firstName,
         lastName,
@@ -2161,14 +1908,7 @@ export async function registerRoutes(
         parentPhone,
         balance: 0,
         status: "active",
-      });
-      
-      if (groupId) {
-        await storage.addStudentToGroup({
-          studentId: student.id,
-          groupId: parseInt(groupId),
-        });
-      }
+      },groupId?Number(groupId):undefined);
       
       res.status(201).json(student);
     } catch (error) {
@@ -2201,46 +1941,7 @@ export async function registerRoutes(
   });
 
   // Teacher moves student between groups
-  app.post("/api/teacher/move-student", requireTenantAuth, requireTeacherPermission('move_student'), async (req, res) => {
-    try {
-      const { studentId, fromGroupId, toGroupId } = req.body;
-      const tenantId = getTenantId(req);
-      const student = await storage.getStudent(studentId, tenantId);
-      if (!student) {
-        return res.status(404).json({ error: "Student not found" });
-      }
-      const fromGroup = await storage.getGroup(fromGroupId, tenantId);
-      const toGroup = await storage.getGroup(toGroupId, tenantId);
-      if (!fromGroup || !toGroup) {
-        return res.status(404).json({ error: "Group not found" });
-      }
-      await storage.removeStudentFromGroup(studentId, fromGroupId);
-      await storage.addStudentToGroup({ studentId, groupId: toGroupId });
-
-      // Activity log: o'qituvchi o'quvchini ko'chirdi
-      try {
-        const actorId = getUserId(req);
-        const actor = await storage.getUser(actorId);
-        await storage.createStudentActivityLog({
-          tenantId,
-          action: "moved",
-          studentId,
-          studentName: `${student.firstName} ${student.lastName}`,
-          fromGroupId,
-          fromGroupName: fromGroup.name,
-          toGroupId,
-          toGroupName: toGroup.name,
-          actorId,
-          actorName: actor ? `${actor.firstName} ${actor.lastName}` : actorId,
-          actorRole: "teacher",
-        });
-      } catch { console.warn("Activity log write failed"); }
-
-      res.json({ success: true });
-    } catch (error) {
-      res.status(400).json({ error: "Failed to move student" });
-    }
-  });
+  app.post("/api/teacher/move-student",requireTenantAuth,requireTeacherPermission('move_student'),async(req,res)=>{try{res.json(await domain.move(actor(req),Number(req.body.studentId),Number(req.body.fromGroupId),Number(req.body.toGroupId)));}catch(e){financeFailure(res,e);}});
 
   // Student activity logs — admin uchun
   app.get("/api/student-activity-logs", async (req, res) => {
@@ -2267,31 +1968,14 @@ export async function registerRoutes(
       const tenantId = getTenantId(req);
       const group=await storage.getGroup(groupId,tenantId);
       if(!group || (isTeacher(req) && group.teacherId!==getUserId(req)))return res.status(403).json({error:"Guruhga ruxsat yo‘q"});
-      const sameTeacherGroups=(await storage.getGroups(tenantId)).filter(g=>g.teacherId===group.teacherId).map(g=>g.id);
       const groupStudents = await storage.getStudentsByGroup(groupId, tenantId);
-      const now = new Date();
-      const result = await Promise.all(
-        groupStudents.map(async (student) => {
-          const studentPayments = await storage.getPayments(tenantId, student.id);
-          const membership=(await storage.getStudentGroups(student.id,tenantId)).map(m=>m.groupId);
-          const completedPayments = studentPayments.filter(p => p.status==='completed' && paymentMatchesGroup(p,group,new Map([[student.id,membership]]),sameTeacherGroups));
-          const lastPayment = completedPayments[0] || null;
-          const lastPaymentDate = lastPayment ? new Date(lastPayment.createdAt) : null;
-          const daysSince = lastPaymentDate
-            ? Math.floor((now.getTime() - lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24))
-            : null;
-          return {
-            studentId: student.id,
-            studentName: `${student.firstName} ${student.lastName}`,
-            balance: student.balance,
-            lastPaymentDate: lastPaymentDate ? lastPaymentDate.toISOString() : null,
-            lastPaymentAmount: lastPayment?.amount || null,
-            daysSinceLastPayment: daysSince,
-            isOverdue: daysSince === null || daysSince > 30,
-            totalPayments: completedPayments.length,
-          };
-        })
-      );
+      const period=uzDate().slice(0,7);
+      const payments=await storage.getPayments(tenantId);
+      const result=groupStudents.map(student=>{
+        const completed=payments.filter(p=>p.studentId===student.id&&p.groupId===groupId&&p.status==='completed');
+        const forMonth=completed.filter(p=>p.paymentPeriod===period),last=completed[0];
+        return {studentId:student.id,studentName:`${student.firstName} ${student.lastName}`,balance:student.balance,lastPaymentDate:last?.createdAt||null,lastPaymentAmount:last?.amount||null,daysSinceLastPayment:last?Math.floor((Date.now()-new Date(last.createdAt).getTime())/86400000):null,isOverdue:student.balance<0,hasPaymentForPeriod:forMonth.length>0,paymentPeriod:period,amountForPeriod:forMonth.reduce((n,p)=>n+p.amount,0),totalPayments:completed.length};
+      });
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "To'lov holatini olishda xatolik" });
@@ -2304,7 +1988,7 @@ export async function registerRoutes(
       const tenantId = getTenantId(req);
       const teacherUserId = getUserId(req);
       const teacherGroups = await storage.getGroupsByTeacher(teacherUserId, tenantId);
-      const today = new Date().toISOString().split("T")[0];
+      const today = uzDate();
       const result = await Promise.all(
         teacherGroups.map(async (group) => {
           const students = await storage.getStudentsByGroup(group.id, tenantId);
@@ -2387,7 +2071,7 @@ export async function registerRoutes(
         const allPayments = await storage.getPayments(tenantId);
         const monthlyPayments = allPayments.filter((p: any) => {
           const d = new Date(p.createdAt);
-          return d.getMonth() + 1 === month && d.getFullYear() === year && p.status === 'completed';
+          return uzDate(d).slice(0,7)===`${year}-${String(month).padStart(2,'0')}` && p.status === 'completed';
         });
         stats.monthlyIncome = monthlyPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
       }
@@ -2414,7 +2098,8 @@ export async function registerRoutes(
       if (!phone || !message) {
         return res.status(400).json({ error: "phone va message kerak" });
       }
-      const result = await sendSMS(phone, message);
+      if(!(await storage.getTenant(getTenantId(req)))?.marketingSmsEnabled)return res.status(403).json({error:"Marketing SMS sozlamasi o‘chirilgan"});
+      const result = await sendSMS(phone, message, getTenantId(req));
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to send SMS" });
@@ -2438,7 +2123,7 @@ export async function registerRoutes(
       }
 
       const fullName = `${student.lastName} ${student.firstName}`;
-      const result = await sendLowBalanceSMS(phone, fullName, student.balance || 0);
+      const result = await sendLowBalanceSMS(phone, fullName, student.balance || 0,tenantId);
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to send low balance reminder" });
@@ -2471,7 +2156,7 @@ export async function registerRoutes(
       const subjectName = subject?.name || "dars";
       const classTime = time || group.time?.split(" - ")[0] || "00:00";
       
-      const result = await sendAbsenceSMS(phone, student.firstName, group.name, classTime, subjectName);
+      const result = await sendAbsenceSMS(phone, student.firstName, group.name, classTime, subjectName,tenantId);
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to send absence notification" });
@@ -2513,7 +2198,8 @@ export async function registerRoutes(
           return res.status(400).json({ error: "Noma'lum template" });
       }
 
-      const result = await sendSMS(phone, message);
+      if(!(await storage.getTenant(getTenantId(req)))?.marketingSmsEnabled)return res.status(403).json({error:"Marketing SMS sozlamasi o‘chirilgan"});
+      const result = await sendSMS(phone, message, getTenantId(req));
       res.json({ ...result, message });
     } catch (error) {
       res.status(500).json({ error: "Failed to send test SMS" });
@@ -3021,44 +2707,7 @@ export async function registerRoutes(
   // ===== CASH RECEIPTS =====
   app.use("/api/cash-receipts", requireTenantAuth);
 
-  app.post("/api/cash-receipts", async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const userId = getUserId(req);
-      const { amount, note, paymentType } = req.body;
-
-      if (!amount || amount <= 0) {
-        return res.status(400).json({ error: "Summa musbat bo'lishi kerak" });
-      }
-      if (!paymentType) {
-        return res.status(400).json({ error: "To'lov turi tanlanishi shart" });
-      }
-
-      const receipt = await storage.createCashReceipt({
-        tenantId,
-        amount: parseInt(amount),
-        submittedBy: userId,
-        note: note || null,
-        paymentType,
-        status: "pending",
-        submittedAt: new Date(),
-      });
-
-      await storage.createCashReceiptLog({
-        cashReceiptId: receipt.id,
-        action: "created",
-        oldStatus: null,
-        newStatus: "pending",
-        actedBy: userId,
-        note: "Pul topshirish yaratildi",
-      });
-
-      res.status(201).json(receipt);
-    } catch (error) {
-      console.error("Cash receipt creation error:", error);
-      res.status(500).json({ error: "Pul topshirish yaratishda xatolik" });
-    }
-  });
+  app.post("/api/cash-receipts", async(req,res)=>{try{res.status(201).json(await domain.cashCreate(actor(req),req.get('Idempotency-Key'),req.body));}catch(e){financeFailure(res,e);}});
 
   app.get("/api/cash-receipts", async (req, res) => {
     try {
@@ -3113,15 +2762,7 @@ export async function registerRoutes(
 
       const allReceipts = await storage.getCashReceipts(tenantId, { month, year });
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
-
-      const todayReceipts = allReceipts.filter(r => {
-        const d = new Date(r.submittedAt);
-        return d >= today && d <= todayEnd;
-      });
+      const todayReceipts=allReceipts.filter(r=>uzDate(r.submittedAt)===uzDate());
 
       res.json({
         todaySubmitted: todayReceipts.reduce((s, r) => s + r.amount, 0),
@@ -3151,91 +2792,9 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/cash-receipts/:id/accept", async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const userId = getUserId(req);
-      const role = getUserRole(req);
-      const id = parseInt(req.params.id);
+  app.patch("/api/cash-receipts/:id/accept",async(req,res)=>{try{res.json(await domain.cashDecide(actor(req),Number(req.params.id),'accepted',req.body.reason??req.body.note));}catch(e){financeFailure(res,e);}});
 
-      if (role !== "manager") {
-        return res.status(403).json({ error: "Faqat rahbar qabul qilishi mumkin" });
-      }
-
-      const receipt = await storage.getCashReceipt(id, tenantId);
-      if (!receipt) {
-        return res.status(404).json({ error: "Topilmadi" });
-      }
-      if (receipt.status === "accepted") {
-        return res.status(400).json({ error: "Bu topshiriq allaqachon qabul qilingan" });
-      }
-
-      const oldStatus = receipt.status;
-      const updated = await storage.updateCashReceipt(id, tenantId, {
-        status: "accepted",
-        acceptedBy: userId,
-        acceptedAt: new Date(),
-      });
-
-      await storage.createCashReceiptLog({
-        cashReceiptId: id,
-        action: "accepted",
-        oldStatus,
-        newStatus: "accepted",
-        actedBy: userId,
-        note: req.body.note || "Qabul qilindi",
-      });
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Cash receipt accept error:", error);
-      res.status(500).json({ error: "Qabul qilishda xatolik" });
-    }
-  });
-
-  app.patch("/api/cash-receipts/:id/reject", async (req, res) => {
-    try {
-      const tenantId = getTenantId(req);
-      const userId = getUserId(req);
-      const role = getUserRole(req);
-      const id = parseInt(req.params.id);
-
-      if (role !== "manager") {
-        return res.status(403).json({ error: "Faqat rahbar rad etishi mumkin" });
-      }
-
-      const receipt = await storage.getCashReceipt(id, tenantId);
-      if (!receipt) {
-        return res.status(404).json({ error: "Topilmadi" });
-      }
-      if (receipt.status === "accepted") {
-        return res.status(400).json({ error: "Qabul qilingan topshiriqni rad etib bo'lmaydi" });
-      }
-
-      const { reason } = req.body;
-      const oldStatus = receipt.status;
-      const updated = await storage.updateCashReceipt(id, tenantId, {
-        status: "rejected",
-        rejectedBy: userId,
-        rejectedAt: new Date(),
-        rejectionReason: reason || null,
-      });
-
-      await storage.createCashReceiptLog({
-        cashReceiptId: id,
-        action: "rejected",
-        oldStatus,
-        newStatus: "rejected",
-        actedBy: userId,
-        note: reason || "Rad etildi",
-      });
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Cash receipt reject error:", error);
-      res.status(500).json({ error: "Rad etishda xatolik" });
-    }
-  });
+  app.patch("/api/cash-receipts/:id/reject",async(req,res)=>{try{res.json(await domain.cashDecide(actor(req),Number(req.params.id),'rejected',req.body.reason??req.body.note));}catch(e){financeFailure(res,e);}});
 
   app.get("/api/cash-receipts/:id/logs", async (req, res) => {
     try {
@@ -3266,5 +2825,6 @@ export async function registerRoutes(
     }
   });
 
+  app.use("/api",(_req,res)=>res.status(404).json({error:"API yo‘li topilmadi"}));
   return httpServer;
 }

@@ -9,7 +9,8 @@ test('real route registration protects platform APIs and financial mutations', a
   // No production database or credentials. Anything that reaches an unexpected query fails.
   pool.query = (async () => { throw new Error('Unexpected database access'); }) as any;
   pool.connect = (async () => { throw new Error('Unexpected database access'); }) as any;
-  storage.getUser = async () => ({id:'test-teacher',tenantId:1,role:'teacher'}) as any;
+  storage.getUser = async () => ({id:'test-teacher',tenantId:1,role:'teacher',authVersion:0}) as any;
+  storage.getTenant = async()=>({id:1,status:"active"}) as any;
   const app=express();app.use(express.json());
   app.use((req:any,_res,next)=>{req.session=req.headers['x-test-teacher']?{userId:'test-teacher',tenantId:1,role:'teacher'}:{};next();});
   const server=createServer(app);await registerRoutes(server,app);

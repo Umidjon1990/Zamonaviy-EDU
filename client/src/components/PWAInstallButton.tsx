@@ -208,7 +208,7 @@ export function PWAInstallBanner() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm">Zamonaviy-Edu ilovasini o'rnating</p>
-            <p className="text-xs text-muted-foreground">Tezkor kirish va offline ishlash imkoni</p>
+            <p className="text-xs text-muted-foreground">Tezkor kirish. Ishlash uchun internet kerak.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button size="sm" className="gradient-primary text-white text-xs px-3" onClick={install}>

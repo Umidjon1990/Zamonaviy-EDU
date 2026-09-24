@@ -29,7 +29,7 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const TeacherSalary = lazy(() => import("@/pages/TeacherSalary"));
 const Login = lazy(() => import("@/pages/Login"));
 const TeacherLogin = lazy(() => import("@/pages/TeacherLogin"));
-const TeacherDashboard = lazy(() => import("@/pages/TeacherDashboard"));
+
 const SuperAdmin = lazy(() => import("@/pages/SuperAdmin"));
 const SuperAdminLogin = lazy(() => import("@/pages/SuperAdminLogin"));
 const RahbarLogin = lazy(() => import("@/pages/RahbarLogin"));
@@ -126,7 +126,7 @@ function Router() {
         <Route path="/super-admin-login" component={SuperAdminLogin} />
         <Route path="/login" component={Login} />
         <Route path="/teacher-login" component={TeacherLogin} />
-        <Route path="/teacher-dashboard" component={TeacherDashboard} />
+        <Route path="/teacher-dashboard"><Redirect to="/attendance" /></Route>
         <Route path="/rahbar-login" component={RahbarLogin} />
         <Route path="/rahbar" component={RahbarDashboard} />
         <Route component={AdminRoutes} />

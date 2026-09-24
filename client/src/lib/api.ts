@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { submitFinance, invalidateFinance } from "./finance";
 import type { Lead, Payment, Student, User, Group, Subject, Expense } from "@shared/schema";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -218,9 +219,12 @@ export function useImportGroupTemplate() {
 
 // ===== PAYMENTS =====
 export function usePayments(studentId?: number) {
+  const client=useQueryClient(),previous=useRef<string|undefined>(undefined);
+  const revision=useQuery({queryKey:['payment-revision'],queryFn:()=>apiCall<{revision:string}>('/payments/revision'),refetchInterval:5000});
+  useEffect(()=>{if(revision.data){if(previous.current!==undefined&&previous.current!==revision.data.revision)void invalidateFinance(client);previous.current=revision.data.revision;}},[revision.data?.revision,client]);
   return useQuery({
     queryKey: ["payments", studentId],
-    refetchInterval: 5000,
+    refetchInterval: false,
     queryFn: () => apiCall<Payment[]>(`/payments${studentId ? `?studentId=${studentId}` : ""}`),
   });
 }

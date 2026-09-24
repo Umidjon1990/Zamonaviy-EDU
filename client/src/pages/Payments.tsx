@@ -1,3 +1,4 @@
+import { AccountingReview } from "@/components/AccountingReview";
 import { PaymentNotifications } from "@/components/PaymentNotifications";
 import { currentPaymentPeriod, paymentMatchesGroup } from "@shared/finance";
 import { useState, useMemo } from "react";
@@ -195,7 +196,7 @@ export default function Payments() {
 
     const relevantPayments = paymentsList.filter((p: any) => {
       if (!p.status || p.status !== 'completed') return false;
-      if((p.paymentPeriod || currentPaymentPeriod(new Date(p.createdAt)))!==`${selectedYear}-${String(selectedMonth+1).padStart(2,'0')}`)return false;
+      if(p.paymentPeriod!==`${selectedYear}-${String(selectedMonth+1).padStart(2,'0')}`)return false;
       if(filterGroupId && !matchesGroup(p,filterGroupId))return false;
       if (relevantTeacherId && p.teacherId !== relevantTeacherId) return false;
       return true;
@@ -409,6 +410,7 @@ export default function Payments() {
       <p className="text-xs text-muted-foreground">Oxirgi yangilanish: {dataUpdatedAt?new Date(dataUpdatedAt).toLocaleTimeString('uz-UZ'):'—'}. To‘lovlar har 5 soniyada yangilanadi.</p>
       {pendingCollections.length > 0 && <a href="/students" className="block rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">O‘qituvchilardan {pendingCollections.length} ta to‘lov tasdiqlashni kutmoqda. Jami {pendingCollections.reduce((s,p)=>s+p.amount,0).toLocaleString()} so‘m. Ko‘rib chiqish →</a>}
       <PaymentNotifications />
+      <AccountingReview payments={paymentsList} students={studentsList} groups={groupsList}/>
       {(filterFromDate||filterToDate)&&<p className="text-sm">Sana oralig‘i tanlangan: oy filtri ro‘yxatga qo‘llanmaydi.</p>}
       {filterGroupId&&paymentsList.some((p:any)=>p.groupId==null)&&<p className="text-xs text-amber-700">Guruh aniq ko‘rsatilmagan eski to‘lovlar faqat guruhni ishonchli aniqlash mumkin bo‘lsa ko‘rsatiladi. To‘liq ro‘yxat uchun guruh filtrini tozalang.</p>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

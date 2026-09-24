@@ -25,6 +25,8 @@ export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 
 // Tenants (Markazlar)
 export const tenants = pgTable("tenants", {
+  attendanceSmsEnabled: boolean("attendance_sms_enabled").notNull().default(false),
+  marketingSmsEnabled: boolean("marketing_sms_enabled").notNull().default(false),
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug"), // URL uchun: markaz-nomi (unique bo'ladi)
@@ -73,6 +75,8 @@ export type TenantSubscription = typeof tenantSubscriptions.$inferSelect;
 
 // Users (Foydalanuvchilar)
 export const users = pgTable("users", {
+  archivedAt: timestamp("archived_at"),
+  authVersion: integer("auth_version").notNull().default(0),
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: integer("tenant_id").notNull(),
   email: text("email"),
@@ -121,6 +125,7 @@ export type Lead = typeof leads.$inferSelect;
 
 // Students (O'quvchilar)
 export const students = pgTable("students", {
+  archivedAt: timestamp("archived_at"),
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   firstName: text("first_name").notNull(),
@@ -160,6 +165,7 @@ export type Subject = typeof subjects.$inferSelect;
 
 // Groups (Guruhlar)
 export const groups = pgTable("groups", {
+  archivedAt: timestamp("archived_at"),
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   name: text("name").notNull(),
