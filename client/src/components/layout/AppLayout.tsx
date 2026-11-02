@@ -15,7 +15,8 @@ import {
   FileText,
   BookOpen,
   Receipt,
-  BarChart2
+  BarChart2,
+  Shield
 } from "lucide-react";
 import { cn, convertGoogleDriveUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,9 @@ const allNavItems = [
   { icon: Users, label: translations.nav.groups, href: "/groups", roles: ["markaz_admin", "teacher"] },
   { icon: BookOpen, label: "Fanlar", href: "/subjects", roles: ["markaz_admin"] },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "teacher"] },
+  { icon: UserCheck, label: "O‘qituvchi davomati", href: "/staff-attendance", roles: ["markaz_admin"] },
+  { icon: UserCheck, label: "QR / Keldi-kettim", href: "/teacher-checkin", roles: ["teacher"] },
+  { icon: Shield, label: "Jarimalarim", href: "/teacher-fines", roles: ["teacher"] },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin"] },
   { icon: Receipt, label: "Xarajatlar", href: "/expenses", roles: ["markaz_admin"] },
   { icon: FileText, label: "Moliya", href: "/reports", roles: ["markaz_admin"] },

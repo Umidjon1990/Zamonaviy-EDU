@@ -338,7 +338,10 @@ export default function Reports() {
   // Informational drafts are excluded from official income and historical earnings.
   const adjustedIncome = teacherIncome;
   const calculatedSalary = salaryData?.calculatedSalary || 0;
-  const teacherSalary = calculatedSalary - totalAdvance;
+  const totalFines = salaryData?.totalFines || 0;
+  const totalCredits = (salaryData?.payrolls || []).reduce((n: number,p: any)=>n+p.credits,0);
+  const otherDeductions = (salaryData?.payrolls || []).reduce((n: number,p: any)=>n+p.otherDeductions,0);
+  const teacherSalary = salaryData?.salary || 0;
   const cashInHand = teacherSalary - cardTransfer;
 
   const getPeriodLabel = () => {
@@ -404,6 +407,9 @@ export default function Reports() {
       financeInfo.push(["Avans:", `-${totalAdvance.toLocaleString()} UZS`]);
     }
     
+    if(totalFines>0)financeInfo.push(["Jarimalar:",`-${totalFines.toLocaleString()} UZS`]);
+    if(otherDeductions>0)financeInfo.push(["Boshqa ushlanmalar:",`-${otherDeductions.toLocaleString()} UZS`]);
+    if(totalCredits>0)financeInfo.push(["Qaytarilgan haq:",`+${totalCredits.toLocaleString()} UZS`]);
     financeInfo.push(["Yakuniy oylik:", `${teacherSalary.toLocaleString()} UZS`]);
     
     if (cardTransfer > 0) {
@@ -524,7 +530,7 @@ Ma'lumotlar:
 Moliya:
 - Umumiy tushum: ${adjustedIncome.toLocaleString()} UZS
 - Oylik foizi: ${salaryPercent}%
-- Hisoblangan oylik: ${calculatedSalary.toLocaleString()} UZS${advanceText}
+- Hisoblangan oylik: ${calculatedSalary.toLocaleString()} UZS${advanceText}\n- Jarimalar: -${totalFines.toLocaleString()} UZS\n- Boshqa ushlanmalar: -${otherDeductions.toLocaleString()} UZS\n- Qaytarilgan haq: +${totalCredits.toLocaleString()} UZS
 - Yakuniy oylik: ${teacherSalary.toLocaleString()} UZS${cardText}${notEnteredText}
 - Qo'lga tegishi: ${cashInHand.toLocaleString()} UZS
 
@@ -821,13 +827,14 @@ Zamonaviy-Edu
                     </Card>
                   </div>
 
+                  <Card><CardContent className="p-4 text-sm flex flex-wrap gap-6"><span>Jarima ushlanmasi: <b>{totalFines.toLocaleString()} UZS</b></span><span>Qaytarilgan haq: <b>{totalCredits.toLocaleString()} UZS</b></span><span>Boshqa ushlanmalar: <b>{otherDeductions.toLocaleString()} UZS</b></span></CardContent></Card>
                   <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Card className="card-modern border-l-4 border-l-emerald-500">
                       <CardContent className="p-4">
                         <p className="text-sm text-muted-foreground mb-1">Yakuniy oylik</p>
                         <p className="text-2xl font-bold text-emerald-600" data-testid="text-final-salary">{teacherSalary.toLocaleString()} UZS</p>
                         {(totalAdvance > 0) && (
-                          <p className="text-xs text-muted-foreground">{calculatedSalary.toLocaleString()} - {totalAdvance.toLocaleString()} avans</p>
+                          <p className="text-xs text-muted-foreground">{calculatedSalary.toLocaleString()} − {totalAdvance.toLocaleString()} to‘langan − {totalFines.toLocaleString()} jarima</p>
                         )}
                       </CardContent>
                     </Card>
@@ -1415,6 +1422,8 @@ Zamonaviy-Edu
                     </tr>
                   )}
                   <tr>
+                    <td style={{ padding: "6px 0", color: "#b45309" }}>Jarimalar / boshqa ushlanmalar / qaytarish:</td><td style={{ padding: "6px 0" }}>−{totalFines.toLocaleString()} / −{otherDeductions.toLocaleString()} / +{totalCredits.toLocaleString()} UZS</td>
+                  </tr><tr>
                     <td style={{ padding: "6px 0", color: "#16a34a", fontWeight: "bold" }}>Yakuniy oylik:</td>
                     <td style={{ padding: "6px 0", fontWeight: "bold", color: "#16a34a" }}>{teacherSalary.toLocaleString()} UZS</td>
                   </tr>

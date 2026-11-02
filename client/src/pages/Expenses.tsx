@@ -1,3 +1,4 @@
+import { uzWorkDate } from "@shared/workforce";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,6 +88,7 @@ export default function Expenses() {
     teacherId: "" as string,
     staffId: "" as string,
     notes: "",
+    payrollPeriod: uzWorkDate().slice(0,7),
     date: new Date().toISOString().split("T")[0],
   });
 
@@ -103,7 +105,7 @@ export default function Expenses() {
   }, {});
 
   const resetForm = () => {
-    setFormData({ title: "", amount: 0, category: "other", teacherId: "", staffId: "", notes: "", date: new Date().toISOString().split("T")[0] });
+    setFormData({ title: "", amount: 0, category: "other", teacherId: "", staffId: "", notes: "", payrollPeriod: uzWorkDate().slice(0,7), date: new Date().toISOString().split("T")[0] });
     setEditExpense(null);
   };
 
@@ -122,6 +124,7 @@ export default function Expenses() {
     }
     const submitData = {
       ...formData,
+      payrollPeriod: formData.category === "salary" ? formData.payrollPeriod : null,
       teacherId: formData.category === "salary" ? formData.teacherId : null,
       staffId: formData.category === "staff_salary" ? formData.staffId : null,
     };
@@ -146,6 +149,7 @@ export default function Expenses() {
       title: expense.title,
       amount: expense.amount,
       category: expense.category,
+      payrollPeriod: expense.payrollPeriod || uzWorkDate(expense.date).slice(0,7),
       teacherId: expense.teacherId || "",
       staffId: expense.staffId || "",
       notes: expense.notes || "",
@@ -247,6 +251,7 @@ export default function Expenses() {
                     </Select>
                   </div>
                 )}
+                {formData.category === "salary" && <div className="grid gap-2"><Label htmlFor="payroll-period">Qaysi oy oyligi / avansi</Label><Input id="payroll-period" type="month" value={formData.payrollPeriod} onChange={e=>setFormData({...formData,payrollPeriod:e.target.value})} /><p className="text-xs text-muted-foreground">To‘lov keyingi oyda berilsa ham, tegishli hisob oyini tanlang.</p></div>}
                 {formData.category === "staff_salary" && (
                   <div className="grid gap-2">
                     <Label htmlFor="staffId">Xodim</Label>

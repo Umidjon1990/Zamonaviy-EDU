@@ -1,3 +1,4 @@
+import { WorkforceToday } from "./Workforce";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -257,6 +258,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 p-2">
+      <WorkforceToday compact />
       <div className="relative overflow-hidden rounded-2xl gradient-hero p-6 md:p-8 text-white animate-slide-up">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24 blur-2xl" />

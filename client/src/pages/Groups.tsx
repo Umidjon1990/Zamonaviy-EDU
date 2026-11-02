@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -538,9 +539,9 @@ export default function Groups() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-time">Dars vaqti</Label>
+                  <Label htmlFor="edit-time">Boshlang‘ich dars vaqti</Label><p className="text-xs text-muted-foreground">Amaldagi vaqt, xona va o‘qituvchi <Link href="/schedule" className="text-primary underline">Dars jadvali</Link> bo‘limida tahrirlanadi.</p>
                   <Input
-                    id="edit-time"
+                    id="edit-time" disabled
                     value={editFormData.time}
                     onChange={(e) => setEditFormData({ ...editFormData, time: e.target.value })}
                     placeholder="14:00 - 15:30"
@@ -555,7 +556,7 @@ export default function Groups() {
                       <Toggle
                         key={day.value}
                         pressed={editFormData.days.includes(day.value)}
-                        onPressedChange={() => toggleEditDay(day.value)}
+                        disabled onPressedChange={() => toggleEditDay(day.value)}
                         variant="outline"
                         size="sm"
                         className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
@@ -569,7 +570,7 @@ export default function Groups() {
                 <div className="space-y-2">
                   <Label htmlFor="edit-room">Xona</Label>
                   <Input
-                    id="edit-room"
+                    id="edit-room" disabled
                     value={editFormData.room}
                     onChange={(e) => setEditFormData({ ...editFormData, room: e.target.value })}
                     placeholder="Xona 1"
@@ -578,7 +579,7 @@ export default function Groups() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-teacherId">O'qituvchi</Label>
-                  <Select value={editFormData.teacherId} onValueChange={(value) => setEditFormData({ ...editFormData, teacherId: value })}>
+                  <Select disabled value={editFormData.teacherId} onValueChange={(value) => setEditFormData({ ...editFormData, teacherId: value })}>
                     <SelectTrigger data-testid="select-edit-teacher">
                       <SelectValue placeholder="O'qituvchini tanlang" />
                     </SelectTrigger>
@@ -641,7 +642,7 @@ export default function Groups() {
               <CardContent className="pb-4 space-y-3">
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Clock className="mr-2 h-4 w-4 text-primary" />
-                  <span>{group.days?.join(", ") || ""} • {group.time}</span>
+                  <Link href="/schedule" className="text-primary underline">Dars jadvalini ko‘rish</Link>
                 </div>
                 {group.room && (
                   <div className="flex items-center text-sm text-muted-foreground">
