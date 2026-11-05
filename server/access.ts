@@ -55,7 +55,13 @@ export function registerAccessGuards(app:Express,auth:RequestHandler){
     if(!(await storage.getStudentGroups(Number(d.studentId),tenantId)).some(g=>g.groupId===Number(d.groupId)))throw new FinanceError('O‘quvchi guruhga tegishli emas');
     if(req.method!=='DELETE')schema=root==='attendance'?(partial?attendanceInput.pick({status:true,notes:true}).partial():attendanceInput):(partial?gradeInput.pick({grade:true,topic:true,notes:true}).partial():gradeInput);
    }
-   if(schema)req.body=schema.parse(req.body);
+   if(schema){
+    // Zod 4 evaluates nested defaults inside optional fields. A PATCH must still
+    // change only explicitly supplied fields, preserving the original API contract.
+    const supplied=new Set(Object.keys(req.body));
+    const parsed=schema.parse(req.body) as Record<string,unknown>;
+    req.body=partial?Object.fromEntries(Object.entries(parsed).filter(([key])=>supplied.has(key))):parsed;
+   }
    if(req.body.groupId)await ownGroup(req.body.groupId);
    if(root==='groups'&&!path.includes('/students')&&req.body.teacherId){const t=await storage.getTeacher(req.body.teacherId,tenantId);if(!t||t.archivedAt)throw new FinanceError('O‘qituvchi topilmadi',404);if(teacher&&t.id!==uid)deny();}
    if(req.body.subjectId&&!await storage.getSubject(req.body.subjectId,tenantId))throw new FinanceError('Fan topilmadi',404);

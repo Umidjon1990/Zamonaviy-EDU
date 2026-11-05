@@ -1,122 +1,48 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { translations } from "@/lib/i18n";
-import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
-import { Clock, Users } from "lucide-react";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { wf, wfDate, wfTime, refreshWorkforce } from '@/lib/workforce';
+import { dayNames, dateWeekday, minutesText, uzWorkDate, type Slot } from '@shared/workforce';
+import { CalendarDays, Plus, Pencil, AlertCircle, History } from 'lucide-react';
+
+const selectStyle = 'w-full h-10 border rounded-md px-3 bg-background text-sm';
+const minute = (s: string) => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+const shift = (date: string, n: number) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 
 export default function Schedule() {
-  const days = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"];
-
-
-  const { data: groupsData, isLoading, error } = useQuery({
-    queryKey: ["groups"],
-    queryFn: async () => {
-      const res = await fetch("/api/groups", { credentials: "include" });
-      if(!res.ok)throw new Error("Jadval olinmadi");
-      return res.json();
-    },
-  });
-  const groups = (groupsData || []) as any[];
-
-  const parseTime = (timeStr: string) => {
-    if (!timeStr) return null;
-    const match = timeStr.match(/(\d{1,2}):(\d{2})/);
-    if (match) {
-      return `${match[1].padStart(2, '0')}:${match[2]}`;
-    }
-    return null;
-  };
-
-  const times=Array.from(new Set(groups.map(g=>parseTime(g.time)).filter((v):v is string=>!!v))).sort();
-
-  const getClassesForSlot = (time: string, dayName: string) => {
-    return groups.filter((group: any) => {
-      if (!group.days || !group.time) return false;
-      
-      const groupDays = Array.isArray(group.days) ? group.days : [];
-      const hasDay = groupDays.some((d: string) => 
-        (({Du:'Dushanba',Se:'Seshanba',Chor:'Chorshanba',Pay:'Payshanba',Ju:'Juma',Sha:'Shanba',Yak:'Yakshanba'} as Record<string,string>)[d]||d).toLowerCase() === dayName.toLowerCase()
-      );
-      
-      if (!hasDay) return false;
-      
-      const groupStartTime = parseTime(group.time);
-      return groupStartTime === time;
-    });
-  };
-
-  if(error)return <p role="alert">Jadval olinmadi. Sahifani yangilang.</p>;
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">{translations.nav.schedule}</h1>
-        <Badge variant="outline" className="w-fit">
-          <Users className="w-4 h-4 mr-1" />
-          {groups.length} ta guruh
-        </Badge>
-      </div>
-
-      <Card className="shadow-sm overflow-x-auto">
-        <CardHeader>
-          <CardTitle>Haftalik dars jadvali</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="min-w-[900px]">
-            <div className="grid grid-cols-8 border-b">
-              <div className="p-4 font-medium text-muted-foreground border-r bg-muted/30">
-                <Clock className="w-4 h-4 inline mr-1" /> Vaqt
-              </div>
-              {days.map(day => (
-                <div key={day} className="p-4 font-medium text-center border-r last:border-r-0 bg-muted/10">
-                  {day}
-                </div>
-              ))}
-            </div>
-            
-            {times.map((time) => (
-              <div key={time} className="grid grid-cols-8 border-b last:border-b-0">
-                <div className="p-3 text-sm font-medium text-muted-foreground border-r bg-muted/5 flex items-center justify-center">
-                  {time}
-                </div>
-                {days.map((dayName, index) => {
-                  const slotGroups = getClassesForSlot(time, dayName);
-                  return (
-                    <div key={index} className="p-1 border-r last:border-r-0 min-h-[70px] relative group transition-colors hover:bg-muted/5">
-                      {slotGroups.map((g: any) => (
-                        <div 
-                          key={g.id}
-                          className="w-full mb-1 bg-primary/10 border-l-2 border-primary rounded-sm p-2 flex flex-col justify-center gap-0.5 cursor-pointer hover:bg-primary/20 transition-colors"
-                          data-testid={`schedule-slot-${g.id}`}
-                        >
-                          <span className="text-xs font-bold text-primary truncate">{g.name}</span>
-                          <span className="text-[10px] text-muted-foreground">{g.time}</span>
-                          {g.room && <span className="text-[10px] text-primary/70">{g.room}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {groups.length === 0 && (
-        <Card className="border-dashed">
-          <CardContent className="p-8 text-center text-muted-foreground">
-            Hozircha guruhlar yo'q. Guruhlar qo'shilganda jadvalda ko'rinadi.
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
+  const user = useQuery<any>({ queryKey: ['/api/auth/me'] }), admin = user.data?.role === 'markaz_admin', client = useQueryClient(), { toast } = useToast();
+  const [date, setDate] = useState(uzWorkDate()), [view, setView] = useState('week'), [search, setSearch] = useState(''), [teacherFilter, setTeacherFilter] = useState(''), [roomFilter, setRoomFilter] = useState(''), [editing, setEditing] = useState<any>(null), [exception, setException] = useState<any>(null), [showHistory, setShowHistory] = useState(false);
+  const from = view === 'month' ? date.slice(0, 7) + '-01' : view === 'week' ? shift(date, 1 - dateWeekday(date)) : date;
+  const to = view === 'month' ? new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).toISOString().slice(0, 10) : view === 'week' ? shift(from, 6) : date;
+  const q = useQuery<any>({ queryKey: ['workforce', 'schedule', from, to], queryFn: () => wf(`schedule?from=${from}&to=${to}`), refetchInterval: 30000 });
+  const teachers = useQuery<any[]>({ queryKey: ['workforce', 'teachers'], enabled: admin, queryFn: async () => { const r = await fetch('/api/teachers'); if (!r.ok) throw new Error('O‘qituvchilar olinmadi'); return r.json(); } });
+  const history = useQuery<any[]>({ queryKey: ['workforce', 'schedule-history'], enabled: showHistory, queryFn: () => wf('history?kind=schedule') });
+  const action = useMutation({ mutationFn: ({ path, data }: { path: string; data: any }) => wf(path, data), onSuccess: async () => { await refreshWorkforce(client); toast({ title: 'Jadval saqlandi' }); }, onError: (e: Error) => toast({ title: 'Saqlanmadi', description: e.message, variant: 'destructive' }) });
+  const configs: any[] = q.data?.configs || [], lessons: any[] = q.data?.lessons || [];
+  const visible = lessons.filter(l => (!search || `${l.groupName} ${l.teacherName}`.toLowerCase().includes(search.toLowerCase())) && (!teacherFilter || l.teacherId === teacherFilter) && (!roomFilter || l.room === roomFilter));
+  const dates = [...new Set<string>(visible.map(l => wfDate(l.workDate)))].sort(), rooms = [...new Set<string>(lessons.map(l => l.room).filter(Boolean))].sort();
+  const edit = (g = configs[0]) => setEditing({ groupId: g?.id || '', teacherId: g?.teacherId || teachers.data?.[0]?.id || '', room: g?.room || '', effectiveFrom: shift(uzWorkDate(), 1), slots: g?.slots?.length ? g.slots.map((s: Slot) => ({ ...s })) : [{ weekday: 1, start: 540, end: 630 }] });
+  const slotChange = (i: number, key: string, value: number) => setEditing({ ...editing, slots: editing.slots.map((s: Slot, n: number) => n === i ? { ...s, [key]: value } : s) });
+  const save = async (path: string, data: any, close: () => void) => { try { await action.mutateAsync({ path, data }); close(); } catch {} };
+  const changeLesson = (l: any) => { const n = (s: string) => minute(new Date(s).toLocaleTimeString('en-GB', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit' })); setException({ groupId: l.groupId, date: wfDate(l.workDate), lessonId: l.id, teacherId: l.teacherId, status: l.status, start: n(l.startAt), originalStart: n(l.startAt), end: n(l.endAt), room: l.room || '', note: l.note || '' }); };
+  const teacherOptions = teachers.data?.map(t => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>);
+  return <div className="space-y-5">
+    <div className="flex flex-wrap justify-between gap-3"><div><h1 className="text-2xl font-bold">{admin ? 'Dars jadvali' : 'Dars jadvalim'}</h1><p className="text-sm text-muted-foreground mt-1">Guruhlar, xonalar va o‘qituvchilar uchun yagona jadval</p></div>{admin && <div className="flex gap-2"><Button variant="outline" onClick={() => setShowHistory(true)}><History className="w-4 h-4 mr-1" />Tarix</Button><Button disabled={!configs.length} onClick={() => edit()}><Plus className="w-4 h-4 mr-1" />Jadval tuzish</Button></div>}</div>
+    <Card><CardContent className="p-4 flex flex-wrap gap-3"><Input aria-label="Jadval sanasi" type="date" className="w-40" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} /><div className="flex gap-1">{[['day', 'Kun'], ['week', 'Hafta'], ['month', 'Oy']].map(([id, label]) => <Button key={id} variant={view === id ? 'default' : 'outline'} onClick={() => setView(id)}>{label}</Button>)}</div><Input aria-label="Guruh yoki o‘qituvchini qidirish" className="sm:max-w-xs" placeholder="Guruh yoki o‘qituvchi…" value={search} onChange={e => setSearch(e.target.value)} />{admin && <select aria-label="Jadval o‘qituvchisi" className={selectStyle + ' sm:max-w-[220px]'} value={teacherFilter} onChange={e => setTeacherFilter(e.target.value)}><option value="">Barcha o‘qituvchilar</option>{teacherOptions}</select>}<select aria-label="Jadval xonasi" className={selectStyle + ' sm:max-w-[180px]'} value={roomFilter} onChange={e => setRoomFilter(e.target.value)}><option value="">Barcha xonalar</option>{rooms.map(r => <option key={r}>{r}</option>)}</select></CardContent></Card>
+    {q.error && <p role="alert" className="text-destructive">{q.error.message}</p>}{q.isLoading && <p>Jadval yuklanmoqda…</p>}
+    {configs.some(g => g.issue) && <Card className="border-amber-300"><CardContent className="p-4 space-y-2"><p className="font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4" />Vaqtini aniqlashtirish kerak</p>{configs.filter(g => g.issue).map(g => <div className="flex justify-between gap-3 items-center text-sm" key={g.id}><span>{g.name}: {g.issue}</span>{admin && <Button size="sm" variant="outline" onClick={() => edit(g)}>To‘ldirish</Button>}</div>)}</CardContent></Card>}
+    {!dates.length && !q.isLoading && <Card><CardContent className="p-8 text-center text-muted-foreground">Tanlangan davr yoki filtr uchun dars topilmadi.</CardContent></Card>}
+    <div className={view === 'day' ? 'space-y-4' : 'grid md:grid-cols-2 xl:grid-cols-3 gap-4'}>{dates.map(d => <Card key={d}><CardHeader className="py-4"><CardTitle className="text-base flex items-center gap-2"><CalendarDays className="w-4 h-4" />{dayNames[dateWeekday(d) - 1]} · {d.slice(8)}.{d.slice(5, 7)}</CardTitle></CardHeader><CardContent className="space-y-3">{visible.filter(l => wfDate(l.workDate) === d).sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)).map((l, i) => <div key={l.id || `${l.groupId}-${i}`} className={`border rounded-xl p-3 space-y-1 ${l.status === 'cancelled' ? 'opacity-60 bg-muted' : 'border-l-4 border-l-primary'}`}><div className="flex items-start justify-between gap-2"><p className="font-semibold">{l.groupName}</p>{admin && d >= uzWorkDate() && <Button size="icon" variant="ghost" aria-label={`${l.groupName} darsini o‘zgartirish`} onClick={() => changeLesson(l)}><Pencil className="w-4 h-4" /></Button>}</div><p className="font-medium text-primary">{wfTime(l.startAt)}–{wfTime(l.endAt)}</p><p className="text-sm">{l.teacherName}</p><p className="text-xs text-muted-foreground">{l.room || 'Xona belgilanmagan'}</p>{l.status === 'cancelled' && <Badge variant="outline">Bekor qilingan</Badge>}{l.note && <p className="text-xs">{l.note}</p>}</div>)}</CardContent></Card>)}</div>
+    {admin && !!configs.length && <Card><CardHeader><CardTitle className="text-lg">Guruhlarning haftalik jadvali</CardTitle></CardHeader><CardContent className="space-y-3">{configs.map(g => <div key={g.id} className="border rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{g.name}</p><p className="text-xs text-muted-foreground">{g.slots.map((s: Slot) => `${dayNames[s.weekday - 1]} ${minutesText(s.start)}–${minutesText(s.end)}`).join(' · ') || 'Jadval kiritilmagan'}</p></div><Button size="sm" variant="outline" onClick={() => edit(g)}>Tahrirlash</Button></div>)}</CardContent></Card>}
+    <Dialog open={!!editing} onOpenChange={v => { if (!v) setEditing(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Haftalik jadvalni belgilash</DialogTitle><DialogDescription>O‘zgarish tanlangan sanadan amal qiladi. Oldingi davomat saqlanadi.</DialogDescription></DialogHeader>{editing && <div className="space-y-4"><label className="block text-sm space-y-1">Guruh<select className={selectStyle} value={editing.groupId} onChange={e => { const g = configs.find(g => g.id === Number(e.target.value)); edit(g); }}>{configs.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label><div className="grid sm:grid-cols-2 gap-3"><label className="block text-sm">O‘qituvchi<select className={selectStyle} value={editing.teacherId} onChange={e => setEditing({ ...editing, teacherId: e.target.value })}>{teacherOptions}</select></label><label className="block text-sm">Xona<Input value={editing.room} onChange={e => setEditing({ ...editing, room: e.target.value })} /></label></div><label className="block text-sm">Qaysi sanadan<Input type="date" min={uzWorkDate()} value={editing.effectiveFrom} onChange={e => setEditing({ ...editing, effectiveFrom: e.target.value })} /></label>
+      {editing.slots.map((s: Slot, i: number) => <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end"><label className="text-xs">Kun<select className={selectStyle} value={s.weekday} onChange={e => slotChange(i, 'weekday', Number(e.target.value))}>{dayNames.map((d, n) => <option key={d} value={n + 1}>{d}</option>)}</select></label><label className="text-xs">Boshlanish<Input type="time" value={minutesText(s.start)} onChange={e => slotChange(i, 'start', minute(e.target.value))} /></label><label className="text-xs">Tugash<Input type="time" value={minutesText(s.end)} onChange={e => slotChange(i, 'end', minute(e.target.value))} /></label><Button variant="ghost" size="icon" aria-label="Vaqtni olib tashlash" disabled={editing.slots.length === 1} onClick={() => setEditing({ ...editing, slots: editing.slots.filter((_: any, n: number) => n !== i) })}>×</Button></div>)}<Button variant="outline" onClick={() => setEditing({ ...editing, slots: [...editing.slots, { weekday: 1, start: 540, end: 630 }] })}>Kun / vaqt qo‘shish</Button><div><Button disabled={action.isPending} onClick={() => save('schedule', { ...editing, groupId: Number(editing.groupId) }, () => setEditing(null))}>Jadvalni saqlash</Button></div></div>}</DialogContent></Dialog>
+    <Dialog open={!!exception} onOpenChange={v => { if (!v) setException(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>Alohida darsni o‘zgartirish</DialogTitle><DialogDescription>Faqat shu sanadagi dars: o‘rinbosar, bekor qilish yoki vaqtni ko‘chirish.</DialogDescription></DialogHeader>{exception && <div className="space-y-4"><p>{exception.date}</p><label className="block text-sm">Holat<select className={selectStyle} value={exception.status} onChange={e => setException({ ...exception, status: e.target.value })}><option value="scheduled">Dars bo‘ladi</option><option value="cancelled">Bekor / bayram</option></select></label><label className="block text-sm">O‘qituvchi / o‘rinbosar<select className={selectStyle} value={exception.teacherId} onChange={e => setException({ ...exception, teacherId: e.target.value })}>{teacherOptions}</select></label><div className="grid grid-cols-2 gap-3"><label className="text-sm">Boshlanish<Input type="time" value={minutesText(exception.start)} onChange={e => setException({ ...exception, start: minute(e.target.value) })} /></label><label className="text-sm">Tugash<Input type="time" value={minutesText(exception.end)} onChange={e => setException({ ...exception, end: minute(e.target.value) })} /></label></div><label className="block text-sm">Xona<Input value={exception.room} onChange={e => setException({ ...exception, room: e.target.value })} /></label><label className="block text-sm">Sabab<Textarea value={exception.note} onChange={e => setException({ ...exception, note: e.target.value })} /></label><Button disabled={action.isPending || exception.note.trim().length < 3} onClick={() => save('lesson-exception', exception, () => setException(null))}>Darsni saqlash</Button></div>}</DialogContent></Dialog>
+    <Dialog open={showHistory} onOpenChange={setShowHistory}><DialogContent className="max-h-[85dvh] overflow-y-auto"><DialogHeader><DialogTitle>Jadval o‘zgarishlari</DialogTitle><DialogDescription>Saqlangan jadval versiyalari.</DialogDescription></DialogHeader>{history.data?.map(h => <div key={h.id} className="border rounded-lg p-3 text-sm"><p>Guruh №{h.detail.groupId} · {h.detail.effectiveFrom} dan</p><p>{new Date(h.createdAt).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })}</p></div>)}</DialogContent></Dialog>
+  </div>;
 }

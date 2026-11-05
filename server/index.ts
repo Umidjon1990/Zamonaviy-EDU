@@ -1,4 +1,5 @@
 import { migrateAudit } from "./audit-migration";
+import { migrateWorkforce } from "./workforce-migration";
 import { migrateFinance } from "./finance-migration";
 import { pool } from "./storage";
 import { publicJson } from "./security";
@@ -248,6 +249,7 @@ app.use((req, res, next) => {
   await fixDatabaseSchema();
   await migrateFinance(pool);
   await migrateAudit(pool);
+  await migrateWorkforce(pool);
   app.get("/api/health", async(_req,res)=>{try{await pool.query("SELECT 1");res.json({status:"ok",version:process.env.RAILWAY_GIT_COMMIT_SHA||"local"});}catch{res.status(503).json({status:"unavailable"});}});
   
   // Register object storage routes for file uploads

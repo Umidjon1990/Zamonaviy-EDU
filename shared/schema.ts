@@ -269,6 +269,7 @@ export type Grade = typeof grades.$inferSelect;
 
 // Expenses (Xarajatlar)
 export const expenses = pgTable("expenses", {
+  payrollPeriod: text("payroll_period"),
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   title: text("title").notNull(),

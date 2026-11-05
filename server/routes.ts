@@ -1,6 +1,7 @@
 import { createBillingService } from "./billing-service";
 import { createDomainService } from "./domain-service";
 import { registerAccessGuards } from "./access";
+import { registerWorkforceRoutes } from "./workforce-routes";
 import { activeTenant, registerAccounts } from "./accounts";
 import { monthBounds, uzDate, parseClassTime } from "../shared/domain";
 import { createSuperAdminAuth } from "./security";
@@ -110,6 +111,12 @@ export async function registerRoutes(
 
   registerAccounts(app);
   registerAccessGuards(app,requireTenantAuth);
+  const workforce = registerWorkforceRoutes(app, pool, requireTenantAuth, async tenantId => activeTenant(await storage.getTenant(tenantId)));
+  let workforceBusy = false;
+  const runWorkforce = async () => { if(workforceBusy)return; workforceBusy=true;try{await workforce.tick();}catch{console.error('Workforce reconciliation failed');}finally{workforceBusy=false;} };
+  const workforceTimer = setInterval(runWorkforce, 60000); workforceTimer.unref();
+  httpServer.once('listening', () => { void runWorkforce(); });
+  httpServer.once('close', () => clearInterval(workforceTimer));
 
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
@@ -1567,8 +1574,9 @@ export async function registerRoutes(
       const month = req.query.month ? parseInt(req.query.month as string) : new Date().getMonth() + 1;
       const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
       
-      const salary = await storage.getTeacherSalary(getUserId(req), getTenantId(req), month, year);
-      res.json(salary);
+      const period = `${year}-${String(month).padStart(2,'0')}`;
+      const payroll = await workforce.payroll(actor(req), getUserId(req), period);
+      res.json({...payroll,salary:payroll.remaining,salaryPercent:(req as any).authUser?.salaryPercent||0});
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch teacher salary" });
     }
@@ -1603,13 +1611,14 @@ export async function registerRoutes(
         return pDate >= startDate && pDate <= endDate;
       });
 
-      const totalPayments = teacherPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-      const totalEarning = teacherPayments.reduce((sum: number, p: any) => sum + (p.teacherEarning || 0), 0);
-      const calculatedSalary = totalEarning;
+      const payrolls = await workforce.payrollRange(actor(req),teacherId,Array.from({length:toMonth-fromMonth+1},(_,i)=>`${year}-${String(fromMonth+i).padStart(2,'0')}`));
+      const totalPayments = payrolls.reduce((n,p)=>n+(p.totalPayments||0),0);
+      const calculatedSalary = payrolls.reduce((n,p)=>n+p.gross,0);
 
       const advanceExpenses = await storage.getExpensesByTeacher(teacherId, tenantId, startDate, endDate);
-      const totalAdvance = advanceExpenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-      const salary = calculatedSalary - totalAdvance;
+      const totalAdvance = payrolls.reduce((n,p)=>n+p.paid,0);
+      const totalFines = payrolls.reduce((n,p)=>n+p.fines,0);
+      const salary = payrolls.reduce((n,p)=>n+p.remaining,0);
 
       let studentsData: any[] = [];
       if (includeStudents) {
@@ -1650,6 +1659,8 @@ export async function registerRoutes(
         totalPayments,
         calculatedSalary,
         totalAdvance,
+        totalFines,
+        payrolls,
         salary,
         advanceExpenses,
         paymentCount: teacherPayments.length,

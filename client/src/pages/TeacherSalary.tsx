@@ -152,7 +152,7 @@ export default function TeacherSalary() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card data-testid="card-salary">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Oylik</CardTitle>
+            <CardTitle className="text-sm font-medium">To‘lash qoldig‘i</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -210,6 +210,8 @@ export default function TeacherSalary() {
           </CardContent>
         </Card>
       </div>
+
+      <Card><CardContent className="p-4 grid gap-3 sm:grid-cols-3"><div><p className="text-sm text-muted-foreground">Hisoblangan haq</p><b>{formatCurrency(salary?.gross || 0)}</b></div><div><p className="text-sm text-muted-foreground">To‘langan / avans</p><b>{formatCurrency(salary?.paid || 0)}</b></div><div><p className="text-sm text-muted-foreground">Jarima ushlanmasi</p><b>{formatCurrency(salary?.fines || 0)}</b><p className="text-xs text-muted-foreground">{salary?.closed ? 'Oy hisobi yopilgan' : 'Dastlabki hisob'}</p></div></CardContent></Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card data-testid="card-debt-students">
