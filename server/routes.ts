@@ -111,7 +111,7 @@ export async function registerRoutes(
 
   registerAccounts(app);
   registerAccessGuards(app,requireTenantAuth);
-  const workforce = registerWorkforceRoutes(app, pool, requireTenantAuth);
+  const workforce = registerWorkforceRoutes(app, pool, requireTenantAuth, async tenantId => activeTenant(await storage.getTenant(tenantId)));
   let workforceBusy = false;
   const runWorkforce = async () => { if(workforceBusy)return; workforceBusy=true;try{await workforce.tick();}catch{console.error('Workforce reconciliation failed');}finally{workforceBusy=false;} };
   const workforceTimer = setInterval(runWorkforce, 60000); workforceTimer.unref();

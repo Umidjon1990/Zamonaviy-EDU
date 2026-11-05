@@ -45,7 +45,7 @@ const allNavItems = [
   { icon: BookOpen, label: "Fanlar", href: "/subjects", roles: ["markaz_admin"] },
   { icon: Calendar, label: translations.nav.schedule, href: "/schedule", roles: ["markaz_admin", "teacher"] },
   { icon: UserCheck, label: "O‘qituvchi davomati", href: "/staff-attendance", roles: ["markaz_admin"] },
-  { icon: UserCheck, label: "QR / Keldi-kettim", href: "/teacher-checkin", roles: ["teacher"] },
+  { icon: UserCheck, label: "Keldi-kettim", href: "/teacher-checkin", roles: ["teacher"] },
   { icon: Shield, label: "Jarimalarim", href: "/teacher-fines", roles: ["teacher"] },
   { icon: CreditCard, label: translations.nav.payments, href: "/payments", roles: ["markaz_admin"] },
   { icon: Receipt, label: "Xarajatlar", href: "/expenses", roles: ["markaz_admin"] },

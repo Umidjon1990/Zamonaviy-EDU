@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { createWorkforceFace } from './workforce-face';
 import { FinanceError } from './payment-service';
 import { monthBounds } from '../shared/domain';
 import { atMinute, dateInput, dateWeekday, locationProblem, monthInput, payrollAmounts, scanInput, scheduleInput, settingsInput, strictLegacySlots, uzWorkDate, type Slot } from '../shared/workforce';
@@ -13,7 +14,7 @@ const dateText = (v: any) => v instanceof Date ? v.toISOString().slice(0, 10) : 
 export function camel(row: any): any { if (!row) return row; return Object.fromEntries(Object.entries(row).map(([k, v]) => [k.replace(/_([a-z])/g, (_, c) => c.toUpperCase()), v])); }
 const same = (a: string, b: string) => { const aa = Buffer.from(a), bb = Buffer.from(b); return aa.length === bb.length && timingSafeEqual(aa, bb); };
 
-export function createWorkforceService(pool: any, clock = () => new Date()) {
+export function createWorkforceService(pool: any, clock = () => new Date(), tenantAllowed = async (_tenantId: number) => true) {
   async function tx<T>(a: WorkforceActor, fn: (c: any) => Promise<T>): Promise<T> {
     const c = await pool.connect();
     try { await c.query('BEGIN'); c.workforceAssignmentsApplied=false; await c.query('SELECT pg_advisory_xact_lock(830,$1)', [a.tenantId]); const value = await fn(c); await c.query('COMMIT'); return value; }
@@ -91,7 +92,7 @@ export function createWorkforceService(pool: any, clock = () => new Date()) {
       AND EXISTS(SELECT 1 FROM workforce_lessons l WHERE l.tenant_id=d.tenant_id AND l.teacher_id=d.teacher_id AND l.work_date=d.work_date AND l.status='scheduled')`, [a.tenantId, date])).rows;
     for (const day of days) {
       if (day.check_in && day.late_minutes > day.grace_minutes) await automaticFine(c, a, day, 'late');
-      else if (!day.check_in && clock() > new Date(day.expected_end)) await automaticFine(c, a, day, 'absence');
+      else if (settings.attendance_method === 'qr' && !day.check_in && clock() > new Date(day.expected_end)) await automaticFine(c, a, day, 'absence');
     }
   }
   async function settings(a: WorkforceActor) { return tx(a, async c => { const s = await setup(c, a); const { qr_secret, ...rest } = s; return camel(rest); }); }
@@ -99,16 +100,29 @@ export function createWorkforceService(pool: any, clock = () => new Date()) {
     admin(a); const d = settingsInput.parse(input);
     return tx(a, async c => {
       const old = await setup(c, a);
+      const method = d.attendanceMethod ?? old.attendance_method;
+      const switching = method !== old.attendance_method;
+      if (switching && method !== 'face') fail('Face ID uchun QR usuliga qaytish yopiq');
+      if (d.enabled && method === 'qr' && (d.latitude === null || d.longitude === null)) fail('Avval xaritada markazni belgilang');
+      if (d.enabled && method === 'face' && !(await face.isReady(c, a.tenantId))) fail('Avval terminalni ulang va kamida bitta o‘qituvchini ro‘yxatdan o‘tkazing');
+      const trialMode = switching || (d.enabled && !old.enabled && method === 'face') ? true : d.trialMode;
       if (d.enabled && !old.enabled) {
         for (const g of await configs(c, a, uzWorkDate(clock()))) if (g.slots.length && !g.versionId) await c.query("INSERT INTO workforce_schedule_versions(tenant_id,group_id,teacher_id,room,slots,effective_from,created_by) VALUES($1,$2,$3,$4,$5,'1970-01-01',$6)", [a.tenantId, g.id, g.teacherId, g.room, JSON.stringify(g.slots), a.userId]);
       }
       await c.query(`UPDATE workforce_settings SET enabled=$2,trial_mode=$3,latitude=$4,longitude=$5,grace_minutes=$6,early_minutes=$7,
-        started_on=CASE WHEN $2 AND (started_on IS NULL OR enabled=FALSE) THEN $8 ELSE started_on END,
-        reconciled_through=CASE WHEN $2 AND enabled=FALSE THEN NULL ELSE reconciled_through END,updated_at=NOW() WHERE tenant_id=$1`, [a.tenantId, d.enabled, d.trialMode, d.latitude, d.longitude, d.graceMinutes, d.earlyMinutes, uzWorkDate(clock())]);
-      await log(c, a, 'settings', a.tenantId, 'updated', { ...d, previousEnabled: old.enabled }); return { success: true };
+        started_on=CASE WHEN $2 AND (started_on IS NULL OR enabled=FALSE OR attendance_method<>$9) THEN $8 ELSE started_on END,
+        reconciled_through=CASE WHEN $2 AND (enabled=FALSE OR attendance_method<>$9) THEN NULL ELSE reconciled_through END,attendance_method=$9,updated_at=NOW() WHERE tenant_id=$1`, [a.tenantId, d.enabled, trialMode, d.latitude, d.longitude, d.graceMinutes, d.earlyMinutes, uzWorkDate(clock()), method]);
+      if (method === 'face' && (switching || (d.enabled && !old.enabled))) {
+        await c.query('UPDATE workforce_days SET trial_mode=TRUE WHERE tenant_id=$1 AND work_date>=$2 AND check_in IS NULL', [a.tenantId, uzWorkDate(clock())]);
+      }
+      await log(c, a, 'settings', a.tenantId, 'updated', { ...d, attendanceMethod: method, trialMode, previousEnabled: old.enabled }); return { success: true };
     });
   }
-  async function qr(a: WorkforceActor) { admin(a); return tx(a, async c => `ZAMONAVIY-CRM:ATTENDANCE:${(await setup(c, a)).qr_secret}`); }
+  async function qr(a: WorkforceActor) { admin(a); return tx(a, async c => {
+    const s = await setup(c, a);
+    if (s.attendance_method !== 'qr') fail('Markazda Face ID davomat ishlatiladi', 403);
+    return `ZAMONAVIY-CRM:ATTENDANCE:${s.qr_secret}`;
+  }); }
   async function registerDevice(a: WorkforceActor, token: string | undefined, label: string) {
     teacher(a); return tx(a, async c => {
       if (token) { const old = (await c.query('SELECT id,status,label FROM workforce_devices WHERE tenant_id=$1 AND teacher_id=$2 AND secret_hash=$3 AND status!=\'revoked\'', [a.tenantId, a.userId, hash(token)])).rows[0]; if (old) return { device: old, token }; }
@@ -173,36 +187,54 @@ export function createWorkforceService(pool: any, clock = () => new Date()) {
       (SELECT COUNT(*)::int FROM workforce_lessons l WHERE l.tenant_id=d.tenant_id AND l.teacher_id=d.teacher_id AND l.work_date=d.work_date AND l.status='scheduled') AS lesson_count
       FROM workforce_days d JOIN users u ON u.id=d.teacher_id AND u.tenant_id=d.tenant_id WHERE d.tenant_id=$1 AND d.work_date=$2 AND ($3::text IS NULL OR d.teacher_id=$3) ORDER BY d.expected_start`, [a.tenantId, date, a.role === 'teacher' ? a.userId : null])).rows;
     const s = await setup(c, a);
-    return { date, graceMinutes: s.grace_minutes, trialMode: s.trial_mode, enabled: s.enabled, days: days.map((d: any) => ({ ...camel(d), state: d.excused || !d.lesson_count ? 'excused' : d.check_out ? 'left' : d.check_in ? (d.late_minutes > d.grace_minutes ? 'late' : 'present') : clock() > new Date(d.expected_end) ? 'missing' : 'expected' })) };
+    return { date, attendanceMethod: s.attendance_method, graceMinutes: s.grace_minutes, trialMode: s.trial_mode, enabled: s.enabled, days: days.map((d: any) => ({ ...camel(d), state: d.excused || !d.lesson_count ? 'excused' : d.check_out ? 'left' : d.check_in ? (d.late_minutes > d.grace_minutes ? 'late' : 'present') : clock() > new Date(d.expected_end) ? 'missing' : 'expected' })) };
   }); }
   async function scan(a: WorkforceActor, token: string | undefined, input: any) { teacher(a); const d = scanInput.parse(input); return tx(a, async c => {
-    const s = await setup(c, a), now = clock(), date = uzWorkDate(now);
-    if (!s.enabled || s.latitude === null || s.longitude === null) fail('QR davomat hali admin tomonidan yoqilmagan');
+    const s = await setup(c, a), now = clock();
+    if (s.attendance_method !== 'qr' || !s.enabled || s.latitude === null || s.longitude === null) fail('QR davomat hali admin tomonidan yoqilmagan');
     if (!same(d.qr, `ZAMONAVIY-CRM:ATTENDANCE:${s.qr_secret}`)) fail('QR kod ushbu markazga tegishli emas');
     const device = token && (await c.query("SELECT id FROM workforce_devices WHERE tenant_id=$1 AND teacher_id=$2 AND secret_hash=$3 AND status='active'", [a.tenantId, a.userId, hash(token)])).rows[0];
     if (!device) fail('Ushbu qurilma tasdiqlanmagan. Admin bilan bog‘laning.', 403);
     const issue = locationProblem(d, { latitude: Number(s.latitude), longitude: Number(s.longitude) }, now); if (issue) fail(issue);
+    const result = await recordAttendance(c, a, d.action, now, s, { deviceId: device.id, accuracy: d.accuracy, latitude: d.latitude, longitude: d.longitude, capturedAt: d.capturedAt });
+    if (!result.duplicate) await c.query('UPDATE workforce_devices SET last_used_at=$2 WHERE id=$1', [device.id, now]);
+    return result;
+  }); }
+  async function recordAttendance(c: any, a: WorkforceActor, action: 'in' | 'out', now: Date, s: any, detail: Record<string, unknown>, actorId = a.userId) {
+    const date = uzWorkDate(now);
     const { lessons } = await materialize(c, a, date);
     if (!lessons.some((l: any) => l.teacher_id === a.userId && l.status === 'scheduled')) fail('Bugun jadvalingizda dars yo‘q');
     const day = (await c.query('SELECT * FROM workforce_days WHERE tenant_id=$1 AND teacher_id=$2 AND work_date=$3 FOR UPDATE', [a.tenantId, a.userId, date])).rows[0];
     if (!day || day.excused) fail('Bugun sizga davomat talab qilinmaydi');
-    if (d.action === 'in') {
+    if (action === 'in') {
       if (day.check_in) return { success: true, duplicate: true, time: day.check_in, action: 'in' };
       if (now < new Date(+new Date(day.expected_start) - s.early_minutes * 60000)) fail('Kelishni qayd etish vaqti hali boshlanmagan');
       if (now >= new Date(day.expected_end)) fail('Bugungi darslar tugagan. Admin orqali holatni aniqlashtiring.');
       const late = Math.max(0, Math.ceil((+now - +new Date(day.expected_start)) / 60000));
-      await c.query('UPDATE workforce_days SET check_in=$2,late_minutes=$3 WHERE id=$1', [day.id, now, late]);
+      await c.query('UPDATE workforce_days SET check_in=$2,late_minutes=$3,check_in_issue=NULL WHERE id=$1', [day.id, now, late]);
       if (late > day.grace_minutes) await automaticFine(c, a, { ...day, late_minutes: late }, 'late');
     } else {
       if (day.check_out) return { success: true, duplicate: true, time: day.check_out, action: 'out' };
       if (!day.check_in) fail('Avval kelishingizni qayd eting');
       if (now < new Date(day.expected_end)) fail('Oxirgi darsingiz hali tugamagan');
-      await c.query('UPDATE workforce_days SET check_out=$2 WHERE id=$1', [day.id, now]);
+      await c.query('UPDATE workforce_days SET check_out=$2,check_out_issue=NULL WHERE id=$1', [day.id, now]);
     }
-    await c.query('UPDATE workforce_devices SET last_used_at=$2 WHERE id=$1', [device.id, now]);
-    await log(c, a, 'day', day.id, d.action, { deviceId: device.id, accuracy: d.accuracy, latitude: d.latitude, longitude: d.longitude, capturedAt: d.capturedAt }, a.userId);
-    return { success: true, time: now, action: d.action };
-  }); }
+    await log(c, { ...a, userId: actorId }, 'day', day.id, action, detail, a.userId);
+    return { success: true, duplicate: false, time: now, action };
+  }
+  async function reportFaceIssue(c: any, a: WorkforceActor, action: 'in' | 'out', reason: string, now: Date, terminalId: string) {
+    const date = uzWorkDate(now);
+    await materialize(c, a, date);
+    const column = action === 'in' ? 'check_in' : 'check_out';
+    const day = (await c.query(`UPDATE workforce_days SET ${column}_issue=$4
+      WHERE tenant_id=$1 AND teacher_id=$2 AND work_date=$3 AND ${column} IS NULL AND excused=FALSE
+        AND ${column}_issue IS DISTINCT FROM $4
+        AND EXISTS(SELECT 1 FROM workforce_lessons l WHERE l.tenant_id=$1 AND l.teacher_id=$2 AND l.work_date=$3 AND l.status='scheduled')
+      RETURNING id`, [a.tenantId, a.userId, date, reason])).rows[0];
+    if (day) await log(c, { ...a, userId: `face-terminal:${terminalId}` }, 'day', day.id, 'face_review', { action, reason, terminalId }, a.userId);
+    return { success: true };
+  }
+  const face = createWorkforceFace({ pool, tx, clock, log, validTeacher, setup, recordAttendance, reportFaceIssue, tenantAllowed });
   async function fineTypes(a: WorkforceActor) { return tx(a, async c => { await setup(c, a); return (await c.query('SELECT * FROM workforce_fine_types WHERE tenant_id=$1 ORDER BY id', [a.tenantId])).rows.map(camel); }); }
   async function saveFineType(a: WorkforceActor, id: number | null, input: any) { admin(a); const d = z.object({ name: z.string().trim().min(3).max(200), amount: z.number().int().min(0).max(1_000_000_000), active: z.boolean() }).strict().parse(input); return tx(a, async c => {
     const row = id ? (await c.query('UPDATE workforce_fine_types SET name=$3,amount=$4,active=$5 WHERE tenant_id=$1 AND id=$2 RETURNING *', [a.tenantId, id, d.name, d.amount, d.active])).rows[0] : (await c.query('INSERT INTO workforce_fine_types(tenant_id,name,amount,active) VALUES($1,$2,$3,$4) RETURNING *', [a.tenantId, d.name, d.amount, d.active])).rows[0];
@@ -250,7 +282,7 @@ export function createWorkforceService(pool: any, clock = () => new Date()) {
     for (const time of [d.checkIn, d.checkOut]) if (time && (uzWorkDate(new Date(time)) !== d.date || new Date(time) > clock())) fail('Qayd vaqti sana yoki hozirgi vaqtga mos emas');
     if ((await c.query("SELECT id FROM workforce_fines WHERE tenant_id=$1 AND teacher_id=$2 AND work_date=$3 AND source='automatic' AND status='approved'", [a.tenantId, d.teacherId, d.date])).rows.length) fail('Avval tasdiqlangan avtomatik jarimani bekor qiling');
     const late = d.checkIn ? Math.max(0, Math.ceil((Date.parse(d.checkIn) - +new Date(old.expected_start)) / 60000)) : 0;
-    await c.query('UPDATE workforce_days SET excused=$4,check_in=$5,check_out=$6,late_minutes=$7,note=$8 WHERE tenant_id=$1 AND teacher_id=$2 AND work_date=$3', [a.tenantId, d.teacherId, d.date, d.excused, d.checkIn, d.checkOut, late, d.note]);
+    await c.query('UPDATE workforce_days SET excused=$4,check_in=$5,check_out=$6,late_minutes=$7,note=$8,check_in_issue=NULL,check_out_issue=NULL WHERE tenant_id=$1 AND teacher_id=$2 AND work_date=$3', [a.tenantId, d.teacherId, d.date, d.excused, d.checkIn, d.checkOut, late, d.note]);
     // Keep the original automatic case as history; corrections do not silently rewrite money.
     await c.query("UPDATE workforce_fines SET status='rejected',note=note||$4 WHERE tenant_id=$1 AND teacher_id=$2 AND work_date=$3 AND source='automatic' AND status='draft'", [a.tenantId, d.teacherId, d.date, '\nDavomat tuzatildi: ' + d.note]);
     await log(c, a, 'day', old.id, 'corrected', { before: camel(old), after: d }, d.teacherId); return { success: true };
@@ -314,5 +346,5 @@ export function createWorkforceService(pool: any, clock = () => new Date()) {
       await tx(a, c => reconcile(c, a, today));
     }
   }
-  return { settings, updateSettings, qr, registerDevice, devices, decideDevice, saveSchedule, schedule, dashboard, scan, fineTypes, saveFineType, fines, createFine, explainFine, decideFine, updateDay, updateLesson, history, payroll, payrollRange, closePayroll, tick };
+  return { face, settings, updateSettings, qr, registerDevice, devices, decideDevice, saveSchedule, schedule, dashboard, scan, fineTypes, saveFineType, fines, createFine, explainFine, decideFine, updateDay, updateLesson, history, payroll, payrollRange, closePayroll, tick };
 }

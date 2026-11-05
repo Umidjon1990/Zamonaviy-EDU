@@ -1,11 +1,13 @@
-# O‘qituvchi QR davomati — foydalanish
+# Avvalgi QR davomati — foydalanish
+
+Bu qo‘llanma QR usuli saqlangan markazlar uchun. Yangi markazlar va Face ID’ga o‘tish uchun [terminal qo‘llanmasiga](../face-terminal/README.md) qarang.
 
 ## Birinchi sozlash
-1. Admin: **O‘qituvchi davomati → Xarita va QR**.
+1. Admin: **O‘qituvchilar davomati → Sozlamalar**.
 2. Manzilni qidiring yoki xaritani bosing. Belgini markaz kirishiga suring.
    **Hozirgi joylashuvim** ham mavjud. 50 metr doirani tekshiring.
 3. Kechikish imtiyozi boshlanishda 5 daqiqa; kelish birinchi darsdan 30 daqiqa oldin ochiladi.
-4. Dastlab **Sinov rejimi** bilan **QR davomatni yoqish**ni belgilang va saqlang.
+4. Dastlab **Sinov rejimi** bilan **Davomatni yoqish**ni belgilang va saqlang.
    Yangi tizim dastlab o‘chiq. Aniqlanmagan koordinata o‘rniga taxminiy manzil qo‘yilmaydi.
 5. QR rasmni PNG yuklab olib, chop eting. U doimiy, avtomatik yangilanmaydi.
 6. **Dars jadvali**da barcha guruhlarning boshlanish/tugash va xona ma’lumotlarini tekshiring.
@@ -13,8 +15,8 @@
    bugungi qayd etilgan dars alohida istisno orqali tahrirlanadi.
 
 ## Qurilma va skanerlash
-- O‘qituvchi: **QR / Keldi-kettim** bo‘limida telefoniga nom qo‘yib ulash so‘rovini yuboradi.
-- Admin: **Qurilmalar**da shu so‘rovni tasdiqlaydi. Avvalgi faol qurilma bekor qilinadi.
+- O‘qituvchi: **Keldi-kettim** bo‘limida telefoniga nom qo‘yib ulash so‘rovini yuboradi.
+- Admin: **QR qurilmalari**da shu so‘rovni tasdiqlaydi. Avvalgi faol qurilma bekor qilinadi.
 - O‘qituvchi shu brauzerda kamera va lokatsiyaga ruxsat berib **Keldim — QR**ni bosadi.
 - **Ketdim — QR** oxirgi dars tugagach ishlaydi. Takror skan yangi qayd yaratmaydi.
 - Telefon, brauzer almashtirilsa yoki sayt ma’lumotlari o‘chirilsa admin qayta ulaydi.

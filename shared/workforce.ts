@@ -8,7 +8,7 @@ export const monthInput = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 export const moneyInput = z.coerce.number().int().min(0).max(1_000_000_000);
 export const slotInput = z.object({ weekday: z.number().int().min(1).max(7), start: z.number().int().min(0).max(1439), end: z.number().int().min(1).max(1440) }).strict().refine(s => s.end > s.start, 'Tugash vaqti boshlanishdan keyin bo‘lsin');
 export const scheduleInput = z.object({ groupId: z.number().int().positive(), teacherId: z.string().min(1).max(200), room: z.string().trim().max(200), effectiveFrom: dateInput, slots: z.array(slotInput).min(1).max(35) }).strict();
-export const settingsInput = z.object({ enabled: z.boolean(), trialMode: z.boolean(), latitude: z.number().min(-90).max(90).nullable(), longitude: z.number().min(-180).max(180).nullable(), graceMinutes: z.number().int().min(0).max(60), earlyMinutes: z.number().int().min(0).max(120) }).strict().refine(v => !v.enabled || (v.latitude !== null && v.longitude !== null), 'Avval xaritada markazni belgilang');
+export const settingsInput = z.object({ attendanceMethod: z.enum(['qr', 'face']).optional(), enabled: z.boolean(), trialMode: z.boolean(), latitude: z.number().min(-90).max(90).nullable(), longitude: z.number().min(-180).max(180).nullable(), graceMinutes: z.number().int().min(0).max(60), earlyMinutes: z.number().int().min(0).max(120) }).strict();
 export const scanInput = z.object({ action: z.enum(['in', 'out']), qr: z.string().min(20).max(500), latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180), accuracy: z.number().positive().max(10000), capturedAt: z.number().int().positive() }).strict();
 export type Slot = z.infer<typeof slotInput>;
 

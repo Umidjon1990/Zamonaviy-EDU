@@ -6,6 +6,29 @@ CREATE TABLE IF NOT EXISTS workforce_settings (
  grace_minutes INTEGER NOT NULL DEFAULT 5, early_minutes INTEGER NOT NULL DEFAULT 30,
  started_on DATE, reconciled_through DATE, qr_secret TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE workforce_settings ADD COLUMN IF NOT EXISTS attendance_method TEXT NOT NULL DEFAULT 'qr'
+ CHECK(attendance_method IN ('qr','face'));
+ALTER TABLE workforce_settings ALTER COLUMN attendance_method SET DEFAULT 'face';
+CREATE TABLE IF NOT EXISTS workforce_face_terminals (
+ id UUID PRIMARY KEY, tenant_id INTEGER NOT NULL, label TEXT NOT NULL, public_key TEXT NOT NULL,
+ paired_at TIMESTAMPTZ NOT NULL, last_seen_at TIMESTAMPTZ NOT NULL, revoked_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS workforce_one_terminal ON workforce_face_terminals(tenant_id) WHERE revoked_at IS NULL;
+CREATE TABLE IF NOT EXISTS workforce_face_pairing (
+ tenant_id INTEGER PRIMARY KEY, code_hash TEXT NOT NULL UNIQUE, label TEXT NOT NULL,
+ expires_at TIMESTAMPTZ NOT NULL, terminal_id UUID
+);
+CREATE TABLE IF NOT EXISTS workforce_face_enrollments (
+ tenant_id INTEGER NOT NULL, teacher_id TEXT NOT NULL, terminal_id UUID NOT NULL,
+ id UUID NOT NULL UNIQUE, consent_ref TEXT NOT NULL, code_hash TEXT UNIQUE,
+ expires_at TIMESTAMPTZ NOT NULL, enrolled_at TIMESTAMPTZ, revoked_at TIMESTAMPTZ,
+ PRIMARY KEY(tenant_id,teacher_id)
+);
+CREATE TABLE IF NOT EXISTS workforce_face_receipts (
+ terminal_id UUID NOT NULL, request_id UUID NOT NULL, digest TEXT NOT NULL,
+ response JSONB NOT NULL, expires_at TIMESTAMPTZ NOT NULL, PRIMARY KEY(terminal_id,request_id)
+);
+CREATE INDEX IF NOT EXISTS workforce_face_receipt_expiry ON workforce_face_receipts(expires_at);
 CREATE TABLE IF NOT EXISTS workforce_devices (
  id TEXT PRIMARY KEY, tenant_id INTEGER NOT NULL, teacher_id TEXT NOT NULL, secret_hash TEXT NOT NULL,
  label TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('pending','active','revoked')),
@@ -31,6 +54,8 @@ CREATE TABLE IF NOT EXISTS workforce_days (
  late_minutes INTEGER NOT NULL DEFAULT 0, grace_minutes INTEGER NOT NULL DEFAULT 5, excused BOOLEAN NOT NULL DEFAULT FALSE, note TEXT,
  trial_mode BOOLEAN NOT NULL DEFAULT TRUE, UNIQUE(tenant_id,teacher_id,work_date)
 );
+ALTER TABLE workforce_days ADD COLUMN IF NOT EXISTS check_in_issue TEXT;
+ALTER TABLE workforce_days ADD COLUMN IF NOT EXISTS check_out_issue TEXT;
 CREATE TABLE IF NOT EXISTS workforce_events (
  id SERIAL PRIMARY KEY, tenant_id INTEGER NOT NULL, teacher_id TEXT, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
  action TEXT NOT NULL, actor_id TEXT NOT NULL, detail JSONB NOT NULL DEFAULT '{}', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

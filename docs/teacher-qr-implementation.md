@@ -1,6 +1,6 @@
 # Zamonaviy CRM: o‘qituvchi QR davomati — bajarish topshirig‘i
 
-2026-11-02. Foydalanuvchi bilan kelishilgan talablar asosida.
+2026-11-02. QR usulining tarixiy topshirig‘i. Face ID talablari va ish tartibi [terminal qo‘llanmasida](../face-terminal/README.md) keltirilgan.
 
 ## Maqsad
 Umidjon1990/Zamonaviy-EDU loyihasida dars jadvali, o‘qituvchi keldi-kettisi,

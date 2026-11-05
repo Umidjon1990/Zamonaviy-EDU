@@ -25,6 +25,14 @@ function ErrorText({ error }: { error?: Error | null }) { return error ? <p role
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block space-y-1.5 text-sm font-medium"><span>{label}</span>{isValidElement(children) ? cloneElement(children as React.ReactElement<any>, {"aria-label":label}) : children}</label>; }
 function Modal({ title, open, onClose, children }: { title: string; open: boolean; onClose: () => void; children: React.ReactNode }) { return <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>Ma’lumotlarni tekshirib, amalni saqlang.</DialogDescription></DialogHeader>{children}</DialogContent></Dialog>; }
 
+const faceIssues: Record<string, string> = {
+  camera: 'Kamera ishlamadi',
+  face_mismatch: 'Yuz mos kelmadi',
+  liveness: 'Jonli yuz tasdiqlanmadi',
+  quality: 'Tasvir sifati yetarli emas',
+  template: 'Yuz andozasi topilmadi',
+};
+
 export function WorkforceToday({ compact = false, admin = true }: { compact?: boolean; admin?: boolean }) {
   const [date, setDate] = useState(uzWorkDate()), [correction, setCorrection] = useState<any>(null), [note, setNote] = useState(''), [excused, setExcused] = useState(false), [inTime, setInTime] = useState(''), [outTime, setOutTime] = useState('');
   const q = useData('dashboard?date=' + date, true, 20000), lessons = useData('schedule?from=' + date + '&to=' + date, true, 30000), action = useAction();
@@ -33,18 +41,89 @@ export function WorkforceToday({ compact = false, admin = true }: { compact?: bo
   const submit = async () => { await action.mutateAsync({ path: 'day-correction', data: { teacherId: correction.teacherId, date, excused, checkIn: inTime ? `${date}T${inTime}:00+05:00` : null, checkOut: outTime ? `${date}T${outTime}:00+05:00` : null, note } }); setCorrection(null); };
   return <Card>
     <CardHeader className="gap-3"><div className="flex flex-wrap items-center justify-between gap-3"><CardTitle className="flex items-center gap-2"><CalendarDays className="w-5 h-5" />{admin ? 'Bugungi darslar va o‘qituvchilar' : 'Mening keldi-kettim'}</CardTitle><Input className="w-40" aria-label="Davomat sanasi" type="date" max={uzWorkDate()} value={date} onChange={e => setDate(e.target.value)} /></div>
-      <div className="flex flex-wrap gap-2 text-sm"><Badge variant="outline">Kutilgan: {days.filter(d => d.lessonCount > 0).length}</Badge><Badge variant="outline">Kelgan: {days.filter(d => d.checkIn).length}</Badge><Badge variant="outline">Kechikkan: {days.filter(d => d.lateMinutes > d.graceMinutes).length}</Badge><Badge variant="outline">Tekshiruv: {days.filter(d => d.state === 'missing' || (d.checkIn && !d.checkOut && new Date(d.expectedEnd) < new Date())).length}</Badge>{q.data?.trialMode && <Badge variant="secondary">Sinov rejimi</Badge>}</div>
+      <div className="flex flex-wrap gap-2 text-sm"><Badge variant="outline">Kutilgan: {days.filter(d => d.lessonCount > 0).length}</Badge><Badge variant="outline">Kelgan: {days.filter(d => d.checkIn).length}</Badge><Badge variant="outline">Kechikkan: {days.filter(d => d.lateMinutes > d.graceMinutes).length}</Badge><Badge variant="outline">Tekshiruv: {days.filter(d => d.state === 'missing' || d.checkInIssue || d.checkOutIssue || (d.checkIn && !d.checkOut && new Date(d.expectedEnd) < new Date())).length}</Badge>{q.data?.trialMode && <Badge variant="secondary">Sinov rejimi</Badge>}</div>
     </CardHeader>
     <CardContent className="space-y-4"><ErrorText error={q.error} />{q.isLoading && <p>Davomat yuklanmoqda…</p>}
       {!q.isLoading && !days.length && <p className="text-muted-foreground text-sm">Bu sana uchun darslar yo‘q. Jadvalda boshlanish va tugash vaqtlarini tekshiring.</p>}
       <div className="space-y-3">{(compact ? days.slice(0, 8) : days).map(d => <div key={d.id} className="rounded-xl border p-4 space-y-2">
-        <div className="flex flex-wrap justify-between gap-2"><span className="font-semibold">{d.teacherName}</span><Badge variant={d.state === 'missing' ? 'destructive' : 'secondary'}>{statusLabels[d.state]}</Badge></div>
+        <div className="flex flex-wrap justify-between gap-2"><span className="font-semibold">{d.teacherName}</span><Badge variant={d.state === 'missing' ? 'destructive' : 'secondary'}>{d.state === 'missing' && q.data?.attendanceMethod === 'face' ? 'Kelish tasdig‘i yo‘q' : statusLabels[d.state]}</Badge></div>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm"><span>Darslar: {wfTime(d.expectedStart)}–{wfTime(d.expectedEnd)}</span><span>Keldi: <b>{wfTime(d.checkIn)}</b></span><span>Ketdi: <b>{wfTime(d.checkOut)}</b></span>{d.lateMinutes > 0 && <span className="text-amber-700">{d.lateMinutes} daqiqa kechikish</span>}</div>
         <div className="text-xs text-muted-foreground">{(lessons.data?.lessons || []).filter((l: any) => l.teacherId === d.teacherId).map((l: any) => `${l.groupName} · ${wfTime(l.startAt)}–${wfTime(l.endAt)} · ${l.room || 'Xona belgilanmagan'}${l.status === 'cancelled' ? ' (bekor)' : ''}`).join(' | ')}</div>
+        {(d.checkInIssue || d.checkOutIssue) && <p className="text-sm text-amber-700">
+          {[d.checkInIssue && `Kelish — ${faceIssues[d.checkInIssue]}`, d.checkOutIssue && `Ketish — ${faceIssues[d.checkOutIssue]}`].filter(Boolean).join(' · ')}
+        </p>}
         {d.note && <p className="text-xs">Izoh: {d.note}</p>}{admin && !compact && <Button size="sm" variant="outline" onClick={() => startEdit(d)}>Ruxsat / qaydni tuzatish</Button>}
       </div>)}</div>
       {compact && <Link href="/staff-attendance" className="text-sm font-medium text-primary">Barcha davomat va boshqaruv →</Link>}
       <Modal title="Davomatni aniqlashtirish" open={!!correction} onClose={() => setCorrection(null)}><div className="space-y-4"><p>{correction?.teacherName} · {date}</p><label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={excused} onChange={e => setExcused(e.target.checked)} />Ruxsatli / uzrli sabab</label><div className="grid grid-cols-2 gap-3"><Field label="Kelgan vaqt"><Input type="time" value={inTime} onChange={e => setInTime(e.target.value)} /></Field><Field label="Ketgan vaqt"><Input type="time" value={outTime} onChange={e => setOutTime(e.target.value)} /></Field></div><Field label="Sabab va dalil"><Textarea value={note} onChange={e => setNote(e.target.value)} /></Field><Button disabled={action.isPending || note.trim().length < 3} onClick={()=>void submit().catch(()=>{})}>Tuzatishni saqlash</Button></div></Modal>
+    </CardContent>
+  </Card>;
+}
+
+function TeacherAttendance() {
+  const settings = useData('settings');
+  if (settings.error) return <ErrorText error={settings.error} />;
+  if (!settings.data) return null;
+  if (settings.data.attendanceMethod === 'qr') return <TeacherScan />;
+  return <Card className="border-primary/25">
+    <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="w-5 h-5" />Face ID davomat</CardTitle></CardHeader>
+    <CardContent className="space-y-2 text-sm">
+      {settings.data.enabled
+        ? <p>Markaz kirishidagi terminalda ismingizni tanlab, <b>Keldim</b> yoki <b>Ketdim</b> tugmasini bosing. Ketishni oxirgi darsingiz tugagach tasdiqlang.</p>
+        : <p>Face ID davomat hali yoqilmagan. Ro‘yxatdan o‘tish uchun administratorga murojaat qiling.</p>}
+      <p className="text-muted-foreground">Tasdiqlangan vaqt quyidagi ro‘yxatda ko‘rinadi. Terminal qaydni tasdiqlamasa, administratorga xabar bering.</p>
+    </CardContent>
+  </Card>;
+}
+
+type FaceStatus = {
+  terminal: { id: string; label: string; lastSeenAt: string } | null;
+  teachers: { id: string; name: string; status: 'none' | 'pending' | 'active' }[];
+};
+function FaceTerminal() {
+  const q = useData<FaceStatus>('face', true, 15000), action = useAction();
+  const [label, setLabel] = useState(''), [teacherId, setTeacherId] = useState(''), [consentRef, setConsentRef] = useState('');
+  const [issued, setIssued] = useState<{ code: string; expiresAt: string; title: string } | null>(null);
+  const [revoke, setRevoke] = useState<{ path: string; data: any; title: string } | null>(null);
+  const teacher = q.data?.teachers.find(t => t.id === teacherId);
+  const terminal = q.data?.terminal;
+  const issue = async (path: string, data: any, title: string) => {
+    const result = await action.mutateAsync({ path, data });
+    setIssued({ ...result, title });
+  };
+  const choose = (id: string) => { setTeacherId(id); setConsentRef(''); };
+  return <Card>
+    <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="w-5 h-5" />Face ID terminali</CardTitle></CardHeader>
+    <CardContent className="space-y-5">
+      <ErrorText error={q.error} />
+      {!q.data && !q.error && <p>Terminal holati yuklanmoqda…</p>}
+      {q.data && (terminal ? <div className="border rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
+        <div><p className="font-medium">{terminal.label}</p><p className="text-sm text-muted-foreground">Oxirgi aloqa · {uzWorkDate(new Date(terminal.lastSeenAt))} {wfTime(terminal.lastSeenAt)}</p></div>
+        <Button variant="outline" onClick={() => setRevoke({ path: 'face/terminal/revoke', data: { terminalId: terminal.id }, title: 'Terminalni bekor qilish' })}>Terminalni bekor qilish</Button>
+      </div> : <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">Kirish joyidagi terminal dasturini oching va quyida yaratilgan kodni o‘sha qurilmaga kiriting.</p>
+        <Field label="Terminal nomi"><Input value={label} maxLength={100} placeholder="Asosiy kirish" onChange={e => setLabel(e.target.value)} /></Field>
+        <Button disabled={action.isPending || label.trim().length < 2} onClick={() => void issue('face/pairing', { label }, 'Terminalni ulash kodi').catch(() => {})}>Ulash kodini yaratish</Button>
+      </div>)}
+      {terminal && <div className="space-y-3">
+        <Field label="O‘qituvchini tanlang"><select className={selectClass} value={teacherId} onChange={e => choose(e.target.value)}>
+          <option value="">Tanlang</option>
+          {q.data?.teachers.map(t => <option key={t.id} value={t.id}>{t.name} · {t.status === 'active' ? 'Faol' : t.status === 'pending' ? 'Kod berilgan' : 'Ro‘yxatdan o‘tmagan'}</option>)}
+        </select></Field>
+        {teacher && (teacher.status === 'none' ? <>
+          <Field label="O‘qituvchining rozilik hujjati raqami"><Input value={consentRef} maxLength={200} onChange={e => setConsentRef(e.target.value)} /></Field>
+          <p className="text-sm text-muted-foreground">Rozilikni rasmiylashtirib, o‘qituvchi bilan birga terminalda kodni kiriting va yuzni ro‘yxatdan o‘tkazing.</p>
+          <Button disabled={action.isPending || consentRef.trim().length < 3} onClick={() => void issue('face/enrollment', { teacherId, consentRef }, 'Ro‘yxatdan o‘tkazish kodi').catch(() => {})}>Ro‘yxatdan o‘tkazish kodini yaratish</Button>
+        </> : <Button variant="outline" onClick={() => setRevoke({ path: 'face/enrollment/revoke', data: { teacherId }, title: 'Face ID ro‘yxatini bekor qilish' })}>Ro‘yxatni bekor qilish</Button>)}
+      </div>}
+      <Modal title={issued?.title ?? 'Kod'} open={!!issued} onClose={() => setIssued(null)}>
+        <Input readOnly value={issued?.code ?? ''} aria-label="Bir martalik kod" onFocus={e => e.target.select()} />
+        <p className="text-sm text-muted-foreground">Kod {issued ? wfTime(issued.expiresAt) : ''} gacha amal qiladi. Uni administrator terminalda ishlatadi.</p>
+      </Modal>
+      <Modal title={revoke?.title ?? 'Bekor qilish'} open={!!revoke} onClose={() => setRevoke(null)}>
+        <p className="text-sm">{revoke?.data.terminalId ? 'Terminal orqali davomat o‘chadi. Yangi terminalda o‘qituvchilar qayta ro‘yxatdan o‘tadi.' : 'O‘qituvchi uchun Face ID tasdig‘i bekor qilinadi. Terminal navbatdagi aloqada mahalliy andozani o‘chiradi.'}</p>
+        <Button variant="destructive" disabled={action.isPending} onClick={() => { if (revoke) void action.mutateAsync(revoke).then(() => setRevoke(null)).catch(() => {}); }}>Bekor qilishni tasdiqlash</Button>
+      </Modal>
     </CardContent>
   </Card>;
 }
@@ -111,19 +190,48 @@ function Payroll({ admin }: { admin: boolean }) {
 function Settings() {
   const q = useData('settings');
   if (q.error) return <ErrorText error={q.error} />; if (!q.data) return <p>Sozlamalar yuklanmoqda…</p>;
-  return <SettingsForm initial={q.data} />;
+  return <SettingsForm key={`${q.data.attendanceMethod}:${q.data.enabled}:${q.data.trialMode}`} initial={q.data} />;
 }
 function SettingsForm({ initial }: { initial: any }) {
-  const [s, setS] = useState({ enabled: initial.enabled, trialMode: initial.trialMode, latitude: initial.latitude === null ? null : Number(initial.latitude), longitude: initial.longitude === null ? null : Number(initial.longitude), graceMinutes: initial.graceMinutes, earlyMinutes: initial.earlyMinutes }), action = useAction();
-  return <div className="grid xl:grid-cols-[1.5fr_1fr] gap-5"><Card><CardHeader><CardTitle className="flex gap-2 items-center"><MapPin className="w-5 h-5" />Markaz va davomat sozlamalari</CardTitle></CardHeader><CardContent className="space-y-5"><Suspense fallback={<p>Xarita yuklanmoqda…</p>}><MapPicker latitude={s.latitude} longitude={s.longitude} onChange={(latitude, longitude) => setS({ ...s, latitude, longitude })} /></Suspense><div className="grid sm:grid-cols-2 gap-3"><Field label="Kechikish imtiyozi (daqiqa)"><Input type="number" min="0" max="60" value={s.graceMinutes} onChange={e => setS({ ...s, graceMinutes: Number(e.target.value) })} /></Field><Field label="Kelish qancha oldin ochiladi (daqiqa)"><Input type="number" min="0" max="120" value={s.earlyMinutes} onChange={e => setS({ ...s, earlyMinutes: Number(e.target.value) })} /></Field></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.enabled} onChange={e => setS({ ...s, enabled: e.target.checked })} />QR davomatni yoqish</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.trialMode} onChange={e => setS({ ...s, trialMode: e.target.checked })} />Sinov rejimi — jarimalar oylikka qo‘llanmaydi</label><Button disabled={action.isPending || (s.enabled && s.latitude === null)} onClick={() => action.mutate({ path: 'settings', method: 'PUT', data: s })}>Sozlamalarni saqlash</Button></CardContent></Card><Card><CardHeader><CardTitle>Chop etiladigan QR kod</CardTitle></CardHeader><CardContent className="space-y-4"><img src="/api/workforce/qr.png" alt="Markaz uchun doimiy davomat QR kodi" className="w-full max-w-xs mx-auto rounded-lg border" /><p className="text-sm text-muted-foreground">QR doimiy. Rasmni yuklab olib, markaz kirishiga chiqarib qo‘ying.</p><Button asChild className="w-full"><a href="/api/workforce/qr.png?download=1" download="zamonaviy-crm-qr.png"><Download className="w-4 h-4 mr-2" />QR rasmni yuklab olish</a></Button></CardContent></Card></div>;
+  const [s, setS] = useState({
+    attendanceMethod: initial.attendanceMethod as 'face' | 'qr', enabled: initial.enabled, trialMode: initial.trialMode,
+    latitude: initial.latitude === null ? null : Number(initial.latitude), longitude: initial.longitude === null ? null : Number(initial.longitude),
+    graceMinutes: initial.graceMinutes, earlyMinutes: initial.earlyMinutes,
+  }), action = useAction();
+  const qrMode = s.attendanceMethod === 'qr';
+  const switching = s.attendanceMethod !== initial.attendanceMethod;
+  return <div className="grid xl:grid-cols-[1.5fr_1fr] gap-5">
+    <Card>
+      <CardHeader><CardTitle className="flex gap-2 items-center"><MapPin className="w-5 h-5" />Davomat sozlamalari</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        {initial.attendanceMethod === 'qr' && <Field label="Davomat usuli"><select className={selectClass} value={s.attendanceMethod} onChange={e => setS({ ...s, attendanceMethod: e.target.value as 'qr' | 'face', enabled: false, trialMode: true })}>
+          <option value="qr">QR (avvalgi usul)</option><option value="face">Face ID</option>
+        </select></Field>}
+        {qrMode
+          ? <Suspense fallback={<p>Xarita yuklanmoqda…</p>}><MapPicker latitude={s.latitude} longitude={s.longitude} onChange={(latitude, longitude) => setS({ ...s, latitude, longitude })} /></Suspense>
+          : <p className="text-sm text-muted-foreground">Terminalni markaz kirishiga o‘rnating. «Face ID terminali» bo‘limida qurilmani ulang va o‘qituvchilarni ro‘yxatdan o‘tkazing. Birinchi yoqishda sinov rejimi ishlaydi.</p>}
+        {switching && <p className="text-sm text-amber-700">Saqlagandan so‘ng QR yopiladi. Face ID davomatni terminal tayyor bo‘lgach yoqing.</p>}
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="Kechikish imtiyozi (daqiqa)"><Input type="number" min="0" max="60" value={s.graceMinutes} onChange={e => setS({ ...s, graceMinutes: Number(e.target.value) })} /></Field>
+          <Field label="Kelish qancha oldin ochiladi (daqiqa)"><Input type="number" min="0" max="120" value={s.earlyMinutes} onChange={e => setS({ ...s, earlyMinutes: Number(e.target.value) })} /></Field>
+        </div>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={switching} checked={s.enabled} onChange={e => setS({ ...s, enabled: e.target.checked })} />Davomatni yoqish</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!qrMode && !initial.enabled} checked={s.trialMode} onChange={e => setS({ ...s, trialMode: e.target.checked })} />Sinov rejimi — jarimalar oylikka qo‘llanmaydi</label>
+        <Button disabled={action.isPending || (qrMode && s.enabled && s.latitude === null)} onClick={() => action.mutate({ path: 'settings', method: 'PUT', data: s })}>Sozlamalarni saqlash</Button>
+      </CardContent>
+    </Card>
+    {qrMode && <Card><CardHeader><CardTitle>Chop etiladigan QR kod</CardTitle></CardHeader><CardContent className="space-y-4"><img src="/api/workforce/qr.png" alt="Markaz uchun doimiy davomat QR kodi" className="w-full max-w-xs mx-auto rounded-lg border" /><Button asChild className="w-full"><a href="/api/workforce/qr.png?download=1" download="zamonaviy-crm-qr.png"><Download className="w-4 h-4 mr-2" />QR rasmni yuklab olish</a></Button></CardContent></Card>}
+  </div>;
 }
 
 export default function Workforce() {
   const [location] = useLocation(), user = useQuery<any>({ queryKey: ['/api/auth/me'] }), isAdmin = user.data?.role === 'markaz_admin';
   const [tab, setTab] = useState(location === '/teacher-fines' ? 'fines' : 'today');
   useEffect(()=>setTab(location === '/teacher-fines' ? 'fines' : 'today'),[location]);
-  const tabs = isAdmin ? [['today', 'Davomat'], ['fines', 'Jarimalar'], ['types', 'Jarima turlari'], ['devices', 'Qurilmalar'], ['payroll', 'Oylik'], ['settings', 'Xarita va QR']] : [['today', 'Keldi-kettim'], ['fines', 'Jarimalarim'], ['payroll', 'Oylik hisobim']];
+  const settings = useData('settings', isAdmin);
+  const qrMode = settings.data?.attendanceMethod === 'qr';
+  const tabs = isAdmin ? [['today', 'Davomat'], ['fines', 'Jarimalar'], ['types', 'Jarima turlari'], ['face', 'Face ID terminali'], ...(qrMode ? [['devices', 'QR qurilmalari']] : []), ['payroll', 'Oylik'], ['settings', 'Sozlamalar']] : [['today', 'Keldi-kettim'], ['fines', 'Jarimalarim'], ['payroll', 'Oylik hisobim']];
   return <div className="space-y-6"><div className="flex flex-wrap justify-between gap-3"><div><h1 className="text-2xl font-bold">{isAdmin ? 'O‘qituvchilar davomati' : 'Mening davomatim'}</h1><p className="text-muted-foreground mt-1 text-sm">Dars jadvali, kelish-ketish va hisob-kitoblar</p></div><Button variant="outline" asChild><Link href="/schedule"><Clock className="w-4 h-4 mr-2" />Dars jadvali</Link></Button></div><div className="flex flex-wrap gap-2" role="tablist">{tabs.map(([id, label]) => <Button key={id} role="tab" aria-selected={tab === id} variant={tab === id ? 'default' : 'outline'} onClick={() => setTab(id)}>{label}</Button>)}</div>
-    {tab === 'today' && <div className="space-y-5">{!isAdmin && <TeacherScan />}<WorkforceToday admin={isAdmin} /></div>}{tab === 'fines' && <Fines admin={isAdmin} />}{tab === 'types' && isAdmin && <FineTypes />}{tab === 'devices' && isAdmin && <Devices />}{tab === 'payroll' && <Payroll admin={isAdmin} />}{tab === 'settings' && isAdmin && <Settings />}
+    {tab === 'today' && <div className="space-y-5">{!isAdmin && <TeacherAttendance />}<WorkforceToday admin={isAdmin} /></div>}{tab === 'fines' && <Fines admin={isAdmin} />}{tab === 'types' && isAdmin && <FineTypes />}{tab === 'devices' && isAdmin && qrMode && <Devices />}{tab === 'face' && isAdmin && <FaceTerminal />}{tab === 'payroll' && <Payroll admin={isAdmin} />}{tab === 'settings' && isAdmin && <Settings />}
   </div>;
 }

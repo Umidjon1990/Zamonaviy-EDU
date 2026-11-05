@@ -5,8 +5,8 @@ import { FinanceError } from './payment-service';
 import { createWorkforceService, type WorkforceActor } from './workforce-service';
 import { monthInput, uzWorkDate } from '../shared/workforce';
 
-export function registerWorkforceRoutes(app: Express, pool: any, auth: RequestHandler) {
-  const service = createWorkforceService(pool);
+export function registerWorkforceRoutes(app: Express, pool: any, auth: RequestHandler, tenantAllowed?: (tenantId: number) => Promise<boolean>) {
+  const service = createWorkforceService(pool, undefined, tenantAllowed);
   const actor = (req: any): WorkforceActor => ({ tenantId: req.session.tenantId, userId: req.session.userId, role: req.session.role });
   const cookieName = (req: any) => `wf_device_${req.session.tenantId}_${req.session.userId}`;
   const deviceToken = (req: any) => { const name = cookieName(req) + '='; const v = (req.headers.cookie || '').split(';').map((s: string) => s.trim()).find((s: string) => s.startsWith(name))?.slice(name.length); return /^[a-f0-9]{64}$/.test(v || '') ? v : undefined; };
@@ -14,6 +14,11 @@ export function registerWorkforceRoutes(app: Express, pool: any, auth: RequestHa
     try { const value = await fn(req, res); if (!res.headersSent) res.json(value); }
     catch (e) { if (e instanceof ZodError) return void res.status(400).json({ error: e.issues.map(i => i.message).join('; ') }); if (e instanceof FinanceError) return void res.status(e.status).json({ error: e.message }); console.error('Workforce operation failed', { code: (e as any)?.code || 'internal' }); res.status(503).json({ error: 'Amal bajarilmadi. Qayta urinib ko‘ring.' }); }
   };
+  app.use(['/api/workforce-terminal', '/api/workforce/face'], (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store'); next();
+  });
+  app.post('/api/workforce-terminal/pair', run(req => service.face.pair(req.body)));
+  app.post('/api/workforce-terminal/:operation', run(req => service.face.signed(req.params.operation, req.body)));
   app.use('/api/workforce', auth, (req: any, res, next) => {
     if (!['teacher', 'markaz_admin'].includes(req.session.role)) return void res.status(403).json({ error: 'Ruxsat yo‘q' });
     if (!['GET', 'HEAD'].includes(req.method)) {
@@ -23,6 +28,11 @@ export function registerWorkforceRoutes(app: Express, pool: any, auth: RequestHa
     }
     next();
   });
+  app.get('/api/workforce/face', run(req => service.face.status(actor(req))));
+  app.post('/api/workforce/face/pairing', run(req => service.face.issuePairing(actor(req), req.body)));
+  app.post('/api/workforce/face/terminal/revoke', run(req => service.face.revokeTerminal(actor(req), req.body)));
+  app.post('/api/workforce/face/enrollment', run(req => service.face.issueEnrollment(actor(req), req.body)));
+  app.post('/api/workforce/face/enrollment/revoke', run(req => service.face.revokeEnrollment(actor(req), req.body)));
   app.get('/api/workforce/settings', run(req => service.settings(actor(req))));
   app.put('/api/workforce/settings', run(req => service.updateSettings(actor(req), req.body)));
   app.get('/api/workforce/qr.png', run(async (req, res) => {
