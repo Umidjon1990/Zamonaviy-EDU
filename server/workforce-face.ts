@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, randomBytes, randomUUID, verify } from 'node:crypto';
 import { z } from 'zod';
+import { faceConsent } from '../shared/workforce';
 import { FinanceError } from './payment-service';
 import type { WorkforceActor } from './workforce-service';
 
@@ -26,6 +27,7 @@ const newCode = () => randomBytes(18).toString('base64url');
 const expiry = (now: Date, minutes: number) => new Date(+now + minutes * 60_000);
 const fail = (message: string, status = 400): never => { throw new FinanceError(message, status); };
 const admin = (a: WorkforceActor) => { if (a.role !== 'markaz_admin') fail('Faqat administrator uchun', 403); };
+const teacher = (a: WorkforceActor) => { if (a.role !== 'teacher') fail('Faqat o‘qituvchi uchun', 403); };
 
 type Dependencies = {
   pool: any;
@@ -123,38 +125,94 @@ export function createWorkforceFace({ pool, tx, clock, log, validTeacher, setup,
     });
   }
 
+  async function enrollmentForTeacher(c: any, a: WorkforceActor, id: string) {
+    return (await c.query(`SELECT terminal_id,enrolled_at,revoked_at,expires_at,self_enrollment_blocked
+      FROM workforce_face_enrollments WHERE tenant_id=$1 AND teacher_id=$2`, [a.tenantId, id])).rows[0];
+  }
+
+  async function selfStatus(a: WorkforceActor) {
+    teacher(a);
+    return tx(a, async c => {
+      await validTeacher(c, a, a.userId);
+      const terminal = await activeTerminal(c, a.tenantId);
+      const row = await enrollmentForTeacher(c, a, a.userId);
+      const state = row?.self_enrollment_blocked ? 'blocked'
+        : !terminal || !row || row.revoked_at || row.terminal_id !== terminal.id ? 'none'
+        : row.enrolled_at ? 'active'
+        : +new Date(row.expires_at) > +clock() ? 'pending' : 'none';
+      return { terminalReady: Boolean(terminal), status: state, expiresAt: state === 'pending' ? row.expires_at : null };
+    });
+  }
+
+  async function createEnrollment(c: any, a: WorkforceActor, id: string, consentRef: string, selfConsentVersion: string | null) {
+    const terminal = await activeTerminal(c, a.tenantId);
+    if (!terminal) fail('Avval markaz terminali ulanishi kerak');
+    const current = await enrollmentForTeacher(c, a, id);
+    if (current?.enrolled_at && !current.revoked_at && current.terminal_id === terminal.id) {
+      fail('Yuzingiz allaqachon ro‘yxatdan o‘tgan', 409);
+    }
+    if (selfConsentVersion && current?.self_enrollment_blocked) fail('Qayta ro‘yxatdan o‘tish uchun administratorga murojaat qiling', 403);
+
+    const token = newCode(), now = clock(), expiresAt = expiry(now, 10), enrollmentId = randomUUID();
+    await c.query(`INSERT INTO workforce_face_enrollments(tenant_id,teacher_id,terminal_id,id,consent_ref,code_hash,expires_at,self_consent_version)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT(tenant_id,teacher_id) DO UPDATE SET terminal_id=EXCLUDED.terminal_id,id=EXCLUDED.id,
+        consent_ref=EXCLUDED.consent_ref,code_hash=EXCLUDED.code_hash,expires_at=EXCLUDED.expires_at,enrolled_at=NULL,
+        revoked_at=NULL,self_consent_version=EXCLUDED.self_consent_version,self_enrollment_blocked=FALSE`,
+    [a.tenantId, id, terminal.id, enrollmentId, consentRef, hash(token), expiresAt, selfConsentVersion]);
+    const detail = selfConsentVersion
+      ? { terminalId: terminal.id, consentVersion: selfConsentVersion, acceptedAt: now.toISOString(), notice: faceConsent.notice, acceptance: faceConsent.acceptance }
+      : { terminalId: terminal.id, consentRef };
+    await log(c, a, 'face_enrollment', enrollmentId, selfConsentVersion ? 'self_issued' : 'issued', detail, id);
+    return { code: token, expiresAt };
+  }
+
   async function issueEnrollment(a: WorkforceActor, input: unknown) {
     admin(a);
     const d = z.object({ teacherId, consentRef: z.string().trim().min(3).max(200) }).strict().parse(input);
     return tx(a, async c => {
       await validTeacher(c, a, d.teacherId);
-      const terminal = await activeTerminal(c, a.tenantId);
-      if (!terminal) fail('Avval terminalni ulang');
-      const token = newCode(), expiresAt = expiry(clock(), 10), id = randomUUID();
-      await c.query(`INSERT INTO workforce_face_enrollments(tenant_id,teacher_id,terminal_id,id,consent_ref,code_hash,expires_at)
-        VALUES($1,$2,$3,$4,$5,$6,$7)
-        ON CONFLICT(tenant_id,teacher_id) DO UPDATE SET terminal_id=EXCLUDED.terminal_id,id=EXCLUDED.id,
-          consent_ref=EXCLUDED.consent_ref,code_hash=EXCLUDED.code_hash,expires_at=EXCLUDED.expires_at,enrolled_at=NULL,revoked_at=NULL`,
-      [a.tenantId, d.teacherId, terminal.id, id, d.consentRef, hash(token), expiresAt]);
-      await log(c, a, 'face_enrollment', id, 'issued', { consentRef: d.consentRef, terminalId: terminal.id }, d.teacherId);
-      return { code: token, expiresAt };
+      return createEnrollment(c, a, d.teacherId, d.consentRef, null);
     });
+  }
+
+  async function issueSelfEnrollment(a: WorkforceActor, input: unknown) {
+    teacher(a);
+    z.object({ consent: z.literal(true), consentVersion: z.literal(faceConsent.version) }).strict().parse(input);
+    return tx(a, async c => {
+      await validTeacher(c, a, a.userId);
+      const settings = await setup(c, a);
+      if (settings.attendance_method !== 'face') fail('Markaz Face ID usuliga hali o‘tmagan', 409);
+      return createEnrollment(c, a, a.userId, faceConsent.version, faceConsent.version);
+    });
+  }
+
+  async function revoke(c: any, a: WorkforceActor, id: string, blocked: boolean) {
+    const revoked = (await c.query(`UPDATE workforce_face_enrollments SET revoked_at=$3,code_hash=NULL,self_enrollment_blocked=$4
+      WHERE tenant_id=$1 AND teacher_id=$2 AND revoked_at IS NULL RETURNING id`, [a.tenantId, id, clock(), blocked])).rows[0];
+    if (!revoked) fail('Faol Face ID ro‘yxati topilmadi', 404);
+    await log(c, a, 'face_enrollment', revoked.id, blocked ? 'revoked' : 'consent_withdrawn', {}, id);
+    return { success: true };
   }
 
   async function revokeEnrollment(a: WorkforceActor, input: unknown) {
     admin(a);
     const { teacherId: id } = z.object({ teacherId }).strict().parse(input);
+    return tx(a, c => revoke(c, a, id, true));
+  }
+
+  async function withdrawSelfEnrollment(a: WorkforceActor, input: unknown) {
+    teacher(a);
+    z.object({}).strict().parse(input);
     return tx(a, async c => {
-      const revoked = (await c.query(`UPDATE workforce_face_enrollments SET revoked_at=$3,code_hash=NULL
-        WHERE tenant_id=$1 AND teacher_id=$2 AND revoked_at IS NULL RETURNING id`, [a.tenantId, id, clock()])).rows[0];
-      if (!revoked) fail('Yuz andozasi topilmadi', 404);
-      await log(c, a, 'face_enrollment', revoked.id, 'revoked', {}, id);
-      return { success: true };
+      await validTeacher(c, a, a.userId);
+      return revoke(c, a, a.userId, false);
     });
   }
 
   async function enrollmentByCode(c: any, a: WorkforceActor, terminalId: string, token: string, now: Date) {
-    const row = (await c.query(`SELECT e.id AS "enrollmentId",e.teacher_id AS "teacherId",u.first_name||' '||u.last_name AS name
+    const row = (await c.query(`SELECT e.id AS "enrollmentId",e.teacher_id AS "teacherId",u.first_name||' '||u.last_name AS name,
+      e.self_consent_version IS NOT NULL AS "selfEnrollment"
       FROM workforce_face_enrollments e JOIN users u ON u.id=e.teacher_id AND u.tenant_id=e.tenant_id
       WHERE e.tenant_id=$1 AND e.terminal_id=$2 AND e.code_hash=$3 AND e.expires_at>$4
         AND e.enrolled_at IS NULL AND e.revoked_at IS NULL AND u.role='teacher' AND u.archived_at IS NULL`, [a.tenantId, terminalId, hash(token), now])).rows[0];
@@ -236,5 +294,5 @@ export function createWorkforceFace({ pool, tx, clock, log, validTeacher, setup,
     });
   }
 
-  return { isReady, status, issuePairing, pair, revokeTerminal, issueEnrollment, revokeEnrollment, signed };
+  return { isReady, status, issuePairing, pair, revokeTerminal, issueEnrollment, revokeEnrollment, selfStatus, issueSelfEnrollment, withdrawSelfEnrollment, signed };
 }

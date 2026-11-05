@@ -52,7 +52,7 @@ class Kiosk:
         self.image.pack(pady=4)
         tools = ttk.Frame(body)
         tools.pack(side="bottom", fill="x")
-        self.setup = ttk.Button(tools, command=self.admin)
+        self.setup = ttk.Button(tools, command=self.setup_or_enroll)
         self.setup.pack(side="left")
         self.reload = ttk.Button(tools, text="Yangilash", command=self.refresh)
         self.reload.pack(side="right")
@@ -209,7 +209,7 @@ class Kiosk:
         self.text("Kamera ochilmoqda…")
         self.submit(work, done)
 
-    def admin(self):
+    def setup_or_enroll(self):
         if self.busy:
             return
         if not self.terminal.terminal_id:
@@ -219,13 +219,19 @@ class Kiosk:
                 self.submit(lambda: self.terminal.pair(code.strip()), lambda _: self.refresh())
             return
 
-        code = simpledialog.askstring("Yuzni ro‘yxatga olish", "O‘qituvchi uchun yaratilgan kodni kiriting.", parent=self.root, show="•")
+        code = simpledialog.askstring("Yuzni ro‘yxatga olish", "Kabinetdagi bir martalik ro‘yxatdan o‘tish kodini kiriting.", parent=self.root, show="•")
         if not code:
             return
         code = code.strip()
 
         def capture(row):
-            if not messagebox.askyesno("Rozilik va shaxsni tekshirish", f"{row['name']} kameraning oldidami va rozilik hujjati tekshirildimi?", parent=self.root):
+            if row.get("selfEnrollment"):
+                title = "Yuzni ro‘yxatga olish"
+                prompt = f"{row['name']}, bu sizning hisobingizmi? Yuzingizni ro‘yxatga olishni boshlaysizmi?"
+            else:
+                title = "Rozilik va shaxsni tekshirish"
+                prompt = f"{row['name']} kameraning oldidami va rozilik hujjati tekshirildimi?"
+            if not messagebox.askyesno(title, prompt, parent=self.root):
                 self.text(self.idle_message())
                 return
 

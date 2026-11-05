@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS workforce_face_enrollments (
  expires_at TIMESTAMPTZ NOT NULL, enrolled_at TIMESTAMPTZ, revoked_at TIMESTAMPTZ,
  PRIMARY KEY(tenant_id,teacher_id)
 );
+ALTER TABLE workforce_face_enrollments ADD COLUMN IF NOT EXISTS self_consent_version TEXT;
+ALTER TABLE workforce_face_enrollments ADD COLUMN IF NOT EXISTS self_enrollment_blocked BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE TABLE IF NOT EXISTS workforce_face_receipts (
  terminal_id UUID NOT NULL, request_id UUID NOT NULL, digest TEXT NOT NULL,
  response JSONB NOT NULL, expires_at TIMESTAMPTZ NOT NULL, PRIMARY KEY(terminal_id,request_id)

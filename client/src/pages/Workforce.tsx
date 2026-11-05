@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { wf, wfDate, wfMoney, wfTime, statusLabels, refreshWorkforce, getPosition } from '@/lib/workforce';
-import { uzWorkDate } from '@shared/workforce';
+import { faceConsent, uzWorkDate } from '@shared/workforce';
 import { QrCode, MapPin, Clock, Smartphone, ShieldCheck, CalendarDays, Plus, Download, History, Wallet } from 'lucide-react';
 
 const MapPicker = lazy(() => import('@/components/WorkforceMap'));
@@ -65,13 +65,70 @@ function TeacherAttendance() {
   if (settings.error) return <ErrorText error={settings.error} />;
   if (!settings.data) return null;
   if (settings.data.attendanceMethod === 'qr') return <TeacherScan />;
+  return <TeacherFace enabled={settings.data.enabled} />;
+}
+
+type TeacherFaceStatus = {
+  terminalReady: boolean;
+  status: 'none' | 'pending' | 'active' | 'blocked';
+  expiresAt: string | null;
+};
+
+function TeacherFace({ enabled }: { enabled: boolean }) {
+  const q = useData<TeacherFaceStatus>('face/self', true, 5000), action = useAction();
+  const [consent, setConsent] = useState(false);
+  const [issued, setIssued] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [withdraw, setWithdraw] = useState(false);
+  const profile = q.data;
+  const code = profile?.status === 'pending' && profile.expiresAt === issued?.expiresAt ? issued : null;
+  const issue = async () => {
+    const result = await action.mutateAsync({ path: 'face/self/enrollment', data: { consent, consentVersion: faceConsent.version } });
+    setIssued(result);
+    setConsent(false);
+  };
+  const withdrawConsent = async () => {
+    await action.mutateAsync({ path: 'face/self/withdraw', data: {} });
+    setIssued(null);
+    setConsent(false);
+    setWithdraw(false);
+  };
+
   return <Card className="border-primary/25">
     <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="w-5 h-5" />Face ID davomat</CardTitle></CardHeader>
-    <CardContent className="space-y-2 text-sm">
-      {settings.data.enabled
-        ? <p>Markaz kirishidagi terminalda ismingizni tanlab, <b>Keldim</b> yoki <b>Ketdim</b> tugmasini bosing. Ketishni oxirgi darsingiz tugagach tasdiqlang.</p>
-        : <p>Face ID davomat hali yoqilmagan. Ro‘yxatdan o‘tish uchun administratorga murojaat qiling.</p>}
-      <p className="text-muted-foreground">Tasdiqlangan vaqt quyidagi ro‘yxatda ko‘rinadi. Terminal qaydni tasdiqlamasa, administratorga xabar bering.</p>
+    <CardContent className="space-y-3 text-sm">
+      <ErrorText error={q.error} />
+      {!profile && !q.error && <p>Face ID holati tekshirilmoqda…</p>}
+      {profile && (!profile.terminalReady
+        ? <p>Markaz terminali ulangach Face ID ro‘yxatidan o‘tishingiz mumkin.</p>
+        : profile.status === 'blocked'
+          ? <p>Face ID ro‘yxatingiz bekor qilingan. Qayta ro‘yxatdan o‘tish uchun administratorga murojaat qiling.</p>
+          : profile.status === 'active'
+            ? <>
+              <Badge variant="secondary">Face ID faol</Badge>
+              {enabled
+                ? <p>Markaz kirishidagi terminalda ismingizni tanlab, <b>Keldim</b> yoki <b>Ketdim</b> tugmasini bosing. Ketishni oxirgi darsingiz tugagach tasdiqlang.</p>
+                : <p>Yuzingiz ro‘yxatdan o‘tgan. Administrator davomatni yoqqach terminaldan foydalanishingiz mumkin.</p>}
+              <p className="text-muted-foreground">Tasdiqlangan vaqt quyidagi ro‘yxatda ko‘rinadi. Terminal qaydni tasdiqlamasa, administratorga xabar bering.</p>
+            </>
+            : code
+              ? <div className="space-y-2 rounded-lg border p-3">
+                <Field label="Face ID bir martalik kodi"><Input readOnly value={code.code} onFocus={e => e.target.select()} className="font-mono" /></Field>
+                <p>Markaz terminalida <b>Yuzni ro‘yxatga olish</b> tugmasini bosing, kodni kiriting va ekrandagi ko‘rsatmaga amal qiling.</p>
+                <p className="text-muted-foreground">Kod {wfTime(code.expiresAt)} gacha amal qiladi. Uni o‘zingiz ishlating va boshqalarga bermang.</p>
+              </div>
+              : <div className="space-y-3">
+                <p>Yuzingizni bir marta markaz terminalida ro‘yxatdan o‘tkazing. Kodni kabinetdan o‘zingiz olishingiz mumkin.</p>
+                <p className="text-muted-foreground">{faceConsent.notice}</p>
+                <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5" checked={consent} onChange={e => setConsent(e.target.checked)} />{faceConsent.acceptance}</label>
+                <Button disabled={q.isError || action.isPending || !consent} onClick={() => void issue().catch(() => {})}>
+                  {profile.status === 'pending' ? 'Yangi kod olish' : 'Ro‘yxatdan o‘tish kodini olish'}
+                </Button>
+              </div>)}
+      {(profile?.status === 'active' || profile?.status === 'pending') && <Button variant="ghost" size="sm" onClick={() => setWithdraw(true)}>Rozilikni bekor qilish</Button>}
+      <Modal title="Face ID roziligini bekor qilish" open={withdraw} onClose={() => setWithdraw(false)}>
+        <p className="text-sm">Face ID orqali davomat to‘xtaydi. Terminal navbatdagi aloqada yuz andozasini o‘chiradi.</p>
+        <Button variant="destructive" disabled={action.isPending} onClick={() => void withdrawConsent().catch(() => {})}>Rozilikni bekor qilishni tasdiqlash</Button>
+      </Modal>
     </CardContent>
   </Card>;
 }
@@ -106,13 +163,14 @@ function FaceTerminal() {
         <Button disabled={action.isPending || label.trim().length < 2} onClick={() => void issue('face/pairing', { label }, 'Terminalni ulash kodi').catch(() => {})}>Ulash kodini yaratish</Button>
       </div>)}
       {terminal && <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">O‘qituvchilar Face ID ro‘yxatidan o‘z kabinetlari orqali o‘tishadi. Bu yerdan ro‘yxat holatini boshqarishingiz mumkin.</p>
         <Field label="O‘qituvchini tanlang"><select className={selectClass} value={teacherId} onChange={e => choose(e.target.value)}>
           <option value="">Tanlang</option>
           {q.data?.teachers.map(t => <option key={t.id} value={t.id}>{t.name} · {t.status === 'active' ? 'Faol' : t.status === 'pending' ? 'Kod berilgan' : 'Ro‘yxatdan o‘tmagan'}</option>)}
         </select></Field>
         {teacher && (teacher.status === 'none' ? <>
           <Field label="O‘qituvchining rozilik hujjati raqami"><Input value={consentRef} maxLength={200} onChange={e => setConsentRef(e.target.value)} /></Field>
-          <p className="text-sm text-muted-foreground">Rozilikni rasmiylashtirib, o‘qituvchi bilan birga terminalda kodni kiriting va yuzni ro‘yxatdan o‘tkazing.</p>
+          <p className="text-sm text-muted-foreground">Admin yordamida ro‘yxatdan o‘tkazish kerak bo‘lsa, rozilikni rasmiylashtiring va o‘qituvchini terminalda tasdiqlang.</p>
           <Button disabled={action.isPending || consentRef.trim().length < 3} onClick={() => void issue('face/enrollment', { teacherId, consentRef }, 'Ro‘yxatdan o‘tkazish kodi').catch(() => {})}>Ro‘yxatdan o‘tkazish kodini yaratish</Button>
         </> : <Button variant="outline" onClick={() => setRevoke({ path: 'face/enrollment/revoke', data: { teacherId }, title: 'Face ID ro‘yxatini bekor qilish' })}>Ro‘yxatni bekor qilish</Button>)}
       </div>}
@@ -121,7 +179,7 @@ function FaceTerminal() {
         <p className="text-sm text-muted-foreground">Kod {issued ? wfTime(issued.expiresAt) : ''} gacha amal qiladi. Uni administrator terminalda ishlatadi.</p>
       </Modal>
       <Modal title={revoke?.title ?? 'Bekor qilish'} open={!!revoke} onClose={() => setRevoke(null)}>
-        <p className="text-sm">{revoke?.data.terminalId ? 'Terminal orqali davomat o‘chadi. Yangi terminalda o‘qituvchilar qayta ro‘yxatdan o‘tadi.' : 'O‘qituvchi uchun Face ID tasdig‘i bekor qilinadi. Terminal navbatdagi aloqada mahalliy andozani o‘chiradi.'}</p>
+        <p className="text-sm">{revoke?.data.terminalId ? 'Terminal orqali davomat o‘chadi. Yangi terminalda o‘qituvchilar qayta ro‘yxatdan o‘tadi.' : 'O‘qituvchi uchun Face ID tasdig‘i bekor qilinadi. Terminal navbatdagi aloqada andozani o‘chiradi. Qayta ro‘yxatdan o‘tkazishni admin boshlaydi.'}</p>
         <Button variant="destructive" disabled={action.isPending} onClick={() => { if (revoke) void action.mutateAsync(revoke).then(() => setRevoke(null)).catch(() => {}); }}>Bekor qilishni tasdiqlash</Button>
       </Modal>
     </CardContent>
