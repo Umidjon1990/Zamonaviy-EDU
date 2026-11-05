@@ -168,6 +168,59 @@ test('a teacher enrolls once from their cabinet, uses the profile repeatedly and
   }
 });
 
+test('terminal QR binds one teacher without typing and expires or cancels safely', async () => {
+  const { db, pool } = await workforceFixture();
+  let now = new Date('2026-11-02T03:45:00Z');
+  const { face } = createWorkforceService(pool, () => now);
+  const other = { ...teacher, userId: 't2' };
+  const outside = { ...teacher, tenantId: 2, userId: 'foreign' };
+  const newQr = () => randomUUID().replaceAll('-', '').slice(0, 24);
+  try {
+    const key = terminalKey();
+    const pairing = await face.issuePairing(admin, { label: 'Kirish' });
+    const { terminalId } = await face.pair({ code: pairing.code, publicKey: key.publicHex });
+    const terminal = (op: string, data: unknown) => face.signed(op, key.envelope(op, terminalId, +now, data));
+    const open = async (code: string) => terminal('enrollment-qr-open', { code });
+    const status = (code: string) => terminal('enrollment-qr-status', { code }) as Promise<{ status: string; enrollment?: { enrollmentId: string; teacherId: string } }>;
+    const approve = (a: typeof teacher, code: string) => face.acceptEnrollmentQr(a, { ...selfConsent, code });
+
+    const expired = newQr();
+    await open(expired);
+    assert.equal((await status(expired)).status, 'waiting');
+    await assert.rejects(approve(admin, expired), /o‘qituvchi/);
+    await assert.rejects(approve(outside, expired), /muddati/);
+    await assert.rejects(face.acceptEnrollmentQr(teacher, { ...selfConsent, code: expired, teacherId: 't2' }));
+    now = new Date(+now + 120_000);
+    await assert.rejects(approve(teacher, expired), /muddati/);
+
+    const cancelled = newQr();
+    await open(cancelled);
+    await approve(teacher, cancelled);
+    const pending = (await status(cancelled)).enrollment!;
+    await terminal('enrollment-qr-close', { code: cancelled });
+    assert.equal((await status(cancelled)).status, 'expired');
+    await assert.rejects(terminal('enrollment-confirm', { code: cancelled, enrollmentId: pending.enrollmentId }), /eskirgan/);
+    assert.equal((await face.selfStatus(teacher)).status, 'none');
+
+    const current = newQr();
+    await open(current);
+    now = new Date(+now + 119_000);
+    await Promise.all([approve(teacher, current), approve(teacher, current)]);
+    await assert.rejects(approve(other, current), /band/);
+    now = new Date(+now + 2_000);
+    const accepted = (await status(current)).enrollment!;
+    assert.equal(accepted.teacherId, teacher.userId);
+    await terminal('enrollment-confirm', { code: current, enrollmentId: accepted.enrollmentId });
+    assert.equal((await status(current)).status, 'expired');
+    assert.equal((await face.selfStatus(teacher)).status, 'active');
+    assert.equal((await face.selfStatus(other)).status, 'none');
+    await open(newQr());
+    assert.equal((await face.selfStatus(teacher)).status, 'active');
+  } finally {
+    await db.close();
+  }
+});
+
 test('Face terminal HTTP authentication and upgrade from QR', async () => {
   const { db, pool } = await workforceFixture();
   await db.exec("INSERT INTO workforce_settings(tenant_id,qr_secret,attendance_method) VALUES(1,'legacy','qr')");

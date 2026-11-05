@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
+import { faceSetupCode } from "@/lib/workforce";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -23,6 +24,7 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const faceSetup = faceSetupCode();
     setIsLoading(true);
 
     try {
@@ -53,7 +55,8 @@ export default function Login() {
       await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
       
       // Force page reload to ensure session is properly loaded
-      window.location.href = "/";
+      if (faceSetup && data.user?.role === "teacher") window.location.reload();
+      else window.location.href = "/";
     } catch (error) {
       toast({
         title: "Xatolik",

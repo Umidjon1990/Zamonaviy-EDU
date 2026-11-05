@@ -1,8 +1,10 @@
+import cv2
 import unittest
 from unittest.mock import Mock, patch
 
 import numpy as np
 
+from kiosk import enrollment_qr_image
 from vision import CaptureError, FaceCamera
 
 
@@ -38,6 +40,15 @@ class FaceCameraTests(unittest.TestCase):
             self.camera.capture(lambda *_: None, self.feature)
         self.assertEqual(error.exception.reason, "face_mismatch")
         self.device.release.assert_called_once()
+
+
+class EnrollmentQrTests(unittest.TestCase):
+    def test_terminal_image_decodes_to_private_cabinet_link(self):
+        code = "aB12_cD34-eF56ghI78jk90m"
+        image = enrollment_qr_image("https://crm.example", code)
+        qr = cv2.imdecode(np.frombuffer(image, np.uint8), cv2.IMREAD_GRAYSCALE)
+        decoded, _, _ = cv2.QRCodeDetector().detectAndDecode(qr)
+        self.assertEqual(decoded, f"https://crm.example/teacher-checkin#face-setup={code}")
 
 
 if __name__ == "__main__":

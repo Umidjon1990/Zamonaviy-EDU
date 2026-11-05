@@ -12,3 +12,9 @@ export const getPosition = (): Promise<GeolocationPosition> => new Promise((reso
   if (!navigator.geolocation) return reject(new Error('Qurilmada lokatsiya mavjud emas'));
   navigator.geolocation.getCurrentPosition(resolve, e => reject(new Error(e.code === 1 ? 'Lokatsiyaga ruxsat bering va qayta urinib ko‘ring.' : 'GPS joylashuvni aniqlay olmadi. Ochiqroq joyda qayta urinib ko‘ring.')), { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
 });
+
+export function faceSetupCode() {
+  if (window.location.pathname !== '/teacher-checkin') return null;
+  const code = new URLSearchParams(window.location.hash.slice(1)).get('face-setup');
+  return code && /^[A-Za-z0-9_-]{24}$/.test(code) ? code : null;
+}

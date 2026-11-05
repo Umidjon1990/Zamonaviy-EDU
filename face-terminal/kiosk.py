@@ -2,6 +2,7 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+import secrets
 import sys
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
@@ -12,6 +13,20 @@ from terminal import LocalStore, Terminal, TerminalError, state_path
 from vision import CaptureError, FaceCamera
 
 TASHKENT = timezone(timedelta(hours=5))
+
+
+def enrollment_qr_image(crm, code):
+    url = f"{crm}/teacher-checkin#face-setup={code}"
+    params = cv2.QRCodeEncoder_Params()
+    params.correction_level = cv2.QRCodeEncoder_CORRECT_LEVEL_M
+    matrix = cv2.QRCodeEncoder_create(params).encode(url)
+    size = matrix.shape[0]
+    scale = max(1, 246 // (size + 8))
+    padded = cv2.copyMakeBorder(matrix, 4, 4, 4, 4, cv2.BORDER_CONSTANT, value=255)
+    image = cv2.resize(padded, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+    height, width = image.shape
+    rgb = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+    return f"P6\n{width} {height}\n255\n".encode() + rgb.tobytes()
 
 
 class Kiosk:
@@ -27,6 +42,7 @@ class Kiosk:
         self.rows = []
         self.enabled = False
         self.reset_timer = None
+        self.scan_code = None
 
         root.title("Zamonaviy CRM · Face ID davomat")
         root.geometry("680x680")
@@ -54,6 +70,8 @@ class Kiosk:
         tools.pack(side="bottom", fill="x")
         self.setup = ttk.Button(tools, command=self.setup_or_enroll)
         self.setup.pack(side="left")
+        self.manual = ttk.Button(tools, text="Kod bilan", command=self.enroll_with_code)
+        self.manual.pack(side="left", padx=8)
         self.reload = ttk.Button(tools, text="Yangilash", command=self.refresh)
         self.reload.pack(side="right")
         self.controls()
@@ -64,11 +82,14 @@ class Kiosk:
     def controls(self):
         paired = bool(self.terminal.terminal_id)
         selected = self.teachers.current() >= 0
+        available = paired and not self.busy and not self.scan_code
         for button in (self.arrive, self.leave):
-            button.configure(state="normal" if paired and not self.busy and self.enabled and selected else "disabled")
-        self.teachers.configure(state="readonly" if paired and not self.busy and self.enabled else "disabled")
-        self.setup.configure(text="Yuzni ro‘yxatga olish" if paired else "Terminalni ulash", state="disabled" if self.busy else "normal")
-        self.reload.configure(state="normal" if paired and not self.busy else "disabled")
+            button.configure(state="normal" if available and self.enabled and selected else "disabled")
+        self.teachers.configure(state="readonly" if available and self.enabled else "disabled")
+        label = "QR’ni yopish" if self.scan_code else "Yuzni ro‘yxatga olish" if paired else "Terminalni ulash"
+        self.setup.configure(text=label, state="disabled" if self.busy else "normal")
+        self.manual.configure(state="normal" if available else "disabled")
+        self.reload.configure(state="normal" if available else "disabled")
 
     def text(self, value):
         self.message.configure(text=value)
@@ -110,8 +131,9 @@ class Kiosk:
             if not future.done():
                 self.root.after(60, finish)
                 return
-            self.image.configure(image="")
-            self.preview = None
+            if not self.scan_code:
+                self.image.configure(image="")
+                self.preview = None
             self.preview_frame = None
             self.busy = False
             self.controls()
@@ -142,7 +164,7 @@ class Kiosk:
         self.controls()
 
     def refresh(self, *, quiet=False):
-        if self.busy:
+        if self.busy or self.scan_code:
             return
         if not self.terminal.terminal_id:
             self.text(self.idle_message())
@@ -219,32 +241,73 @@ class Kiosk:
                 self.submit(lambda: self.terminal.pair(code.strip()), lambda _: self.refresh())
             return
 
-        code = simpledialog.askstring("Yuzni ro‘yxatga olish", "Kabinetdagi bir martalik ro‘yxatdan o‘tish kodini kiriting.", parent=self.root, show="•")
-        if not code:
+        if self.scan_code:
+            code = self.scan_code
+            self.clear_scan()
+            self.submit(lambda: self.terminal.signed("enrollment-qr-close", {"code": code}), lambda _: self.reset())
             return
-        code = code.strip()
 
-        def capture(row):
-            if row.get("selfEnrollment"):
-                title = "Yuzni ro‘yxatga olish"
-                prompt = f"{row['name']}, bu sizning hisobingizmi? Yuzingizni ro‘yxatga olishni boshlaysizmi?"
-            else:
-                title = "Rozilik va shaxsni tekshirish"
-                prompt = f"{row['name']} kameraning oldidami va rozilik hujjati tekshirildimi?"
-            if not messagebox.askyesno(title, prompt, parent=self.root):
-                self.text(self.idle_message())
+        code = secrets.token_urlsafe(18)
+        qr = enrollment_qr_image(self.terminal.crm, code)
+
+        def show(_):
+            self.scan_code = code
+            self.preview = tk.PhotoImage(data=qr, format="PPM")
+            self.image.configure(image=self.preview)
+            self.text("Telefon kamerasi bilan QR’ni oching va kabinetda tasdiqlang. QR 2 daqiqa amal qiladi.")
+            self.controls()
+            self.root.after(1500, self.check_scan, code)
+
+        self.submit(lambda: self.terminal.signed("enrollment-qr-open", {"code": code}), show)
+
+    def clear_scan(self):
+        self.scan_code = None
+        self.image.configure(image="")
+        self.preview = None
+        self.controls()
+
+    def check_scan(self, code):
+        if self.scan_code != code:
+            return
+
+        def handle(result):
+            if result["status"] == "waiting":
+                self.root.after(1500, self.check_scan, code)
                 return
+            self.clear_scan()
+            if result["status"] == "ready":
+                self.capture_enrollment(code, result["enrollment"])
+            else:
+                self.text("QR muddati tugagan. Yuzni ro‘yxatga olish tugmasini qayta bosing.")
 
-            def work():
-                template = self.camera_capture()
-                self.terminal.store.save(row["enrollmentId"], template)
-                # A lost confirmation response can be retried safely. Roster also preserves valid pending IDs.
-                return self.terminal.signed("enrollment-confirm", {"code": code, "enrollmentId": row["enrollmentId"]})
+        self.submit(lambda: self.terminal.signed("enrollment-qr-status", {"code": code}), handle, self.clear_scan, quiet=True)
 
-            self.text("Ro‘yxatdan o‘tish uchun kameraga qarang…")
-            self.submit(work, lambda _: self.enrolled())
+    def enroll_with_code(self):
+        if self.busy or self.scan_code or not self.terminal.terminal_id:
+            return
+        code = simpledialog.askstring("Yuzni ro‘yxatga olish", "Admin bergan bir martalik kodni kiriting.", parent=self.root, show="•")
+        if code:
+            code = code.strip()
+            self.submit(lambda: self.terminal.signed("enrollment-lookup", {"code": code}), lambda row: self.capture_enrollment(code, row))
 
-        self.submit(lambda: self.terminal.signed("enrollment-lookup", {"code": code}), capture)
+    def capture_enrollment(self, code, row):
+        if row.get("selfEnrollment"):
+            title = "Yuzni ro‘yxatga olish"
+            prompt = f"{row['name']}, bu sizning hisobingizmi? Yuzingizni ro‘yxatga olishni boshlaysizmi?"
+        else:
+            title = "Rozilik va shaxsni tekshirish"
+            prompt = f"{row['name']} kameraning oldidami va rozilik hujjati tekshirildimi?"
+        if not messagebox.askyesno(title, prompt, parent=self.root):
+            self.text(self.idle_message())
+            return
+
+        def work():
+            template = self.camera_capture()
+            self.terminal.store.save(row["enrollmentId"], template)
+            return self.terminal.signed("enrollment-confirm", {"code": code, "enrollmentId": row["enrollmentId"]})
+
+        self.text("Ro‘yxatdan o‘tish uchun kameraga qarang…")
+        self.submit(work, lambda _: self.enrolled())
 
     def enrolled(self):
         self.text("O‘qituvchi Face ID ro‘yxatiga qo‘shildi.")

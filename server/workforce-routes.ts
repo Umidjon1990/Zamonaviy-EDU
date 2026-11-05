@@ -35,6 +35,7 @@ export function registerWorkforceRoutes(app: Express, pool: any, auth: RequestHa
   app.post('/api/workforce/face/enrollment/revoke', run(req => service.face.revokeEnrollment(actor(req), req.body)));
   app.get('/api/workforce/face/self', run(req => service.face.selfStatus(actor(req))));
   app.post('/api/workforce/face/self/enrollment', run(req => service.face.issueSelfEnrollment(actor(req), req.body)));
+  app.post('/api/workforce/face/self/qr', run(req => service.face.acceptEnrollmentQr(actor(req), req.body)));
   app.post('/api/workforce/face/self/withdraw', run(req => service.face.withdrawSelfEnrollment(actor(req), req.body)));
   app.get('/api/workforce/settings', run(req => service.settings(actor(req))));
   app.put('/api/workforce/settings', run(req => service.updateSettings(actor(req), req.body)));

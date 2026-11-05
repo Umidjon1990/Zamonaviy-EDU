@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { wf, wfDate, wfMoney, wfTime, statusLabels, refreshWorkforce, getPosition } from '@/lib/workforce';
+import { faceSetupCode, wf, wfDate, wfMoney, wfTime, statusLabels, refreshWorkforce, getPosition } from '@/lib/workforce';
 import { faceConsent, uzWorkDate } from '@shared/workforce';
 import { QrCode, MapPin, Clock, Smartphone, ShieldCheck, CalendarDays, Plus, Download, History, Wallet } from 'lucide-react';
 
@@ -77,18 +77,22 @@ type TeacherFaceStatus = {
 function TeacherFace({ enabled }: { enabled: boolean }) {
   const q = useData<TeacherFaceStatus>('face/self', true, 5000), action = useAction();
   const [consent, setConsent] = useState(false);
-  const [issued, setIssued] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [scanCode, setScanCode] = useState(faceSetupCode);
   const [withdraw, setWithdraw] = useState(false);
   const profile = q.data;
-  const code = profile?.status === 'pending' && profile.expiresAt === issued?.expiresAt ? issued : null;
-  const issue = async () => {
-    const result = await action.mutateAsync({ path: 'face/self/enrollment', data: { consent, consentVersion: faceConsent.version } });
-    setIssued(result);
+  useEffect(() => {
+    const update = () => { setScanCode(faceSetupCode()); setConsent(false); };
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
+  const approveScan = async () => {
+    await action.mutateAsync({ path: 'face/self/qr', data: { code: scanCode, consent, consentVersion: faceConsent.version } });
+    if (faceSetupCode() === scanCode) window.history.replaceState(window.history.state, '', '/teacher-checkin');
+    setScanCode(null);
     setConsent(false);
   };
   const withdrawConsent = async () => {
     await action.mutateAsync({ path: 'face/self/withdraw', data: {} });
-    setIssued(null);
     setConsent(false);
     setWithdraw(false);
   };
@@ -110,20 +114,16 @@ function TeacherFace({ enabled }: { enabled: boolean }) {
                 : <p>Yuzingiz ro‘yxatdan o‘tgan. Administrator davomatni yoqqach terminaldan foydalanishingiz mumkin.</p>}
               <p className="text-muted-foreground">Tasdiqlangan vaqt quyidagi ro‘yxatda ko‘rinadi. Terminal qaydni tasdiqlamasa, administratorga xabar bering.</p>
             </>
-            : code
-              ? <div className="space-y-2 rounded-lg border p-3">
-                <Field label="Face ID bir martalik kodi"><Input readOnly value={code.code} onFocus={e => e.target.select()} className="font-mono" /></Field>
-                <p>Markaz terminalida <b>Yuzni ro‘yxatga olish</b> tugmasini bosing, kodni kiriting va ekrandagi ko‘rsatmaga amal qiling.</p>
-                <p className="text-muted-foreground">Kod {wfTime(code.expiresAt)} gacha amal qiladi. Uni o‘zingiz ishlating va boshqalarga bermang.</p>
-              </div>
-              : <div className="space-y-3">
-                <p>Yuzingizni bir marta markaz terminalida ro‘yxatdan o‘tkazing. Kodni kabinetdan o‘zingiz olishingiz mumkin.</p>
+            : scanCode
+              ? <div className="space-y-3">
+                <p>Terminalda yuzingizni ro‘yxatdan o‘tkazishni tasdiqlang.</p>
                 <p className="text-muted-foreground">{faceConsent.notice}</p>
                 <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5" checked={consent} onChange={e => setConsent(e.target.checked)} />{faceConsent.acceptance}</label>
-                <Button disabled={q.isError || action.isPending || !consent} onClick={() => void issue().catch(() => {})}>
-                  {profile.status === 'pending' ? 'Yangi kod olish' : 'Ro‘yxatdan o‘tish kodini olish'}
-                </Button>
-              </div>)}
+                <Button disabled={q.isError || action.isPending || !consent} onClick={() => void approveScan().catch(() => {})}>Terminalda davom etish</Button>
+              </div>
+              : profile.status === 'pending'
+                ? <p>Ro‘yxatdan o‘tishni markaz terminalida yakunlang. Qayta boshlash uchun terminalda yangi QR oching.</p>
+                : <p>Markaz terminalida <b>Yuzni ro‘yxatga olish</b> tugmasini bosing va ekrandagi QR’ni telefon kamerasi bilan oching.</p>)}
       {(profile?.status === 'active' || profile?.status === 'pending') && <Button variant="ghost" size="sm" onClick={() => setWithdraw(true)}>Rozilikni bekor qilish</Button>}
       <Modal title="Face ID roziligini bekor qilish" open={withdraw} onClose={() => setWithdraw(false)}>
         <p className="text-sm">Face ID orqali davomat to‘xtaydi. Terminal navbatdagi aloqada yuz andozasini o‘chiradi.</p>
